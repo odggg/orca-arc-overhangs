@@ -1,0 +1,25 @@
+name: Checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python build_plugin.py
+      - run: python tests.py
+      - run: python test_audit.py
+      - run: node test_tab.js
+      - run: python package_release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arc-overhang-v0.2.3
+          path: Arc_Overhang_OrcaSlicer_2.5_v0.2.3.zip

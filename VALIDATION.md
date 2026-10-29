@@ -1,0 +1,55 @@
+# Validation - Arc Overhang 0.2.3
+Date: 2026-10-24
+
+## Retraction regression retained from 0.2.2
+The current G-code reproduced the previous exception with an apparent
+0.00027 mm retract balance at both bridge boundaries. The old tracker only
+repaid that balance on E-only commands, allowing rounded wipe residue to
+accumulate even during positive XY extrusion. Fixed tracking yields zero
+balance at both bridges. Three new tests cover XY repayment, submicron wipe
+rounding and protection of genuinely unrecovered retractions.
+
+## Reproduced user issues
+- Installed Orca log shows utf-8-sig codec reads and transient pycache writes
+  under Program Files, followed by denied audit events and failed processing.
+- The same log shows processing rejected existing G2/G3 toolpaths.
+- Installed native configuration iframe is sandboxed with allow-scripts only.
+  The old plugin used a submit form; the new UI uses an ordinary button.
+- The actual host saveConfig() returns undefined and confirms asynchronously
+  through onConfig(). The new UI waits for that confirmation.
+
+## Completed checks
+- 25 Python regression tests passed.
+- Separate audit-hook test passed: BOM input was successfully transformed while
+  every file open outside the current G-code directory was rejected.
+- JavaScript tests use the actual installed Orca plugin-config-ui.js bridge:
+  preset and global scopes, button action, native asynchronous confirmation,
+  timeout, read-only state and numeric validation.
+- Main tab messaging tests passed, including rejected saves and profile overrides.
+- API checked against OrcaSlicer v2.5.0-alpha source.
+
+## Actual current Orca file
+A local copy of the current approximately 8 MB G-code was processed.
+The source has 401 layers, a 0.6 mm nozzle, scarf seams and no Overhang-wall
+feature labels. It contains one Bridge and one Internal Bridge feature.
+Result:
+- One feature replaced at Z 57.54 mm with 88 arc toolpaths.
+- Algorithm reports 100% geometric region coverage.
+- Other bridge retained when eligibility/coverage checks did not pass.
+- Every injected XY point lies inside the reconstructed current footprint.
+- Original prefix and suffix outside the replacement are byte-equivalent text.
+- M73 message count and final modal machine state preserved.
+- Real source and transformed G-code are not included in this source package.
+
+This validates transformation of the current file, not physical print quality.
+
+## Remaining limits
+- No physical print has been performed.
+- Native Orca WebView clicking and save persistence have not been exercised
+  end to end; the installed JavaScript bridge was tested in a VM.
+- A headless Edge regression attempt could not start successfully in this
+  environment, so no browser-rendering claim is made.
+- No cross-platform host installation/upload testing.
+
+## English UI in 0.2.3
+All plugin UI and runtime messages translated to English. Configuration keys and defaults unchanged. Regression suite rerun for this release.
