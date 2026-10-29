@@ -57,6 +57,14 @@ class Tests(unittest.TestCase):
         with self.assertRaises(a.UnsupportedGCode):
             a.process_text(source)
 
+    def test_fully_supported_bridge_with_overhang_tag_is_preserved(self):
+        source = fixture().replace(ring(10, 10, 20, 30), ring(10, 10, 30, 30), 1)
+        output, report = a.process_text(source)
+        self.assertEqual(report["replaced_features"], 0)
+        self.assertEqual(report["skipped_features"], 1)
+        self.assertNotIn(a.MARKER, output)
+        self.assertEqual(output, source)
+
     def test_geometric_overhang_without_special_wall_tag(self):
         source = fixture().replace("Overhang wall", "Inner wall")
         output, report = a.process_text(source)

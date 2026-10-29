@@ -24,3 +24,9 @@
 - Keep Bambu virtual tool markers outside the physical-tool count.
 - Add regression coverage for single-tool T1 and true multi-tool T1/T2 G-code.
 
+
+## 2026-10-29 local repair: unsupported overhangs only
+
+- Replace Bridge features only when the geometry contains enough genuinely unsupported area.
+- Preserve bridges supported by the lower-layer footprint, even when an Overhang-wall label is nearby.
+- Add a regression test for fully supported Bridge paths.

@@ -482,7 +482,6 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if support.is_empty or current.is_empty:
             skipped("No closed contour")
             continue
-        overhangs = [segment(m) for f in by_layer[feature.layer] if f.role in ("overhang wall", "overhang perimeter") for m in f.moves if segment(m) is not None]
         # Only real extrusion segments form the region; travel moves cannot join islands.
         region = unary_union([segment(m).buffer(width * 0.6) for m in moves]).buffer(cfg["wall_overlap_mm"]).intersection(current)
         pieces = polygons(region)
@@ -491,9 +490,11 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         valid = bool(pieces)
         for poly in pieces:
             unsupported = poly.difference(support.buffer(width * 0.05))
-            tagged_overhang = any(poly.distance(oh) < width and oh.length >= cfg["minimum_overhang_length_mm"] for oh in overhangs)
             geometric_overhang = unsupported.area >= cfg["minimum_area_mm2"] and unsupported.length >= cfg["minimum_overhang_length_mm"]
-            if poly.area < cfg["minimum_area_mm2"] or not (tagged_overhang or geometric_overhang):
+            # A nearby Orca overhang label is not proof of a real overhang.
+            # In particular, keep Bridge paths that are supported by the
+            # previous layer's footprint unchanged.
+            if poly.area < cfg["minimum_area_mm2"] or not geometric_overhang:
                 valid = False
                 break
             generated = fill_polygon(poly, support, cfg, printer, cancelled)

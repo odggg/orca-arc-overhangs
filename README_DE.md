@@ -89,11 +89,12 @@ Die Slicer-Zeit- und Materialangaben werden durch das Plugin nicht neu berechnet
 Bei Bambu-Druckern wird der vom Host gelieferte G-Code-Text verarbeitet;
 das Plugin bearbeitet keine selbst eingelesenen 3MF-Archive.
 
-Arc Overhang ersetzt geeignete Bridge-Fuellungen, die an Overhang-Waende grenzen.
-Es benoetigt ein Bridge-Feature im G-Code. Zusaetzliche Overhang-wall-Labels
-sind hilfreich; fehlen sie, wird der Ueberhang geometrisch gegen die
-darunterliegende Schicht geprueft. Support fuer die zu ersetzende
-Flaeche entsprechend deaktivieren. Die Overhang-Wanderkennung muss aktiv sein.
+Arc Overhang ersetzt nur geeignete Bridge-Features, unter denen geometrisch
+genug ungestuetzte Flaeche liegt. Ein nahes Overhang-wall-Label allein reicht
+nicht aus: Bridge-Bahnen ueber bereits gestuetzter Flaeche bleiben unveraendert.
+Die darunterliegende Schicht wird zur Stuetzerkennung geprueft. Support fuer die
+zu ersetzende Flaeche entsprechend deaktivieren. Die Overhang-Wanderkennung muss
+aktiv sein.
 
 Der Parser benoetigt absolute XYZ-Koordinaten (G90), relative Extrusion (M83),
 Text-G-Code mit Feature-Kommentaren und lineare Druckbewegungen (G1).
