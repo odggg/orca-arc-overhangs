@@ -65,6 +65,29 @@ class Tests(unittest.TestCase):
         self.assertNotIn(a.MARKER, output)
         self.assertEqual(output, source)
 
+    def test_wall_overlap_is_zero_when_disabled_and_grows_with_setting(self):
+        self.assertEqual(a.DEFAULTS["wall_overlap_mm"], 0.2)
+        source = fixture()
+        printer = a.printer_settings(source.splitlines())
+        width = printer["outer_wall_line_width"]
+        arc_width = printer["nozzle_diameter"] * a.DEFAULTS["arc_spacing_nozzle_ratio"]
+        current = a.layer_shape([f for f in a.parse(source.splitlines(True)) if f.layer == 1], width)
+        wall_footprint = current.boundary.buffer(width / 2)
+        measured = []
+        for overlap in (0.0, 0.2, 0.8):
+            output, report = a.process_text(source, {
+                "wall_overlap_mm": overlap,
+                "minimum_coverage_percent": 80,
+            })
+            self.assertEqual(report["replaced_features"], 1, report)
+            arcs = [a.segment(move) for feature in a.parse(output.splitlines(True))
+                    if feature.role in ("bridge", "bridge infill", "internal bridge")
+                    for move in feature.moves if a.segment(move) is not None]
+            arc_footprint = a.unary_union([line.buffer(arc_width / 2) for line in arcs])
+            measured.append(arc_footprint.intersection(wall_footprint).area)
+        self.assertLess(measured[0], 1e-6, measured)
+        self.assertLess(measured[1], measured[2], measured)
+
     def test_geometric_overhang_without_special_wall_tag(self):
         source = fixture().replace("Overhang wall", "Inner wall")
         output, report = a.process_text(source)

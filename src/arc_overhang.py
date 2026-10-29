@@ -234,7 +234,7 @@ DEFAULTS = {
     "minimum_arc_speed_mm_s": 0.5,
     "travel_speed_mm_s": 30.0,
     "arc_spacing_nozzle_ratio": 0.95,
-    "wall_overlap_mm": 0.8,
+    "wall_overlap_mm": 0.2,
     "arc_center_offset_mm": 2.0,
     "max_radius_mm": 100.0,
     "minimum_area_mm2": 50.0,
@@ -711,7 +711,12 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             skipped("No closed contour")
             continue
         # Only real extrusion segments form the region; travel moves cannot join islands.
-        region = unary_union([segment(m).buffer(width * 0.6) for m in moves]).buffer(cfg["wall_overlap_mm"]).intersection(current)
+        # Arc centerlines have finite extrusion width. Keep that footprint clear of the
+        # current wall at zero overlap; then let the requested overlap consume this
+        # clearance instead of adding on top of the bridge's base stroke.
+        arc_width = printer["nozzle_diameter"] * cfg["arc_spacing_nozzle_ratio"]
+        wall_clearance = max(0.0, (width + arc_width) * 0.5 - cfg["wall_overlap_mm"])
+        region = unary_union([segment(m).buffer(width * 0.6) for m in moves]).buffer(cfg["wall_overlap_mm"]).intersection(current.buffer(-wall_clearance))
         pieces = polygons(region)
         arcs = []
         coverages = []
@@ -786,7 +791,7 @@ def config_page(as_tab=False):
         ("arc_speed_mm_s", "Arc speed", "mm/s"),
         ("minimum_arc_speed_mm_s", "Minimum arc speed", "mm/s"),
         ("arc_spacing_nozzle_ratio", "Arc spacing / nozzle diameter", "Factor"),
-        ("wall_overlap_mm", "Wall anchoring", "mm"),
+        ("wall_overlap_mm", "Wall overlap with outer wall", "mm"),
         ("arc_center_offset_mm", "Arc center offset", "mm"),
         ("max_radius_mm", "Maximum radius", "mm"),
         ("minimum_area_mm2", "Minimum area", "mm2"),
@@ -817,7 +822,7 @@ button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:whi
 small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 </style><h1>Arc Overhang</h1>
 <p>Concentric arc toolpaths for flat overhangs. Applied during G-code export.</p>
-<p id="last-report" role="status"></p><p class="notice">Arc spacing and wall anchoring are independent. Spacing is a factor of nozzle diameter: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
+<p id="last-report" role="status"></p><p class="notice">Arc spacing and wall overlap are independent. Spacing is a factor of nozzle diameter: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
 <div id="settings"><label>Enable Arc Overhang<input id="enabled" type="checkbox"></label>
 __ROWS__
 <button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>

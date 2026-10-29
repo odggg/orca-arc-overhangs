@@ -30,3 +30,9 @@
 - Replace Bridge features only when the geometry contains enough genuinely unsupported area.
 - Preserve bridges supported by the lower-layer footprint, even when an Overhang-wall label is nearby.
 - Add a regression test for fully supported Bridge paths.
+
+## 2026-10-29 local repair: wall overlap control
+
+- Reduce the default wall overlap from 0.8 mm to 0.2 mm.
+- Account for the printed widths of the Arc path and wall so a 0 mm setting creates no overlap with the wall.
+- Add geometry coverage checks for zero, normal and high overlap settings.
