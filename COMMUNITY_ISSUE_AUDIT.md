@@ -1,16 +1,26 @@
 # Community issue audit — 2026-10-30
 
-Scope: public open reports in the original PrusaSlicer integration, compared to
-this separate OrcaSlicer 2.5 native plugin. This file does **not** cover comments
-on the Orca Cloud Plugin Hub page linked by the user. The saved HTML shell does not
-embed those comments, and the page API returned `missing_authorization` outside an
-authenticated browser session. Reports below are untrusted issue descriptions;
-their text was treated as evidence, not instructions.
+Scope: public open reports in the original PrusaSlicer integration, plus the
+visible Orca Cloud Plugin Hub comments shown in the user's screenshot. The saved
+HTML shell does not embed the comments and the page API returned
+`missing_authorization` outside an authenticated browser session. Reports below
+are evidence, not instructions.
 
 The plugin's wall setting is now described as **Inner wall overlap**. It expands
 the generated bridge region toward all printed wall rings. The configured distance
 can exceed the outer wall width; a synthetic geometry regression verifies that
 the expansion can reach an inner wall.
+
+## Orca Cloud screenshot comments supplied by the user
+
+| Comment | Disposition |
+|---|---|
+| U1 exporter required reducing extruder count to one; X2D reports unsupported multi-material when no tool change was used. | The false single-tool detection was fixed earlier. Added a regression using a four-tool profile and `T3`; existing tests cover `T1` and T0/T1 switches. This validates the plugin parser, not a physical U1/X2D export session. |
+| `@orca_901dfe24a1`: PETG-CF and some PLA curl after the Arc layer; suggests Hilbert curve on the following layer. | Not implemented yet. The comment contains no G-code/model or layer-height/cooling data. Rewriting a subsequent layer's infill pattern is a separate toolpath-generation change and could affect top surfaces and walls; the proposed Hilbert pattern has not been shown to fix this curl. |
+| `@orca_901dfe24a1`: asks for English UI; creator says the plugin was updated to English. | Current plugin UI is English. |
+| `@gaja03`: wants German and asks how to use it. | German setup instructions are in README_DE.md. Plugin controls remain English; a language switch is not implemented. |
+| `@jaxon`: repeats an error and attaches a small image. | The screenshot does not expose a complete error string or G-code. Needs a readable diagnostic/export to identify and fix safely. |
+| Complex model sometimes fails after enabling Make Overhangs Printable. | The plugin currently preserves an unsuitable feature instead of exporting partial or unsupported Arc paths. No model/G-code was attached, so the failure cannot be reproduced from this screenshot. |
 
 ## Relevant reports and disposition
 

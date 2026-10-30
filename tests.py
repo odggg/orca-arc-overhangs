@@ -312,6 +312,21 @@ class Tests(unittest.TestCase):
         expected_e_per_mm = (0.6 / 2.85) ** 2 * 1.35 * 0.9
         self.assertAlmostEqual(first_extrusion["E"], distance * expected_e_per_mm, places=6)
 
+    def test_snapmaker_style_four_tool_index_is_supported(self):
+        source = fixture().replace("G90\nM83", "T0\nG90\nM83")
+        source = source.replace("; FEATURE: Bridge", "T3\n; FEATURE: Bridge")
+        source = source.replace("; FEATURE: Sparse infill", "T0\n; FEATURE: Sparse infill")
+        resolved = {
+            "nozzle_diameter": [0.4, 0.4, 0.4, 0.6],
+            "filament_diameter": [1.75, 1.75, 1.75, 2.85],
+            "outer_wall_line_width": [0.42, 0.42, 0.42, 0.62],
+            "filament_flow_ratio": [1.0, 1.0, 1.0, 0.9],
+        }
+        output, report = a.process_text(source, resolved=resolved)
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertIn("T3\n; FEATURE: Bridge", output)
+        self.assertIn("T0\n; FEATURE: Sparse infill", output)
+
     def test_seam_gap_is_closed_for_support_detection(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"
         source += "; FEATURE: Outer wall\nG1 X0 Y0.04\nG1 X20 Y0 E1\nG1 X20 Y20 E1\nG1 X0 Y20 E1\nG1 X0 Y0.08 E1\n"

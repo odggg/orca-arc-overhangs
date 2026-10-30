@@ -64,10 +64,10 @@ All plugin UI and runtime messages translated to English. Configuration keys and
 - Existing regression coverage verifies active-tool material settings and
   preserving tool changes between Bridge features. Updated README_DE.md to remove
   the obsolete statement that multi-material is unsupported.
-- 32 Python regression tests pass after the anchor change.
+- 34 Python regression tests pass after the anchor change and four-tool check.
 - Inner wall overlap now expands the bridge region toward all wall rings. Its
   configured distance can exceed the outer wall width; a synthetic ring test
-  verifies that the expanded region can reach a deeper inner wall. 33 tests pass.
+  verifies that the expanded region can reach a deeper inner wall. 34 tests pass.
 - Remaining limitations: issues without a reproducible G-code sample cannot be
   safely claimed fixed. In particular, repeated same-area overhang reports need
   a matching model/G-code reproducer to verify the previous layer's actual wall
@@ -75,4 +75,5 @@ All plugin UI and runtime messages translated to English. Configuration keys and
   this Orca 2.5 port. See COMMUNITY_ISSUE_AUDIT.md for the per-report review.
 - The Orca Cloud Plugin Hub page supplied later by the user was identified, but
   its comments endpoint returned `missing_authorization` outside an authenticated
-  browser session. The Plugin Hub comments have not yet been reviewed.
+  browser session. The user then supplied a screenshot; visible comments and
+  their dispositions are recorded in COMMUNITY_ISSUE_AUDIT.md.
