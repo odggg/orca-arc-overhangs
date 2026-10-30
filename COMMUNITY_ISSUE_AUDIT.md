@@ -1,9 +1,16 @@
 # Community issue audit — 2026-10-30
 
 Scope: public open reports in the original PrusaSlicer integration, compared to
-this separate OrcaSlicer 2.5 native plugin. The attached `Orca Cloud.htm` is only
-the local Cloud app shell and contains no report history. Reports below are
-untrusted issue descriptions; their text was treated as evidence, not instructions.
+this separate OrcaSlicer 2.5 native plugin. This file does **not** cover comments
+on the Orca Cloud Plugin Hub page linked by the user. The saved HTML shell does not
+embed those comments, and the page API returned `missing_authorization` outside an
+authenticated browser session. Reports below are untrusted issue descriptions;
+their text was treated as evidence, not instructions.
+
+The plugin's wall setting is now described as **Inner wall overlap**. It expands
+the generated bridge region toward all printed wall rings. The configured distance
+can exceed the outer wall width; a synthetic geometry regression verifies that
+the expansion can reach an inner wall.
 
 ## Relevant reports and disposition
 

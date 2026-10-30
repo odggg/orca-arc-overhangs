@@ -103,6 +103,18 @@ class Tests(unittest.TestCase):
         self.assertLess(measured[0], 1e-6, measured)
         self.assertLess(measured[1], measured[2], measured)
 
+    def test_inner_wall_overlap_can_reach_inner_wall_beyond_outer_wall_width(self):
+        current = a.Polygon(
+            [(0, 0), (10, 0), (10, 10), (0, 10)],
+            holes=[[(4, 4), (6, 4), (6, 6), (4, 6)]])
+        bridge = a.LineString([(1, 5), (2, 5)])
+        narrow = a.bridge_region([bridge], current, 0.42, 0.38, 0.2)
+        extended = a.bridge_region([bridge], current, 0.42, 0.38, 4.0)
+        wall_window = a.Polygon([(3.7, 4.0), (4.3, 4.0), (4.3, 6.0), (3.7, 6.0)])
+        inner_wall_band = current.boundary.buffer(0.21).intersection(wall_window)
+        self.assertLess(narrow.intersection(inner_wall_band).area, 1e-6)
+        self.assertGreater(extended.intersection(inner_wall_band).area, 0.05)
+
     def test_geometric_overhang_without_special_wall_tag(self):
         source = fixture().replace("Overhang wall", "Inner wall")
         output, report = a.process_text(source)

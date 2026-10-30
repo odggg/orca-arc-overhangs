@@ -121,7 +121,7 @@ Z-Hop waehrend der erzeugten Arc-Fahrten ist in dieser Version nicht enthalten.
 | Arc-Geschwindigkeit | arc_speed_mm_s | 1.5 mm/s | Obergrenze der Geschwindigkeit auf Arc-Bahnen |
 | Minimale Arc-Geschwindigkeit | minimum_arc_speed_mm_s | 0.5 mm/s | Untergrenze fuer kurze Arcs |
 | Arc-Abstand / Duesendurchmesser | arc_spacing_nozzle_ratio | 0.95 | Bahnabstand als Faktor des Duesendurchmessers |
-| Wand-Ueberlappung | wall_overlap_mm | 0.2 mm | Maximaler geometrischer Ueberlapp mit der ersten Wandlinie; 0 mm haelt die gedruckte Arc-Breite von der Wand frei |
+| Innenwand-Verankerung | wall_overlap_mm | 0.2 mm | Erweitert den Arc-Bereich in gedruckte Waende; groessere Werte koennen bis zu inneren Wandlinien reichen |
 | Versatz des Arc-Mittelpunkts | arc_center_offset_mm | 2 mm | Reduziert sehr kleine Arcs; 0 erreicht engere Stellen |
 | Maximaler Radius | max_radius_mm | 100 mm | Groesster Arc-Radius |
 | Minimale Flaeche | minimum_area_mm2 | 50 mm2 | Kleinere Bereiche bleiben als Originalbruecke erhalten |
@@ -133,7 +133,7 @@ Z-Hop waehrend der erzeugten Arc-Fahrten ist in dieser Version nicht enthalten.
 
 **Beispiel Abstand:** 0.5 bei einer 0.4-mm-Duese ergibt 0.2 mm Bahnabstand.
 Das ist ein Abstandsfaktor, kein Wert in Millimetern und keine Prozentangabe.
-Wand-Ueberlappung und Bahnabstand sind unabhaengige Einstellungen. Die Ueberlappung wird auf die tatsaechliche Breite von Arc- und Wandbahn bezogen; die Arc-Mittellinie wird so begrenzt, dass 0 mm keine Ueberdeckung erzeugt.
+Innenwand-Verankerung und Bahnabstand sind unabhaengige Einstellungen. Die Verankerung erweitert den Bridge-Bereich in Richtung vorhandener Wandlinien und kann mehrere Wandbahnen erreichen. Bei 0 mm bleibt der bisherige Sicherheitsabstand zur Wand erhalten.
 
 Fuer einen Versuch mit bis zu 10 mm/s **Arc-Geschwindigkeit** auf 10 setzen.
 Kurze Arcs werden wegen der Mindestzeit weiterhin langsamer gedruckt.
