@@ -43,3 +43,11 @@
 - Select per-tool nozzle, filament, wall-width and flow values for each Bridge feature.
 - Leave a Bridge feature unchanged if it switches tools internally.
 - Add regression coverage for material-specific extrusion and preserved tool switches.
+
+
+## 2026-10-30 local repair: optional next-layer Hilbert infill
+
+- Add a selector to keep Orca's fill pattern or opt into Hilbert infill on the layer immediately after replaced Arc bridges.
+- Limit replacement to solid internal infill overlapping the Arc zone; preserve sliced extrusion outside the zone.
+- Keep the slicer pattern as the default because Hilbert can increase print time.
+- Add selector, geometry, and setting-validation regressions.

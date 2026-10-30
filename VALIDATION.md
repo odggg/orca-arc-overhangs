@@ -71,8 +71,10 @@ All plugin UI and runtime messages translated to English. Configuration keys and
 - Remaining limitations: issues without a reproducible G-code sample cannot be
   safely claimed fixed. In particular, repeated same-area overhang reports need
   a matching model/G-code reproducer to verify the previous layer's actual wall
-  support. Legacy-only UI/features (for example Hilbert infill) are not part of
-  this Orca 2.5 port. See COMMUNITY_ISSUE_AUDIT.md for the per-report review.
+  support. Hilbert infill is now an optional, experimental setting for eligible
+  internal-solid-infill regions on the layer after a replaced Arc feature. It is
+  off by default and has not been physically print-validated. See
+  COMMUNITY_ISSUE_AUDIT.md for the per-report review.
 - The Orca Cloud Plugin Hub page supplied later by the user was identified, but
   its comments endpoint returned `missing_authorization` outside an authenticated
   browser session. The user then supplied a screenshot; visible comments and

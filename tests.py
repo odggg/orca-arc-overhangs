@@ -27,7 +27,7 @@ def fixture(style="modern"):
 
 class Tests(unittest.TestCase):
     def test_configuration_rejects_invalid(self):
-        for cfg in ({"arc_speed_mm_s": 0}, {"points_per_circle": 81}, {"enabled": 1}, {"flow_multiplier": float("nan")}, {"made_up": 1}, {"max_centers": 1.5}):
+        for cfg in ({"arc_speed_mm_s": 0}, {"points_per_circle": 81}, {"enabled": 1}, {"flow_multiplier": float("nan")}, {"made_up": 1}, {"max_centers": 1.5}, {"next_layer_pattern": "banana"}):
             with self.subTest(cfg=cfg), self.assertRaises(ValueError):
                 a.configuration(cfg)
 
@@ -47,6 +47,30 @@ class Tests(unittest.TestCase):
                 self.assertEqual(a.replace(original_end, e=0), a.replace(new_end, e=0))
                 self.assertNotIn("nan", output.lower())
                 self.assertNotIn("inf ", output.lower())
+
+    def test_hilbert_next_layer_selector_and_geometry(self):
+        self.assertEqual(a.DEFAULTS["next_layer_pattern"], "slicer")
+        self.assertEqual(a.configuration({"next_layer_pattern": "hilbert"})["next_layer_pattern"], "hilbert")
+        page = a.config_page()
+        self.assertIn('id="next_layer_pattern"', page)
+        self.assertIn('value="hilbert"', page)
+        poly = a.Polygon([(10, 10), (20, 10), (20, 20), (10, 20)])
+        paths = a.hilbert_paths(poly, 0.5)
+        self.assertTrue(paths)
+        for line, spacing in paths:
+            self.assertLessEqual(spacing, 0.5 + 1e-9)
+            self.assertLess(line.difference(poly).length, 1e-6)
+        source = ("G90\nM83\n; nozzle_diameter = 0.4\n; filament_diameter = 1.75\n"
+                  "; layer_height = 0.2\n; outer_wall_line_width = 0.42\n; CHANGE_LAYER\nG1 Z0.2\n"
+                  "; FEATURE: Internal solid infill\nG1 X11 Y11 F1800\n"
+                  "G1 X19 Y11 E0.5\nG1 X19 Y19 E0.5\n")
+        feature = a.parse(source.splitlines(True))[0]
+        replacement = a.hilbert_feature_replacement(
+            feature, source.splitlines(True), poly, a.configuration(),
+            a.printer_settings(source.splitlines()), lambda: False)
+        self.assertIsNotNone(replacement)
+        self.assertTrue(any("Hilbert" in line for line in replacement))
+        self.assertIn("G92 E1.0000000\n", replacement)
 
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"

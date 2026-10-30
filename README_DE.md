@@ -140,10 +140,11 @@ Kurze Arcs werden wegen der Mindestzeit weiterhin langsamer gedruckt.
 Wenn alle Arcs exakt mit 10 mm/s laufen sollen, auch die minimale
 Arc-Geschwindigkeit auf 10 setzen. Das ist kein automatisch druckvalidiertes Profil.
 
-Die zwei Schichten oberhalb der Arc-Schicht bleiben in dieser Portierung normale
-Orca-Schichten. Hilbert-Fuellung und eine gesonderte Nachbehandlung dieser
-Deckschichten sind nicht implementiert; die portierte SoftFever-Datei enthaelt
-diese Funktion ebenfalls nicht.
+Das Füllmuster der direkt folgenden Schicht ist auswählbar. Standardmäßig
+bleibt Orças ursprüngliches Muster erhalten. Optional kann das Plugin massive
+Innenfüllung im Bereich ersetzter Bridge-Bahnen durch eine Hilbert-Kurve ersetzen.
+Andere Füllbereiche bleiben erhalten. Die Hilbert-Option kann die Druckzeit erhöhen
+und ist experimentell; vor dem Druck den erzeugten G-Code prüfen.
 
 ## Wenn nichts geaendert wird
 - Erzeugt Orca ein Bridge-Feature und eine geometrisch ungestuetzte Flaeche?
@@ -209,3 +210,6 @@ Quellen:
 - https://github.com/OrcaSlicer/OrcaSlicer/wiki/plugin_development
 - https://github.com/OrcaSlicer/OrcaSlicer/wiki/pages
 - https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.5.0-alpha/src/slic3r/plugin/pluginTypes/slicingPipeline/SlicingPipelinePluginCapability.cpp
+
+
+Das Füllmuster der Folgeschicht ist auswählbar: Standardmäßig bleibt Orças Muster erhalten. Optional kann in geeigneten Bereichen mit massiver Innenfüllung über ersetzten Arc-Bereichen eine Hilbert-Kurve verwendet werden. Das kann die Druckzeit erhöhen; andere Füllbereiche bleiben unverändert.

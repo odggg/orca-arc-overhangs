@@ -16,7 +16,7 @@ the expansion can reach an inner wall.
 | Comment | Disposition |
 |---|---|
 | U1 exporter required reducing extruder count to one; X2D reports unsupported multi-material when no tool change was used. | The false single-tool detection was fixed earlier. Added a regression using a four-tool profile and `T3`; existing tests cover `T1` and T0/T1 switches. This validates the plugin parser, not a physical U1/X2D export session. |
-| `@orca_901dfe24a1`: PETG-CF and some PLA curl after the Arc layer; suggests Hilbert curve on the following layer. | Not implemented yet. The comment contains no G-code/model or layer-height/cooling data. Rewriting a subsequent layer's infill pattern is a separate toolpath-generation change and could affect top surfaces and walls; the proposed Hilbert pattern has not been shown to fix this curl. |
+| `@orca_901dfe24a1`: PETG-CF and some PLA curl after the Arc layer; suggests Hilbert curve on the following layer. | Added an opt-in Hilbert choice for eligible internal-solid-infill areas on the immediately following layer. The default preserves Orca's infill. Other areas are retained. The comment contains no G-code/model or cooling data, so the change is experimental and does not establish that it fixes curling. |
 | `@orca_901dfe24a1`: asks for English UI; creator says the plugin was updated to English. | Current plugin UI is English. |
 | `@gaja03`: wants German and asks how to use it. | German setup instructions are in README_DE.md. Plugin controls remain English; a language switch is not implemented. |
 | `@jaxon`: repeats an error and attaches a small image. | The screenshot does not expose a complete error string or G-code. Needs a readable diagnostic/export to identify and fix safely. |
@@ -40,9 +40,9 @@ the expansion can reach an inner wall.
 - Shapely 1.x import and Python 3.11 setup reports describe the legacy script.
   The Orca package declares Shapely 2 and Python 3.12, matching its Orca 2.5
   plugin runtime.
-- Hilbert infill, speed treatment on later layers, and other legacy algorithm
-  features are not implemented in this Orca port; they are feature differences,
-  not safe bug fixes to apply without a specification and slicer test.
+- Hilbert infill is now opt-in for eligible internal-solid-infill areas on the
+  layer immediately after replaced Arc paths. It remains experimental and is not
+  physically print-validated; later-layer speed treatment remains out of scope.
 - Requests for different perimeter/infill selection are behavior changes, not
   confirmed defects. This plugin intentionally replaces eligible Bridge paths
   and leaves unsupported or disconnected features unchanged.

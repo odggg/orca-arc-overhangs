@@ -230,6 +230,7 @@ VERSION = "0.2.3"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
+    "next_layer_pattern": "slicer",
     "arc_speed_mm_s": 1.5,
     "minimum_arc_speed_mm_s": 0.5,
     "travel_speed_mm_s": 30.0,
@@ -274,6 +275,9 @@ def configuration(overrides=None):
         if isinstance(DEFAULTS[key], bool):
             if type(value) is not bool:
                 raise ValueError(key + " must be true or false.")
+        elif isinstance(DEFAULTS[key], str):
+            if type(value) is not str or value not in ("slicer", "hilbert"):
+                raise ValueError(key + " must be 'slicer' or 'hilbert'.")
         elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(key + " must be a finite number.")
         elif value < 0:
@@ -726,9 +730,135 @@ def emit_arcs(arcs, before, after, cfg, printer):
     out.append(MARKER + "END\n")
     return out
 
+def hilbert_xy(index, bits):
+    """Return integer Hilbert-grid coordinates for a curve index."""
+    x = y = 0
+    scale = 1
+    while scale < (1 << bits):
+        rx = 1 & (index // 2)
+        ry = 1 & (index ^ rx)
+        if ry == 0:
+            if rx == 1:
+                x, y = scale - 1 - x, scale - 1 - y
+            x, y = y, x
+        x += scale * rx
+        y += scale * ry
+        index //= 4
+        scale *= 2
+    return x, y
+
+def hilbert_paths(poly, spacing, cancelled=lambda: False):
+    """Build Hilbert extrusion strokes inside one polygon, splitting at its boundary."""
+    min_x, min_y, max_x, max_y = poly.bounds
+    side = max(max_x - min_x, max_y - min_y)
+    if side <= 1e-6:
+        return []
+    intervals = max(1, math.ceil(side / max(spacing, 0.05)))
+    size, bits = 1, 0
+    while size < intervals + 1:
+        size *= 2
+        bits += 1
+    if bits > 9:
+        return []
+    step = side / max(1, size - 1)
+    paths, run, previous = [], [], None
+    def flush():
+        if len(run) >= 2:
+            clipped = LineString(run).intersection(poly)
+            if clipped.geom_type == "LineString" and clipped.length > 1e-5:
+                paths.append((clipped, step))
+            elif hasattr(clipped, "geoms"):
+                paths.extend((g, step) for g in clipped.geoms if g.geom_type == "LineString" and g.length > 1e-5)
+        run.clear()
+    for index in range(size * size):
+        if index % 4096 == 0 and cancelled():
+            raise Cancelled("Cancelled.")
+        gx, gy = hilbert_xy(index, bits)
+        point = (min_x + gx * step, min_y + gy * step)
+        if poly.covers(Point(point)):
+            if previous is not None and index == previous[0] + 1:
+                run.append(point)
+            else:
+                flush()
+                run.append(point)
+            previous = (index, point)
+        else:
+            flush()
+            previous = None
+    flush()
+    return paths
+
+def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled):
+    """Replace infill inside the Arc zone and retain original infill outside it."""
+    if feature.role not in ("solid infill", "internal solid infill"):
+        return None
+    moves = feature.moves
+    strokes = [(move, segment(move)) for move in moves]
+    if any(move.delta_e > 1e-9 and line is None for move, line in strokes):
+        return None
+    strokes = [(move, line) for move, line in strokes if line is not None]
+    if not strokes or any(move.before.z != strokes[0][0].before.z or move.after.z != strokes[0][0].after.z for move, _ in strokes):
+        return None
+    if len({move.before.tool for move in moves}) != 1:
+        return None
+    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
+           for i in range(feature.start, feature.end)):
+        return None
+    if any(move.before.retracted > 1e-5 or move.after.retracted > 1e-5 for move in moves):
+        return None
+    width = printer["outer_wall_line_width"]
+    footprints = [line.buffer(width * 0.5) for _, line in strokes]
+    footprint = unary_union(footprints)
+    fill_zone = target.intersection(footprint)
+    fill_polys = [poly for poly in polygons(fill_zone) if poly.area >= width * width * 2]
+    if not fill_polys:
+        return None
+    hilbert = []
+    for poly in fill_polys:
+        hilbert.extend(hilbert_paths(poly, width, cancelled))
+    if not hilbert:
+        return None
+
+    before, after = moves[0].before, moves[-1].after
+    filament_area = math.pi * (printer["filament_diameter"] / 2) ** 2
+    travel = cfg["travel_speed_mm_s"] * 60
+    hilbert_feed = max(60.0, strokes[0][0].before.feed)
+    out = ["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n"]
+    # Preserve the sliced infill outside the replacement zone, clipping only
+    # the material footprint that the Hilbert paths will cover.
+    cut_zone = unary_union(fill_polys).buffer(0.01)
+    for move, line in strokes:
+        outside = line.difference(cut_zone)
+        parts = [outside] if outside.geom_type == "LineString" else [g for g in getattr(outside, "geoms", ()) if g.geom_type == "LineString"]
+        for part in parts:
+            coords = list(part.coords)
+            if len(coords) < 2 or part.length <= 1e-5:
+                continue
+            out.append(f"G0 X{coords[0][0]:.5f} Y{coords[0][1]:.5f} F{travel:.1f}\n")
+            out.append(f"G1 F{max(60.0, move.before.feed):.1f}\n")
+            e_per_mm = move.delta_e / line.length
+            for a, b in zip(coords, coords[1:]):
+                distance = math.dist(a, b)
+                if distance > 1e-8:
+                    out.append(f"G1 X{b[0]:.5f} Y{b[1]:.5f} E{distance * e_per_mm:.7f}\n")
+    for path, path_spacing in hilbert:
+        coords = list(path.coords)
+        if len(coords) < 2:
+            continue
+        out.append(f"G0 X{coords[0][0]:.5f} Y{coords[0][1]:.5f} F{travel:.1f}\n")
+        out.append(f"G1 F{hilbert_feed:.1f}\n")
+        e_per_mm = (path_spacing * printer["layer_height"] / filament_area) * printer["filament_flow_ratio"]
+        for a, b in zip(coords, coords[1:]):
+            distance = math.dist(a, b)
+            if distance > 1e-8:
+                out.append(f"G1 X{b[0]:.5f} Y{b[1]:.5f} E{distance * e_per_mm:.7f}\n")
+    out.append(f"G0 X{after.x:.5f} Y{after.y:.5f} F{travel:.1f}\n")
+    out.append(f"G92 E{after.e:.7f}\nG1 F{after.feed:.2f}\n")
+    return out
+
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
-    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "skip_reasons": {}}
+    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "skip_reasons": {}}
     if not cfg["enabled"] or MARKER in text:
         return text, report
     lines = text.splitlines(keepends=True)
@@ -746,6 +876,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         by_layer.setdefault(feature.layer, []).append(feature)
     shapes = {}
     replacements = []
+    hilbert_targets = {}
     for feature in bridges:
         if cancelled():
             raise Cancelled("Cancelled.")
@@ -809,10 +940,29 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         # Progress messages do not change tool state and must not disable a bridge.
         replacement.extend(lines[i] for i in range(first.index,last.index+1) if command(lines[i])[0] == "M73")
         replacements.append((first.index, last.index + 1, replacement))
+        if cfg["next_layer_pattern"] == "hilbert":
+            hilbert_targets.setdefault((feature.layer + 1, tool_index), []).append(region)
         report["replaced_features"] += 1
         report["generated_arcs"] += len(arcs)
         previous = report["minimum_coverage_percent"]
         report["minimum_coverage_percent"] = min(coverages + ([previous] if previous is not None else []))
+    if cfg["next_layer_pattern"] == "hilbert" and hilbert_targets:
+        for feature in features:
+            feature_tools = {m.before.tool for m in feature.moves if segment(m) is not None}
+            if len(feature_tools) != 1:
+                continue
+            tool_index = feature_tools.pop()
+            matching = [geom for (layer, tool), geoms in hilbert_targets.items()
+                        if layer == feature.layer and tool == tool_index for geom in geoms]
+            if not matching:
+                continue
+            if tool_index not in printer_by_tool:
+                printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
+            replacement = hilbert_feature_replacement(
+                feature, lines, unary_union(matching), cfg, printer_by_tool[tool_index], cancelled)
+            if replacement is not None:
+                replacements.append((feature.start, feature.end, replacement))
+                report["hilbert_features"] += 1
     if not replacements:
         return text, report
     for start, end, replacement in reversed(replacements):
@@ -880,7 +1030,7 @@ def config_page(as_tab=False):
 :root{color-scheme:light dark;font:14px system-ui,sans-serif}body{max-width:780px;margin:24px auto;padding:0 20px}
 h1{font-size:26px;margin-bottom:8px}p{line-height:1.5;color:light-dark(#555,#aaa)}
 label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #8884}
-input[type=number]{width:100px;padding:7px;border:1px solid #8886;border-radius:5px;font:inherit}
+input[type=number],select{min-width:180px;padding:7px;border:1px solid #8886;border-radius:5px;font:inherit}
 button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:white;cursor:pointer;font:inherit;margin-top:18px}
 #status{margin-left:12px}summary{cursor:pointer;margin-top:20px;font-weight:600}.notice{padding:12px;background:#8881;border-radius:6px}
 small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
@@ -888,6 +1038,7 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <p>Concentric arc toolpaths for flat overhangs. Applied during G-code export.</p>
 <p id="last-report" role="status"></p><p class="notice">Inner wall overlap is the distance the Arc region can extend into printed walls. Larger values can reach inner wall lines. Arc spacing is independent: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
 <div id="settings"><label>Enable Arc Overhang<input id="enabled" type="checkbox"></label>
+<label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
 __ROWS__
 <button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>
 </div><small>Version 0.2.3  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
@@ -910,7 +1061,7 @@ document.getElementById('save').onclick=async()=>{
   const values={};
   for(const key of fields){
     const el=document.getElementById(key);
-    values[key]=typeof defaults[key]==='boolean'?el.checked:Number(el.value);
+    values[key]=typeof defaults[key]==='boolean'?el.checked:(typeof defaults[key]==='string'?el.value:Number(el.value));
     if(typeof values[key]==='number'&&!Number.isFinite(values[key])){status.textContent='Please enter valid numbers.';return;}
   }
   if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s){status.textContent='Minimum speed must not exceed maximum arc speed.';return;}
@@ -979,7 +1130,7 @@ const settingsBridge = {
     const report=response.last_report;
     document.getElementById('last-report').textContent=report ?
       (report.error ? 'Last export: '+report.error :
-       'Last export: '+report.replaced_features+' bridges replaced, '+report.generated_arcs+' arc toolpaths, '+report.skipped_features+' skipped. '+JSON.stringify(report.skip_reasons||{})) :
+       'Last export: '+report.replaced_features+' bridges replaced, '+report.generated_arcs+' arc toolpaths, '+(report.hilbert_features||0)+' Hilbert infill features, '+report.skipped_features+' skipped. '+JSON.stringify(report.skip_reasons||{})) :
       'No export with this plugin version yet.';
     return response.config;
   },

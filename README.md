@@ -30,3 +30,6 @@ The installable script is dist/arc_overhang.py. The wheel and Orca plugin ZIP ar
 - archive/legacy-workspace/: prior working files and both publish trees, excluding temporary browser profiles and vendored Python test dependencies.
 
 This repository is local-only; no remote was configured. A Git bundle and ZIP snapshot are stored beside the repository.
+
+
+The next-layer infill pattern is selectable: keep Orca’s original pattern by default, or use the optional Hilbert curve in eligible internal solid infill above replaced Arc regions. Hilbert can increase print time; unrelated infill is preserved.
