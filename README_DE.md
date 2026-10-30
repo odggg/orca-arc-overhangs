@@ -106,9 +106,9 @@ Text-G-Code mit Feature-Kommentaren und lineare Druckbewegungen (G1).
 G2/G3-Arc-Fitting mit relativen I/J-Zentren oder R ist unterstuetzt.
 Geschlossene Aussenkonturen werden benoetigt; Scarf-Ueberlappungen der Waende
 werden projiziert. Nicht-planare Bridge-Bahnen bleiben ausgeschlossen.
-Einzelwerkzeug/Einzelmaterial ist der vorgesehene Einsatzfall.
-Vase-/Spiral-Modus, IDEX, Werkzeugwechsel, volumetrische Extrusion und
-Firmware-Retraktion werden nicht unterstuetzt.
+Mehrmaterial mit regulären Werkzeugwechseln wird unterstuetzt. Vase-/Spiral-Modus,
+IDEX, Werkzeugwechsel innerhalb eines Bridge-Abschnitts, volumetrische Extrusion
+und Firmware-Retraktion werden nicht unterstuetzt.
 
 Temperatur, Bauteilluefter, Aux-Luefter und Gehaeuseluefter werden nicht geaendert.
 Die am ersetzten Bridge-Abschnitt aktiven Werte gelten weiter.
@@ -170,6 +170,7 @@ getrennt behandelt. Bei einem Fehler wird die Exportdatei nicht ersetzt.
 - test_ui.js, test_tab.js und die beiden preview.html-Dateien: isolierter Test der Einstellungsmaske
 - examples/: synthetische Vorher-/Nachher-Dateien fuer die G-Code-Analyse
 - VALIDATION.md: durchgefuehrte und noch offene Pruefungen
+- COMMUNITY_ISSUE_AUDIT.md: Abgleich der oeffentlichen Nutzerberichte mit diesem Orca-Port
 - LICENSE und THIRD_PARTY_NOTICES.md: Lizenz und Herkunft
 
 Die Beispieldateien sind synthetische Testdaten ohne druckerspezifischen

@@ -575,6 +575,34 @@ def parameters(config, printer, cancelled):
         "_cancelled": cancelled,
     }
 
+def anchor_arc_paths(paths, support, arc_width, wall_width):
+    """Order extrusion paths so every new arc starts on printed material."""
+    pending = [path for path in paths if not path.is_empty and path.length > 1e-5]
+    if not pending or support.is_empty:
+        return None
+    printed = support.buffer(wall_width * 0.5)
+    ordered = []
+    tolerance = max(0.01, arc_width * 0.05)
+    while pending:
+        best = None
+        for index, path in enumerate(pending):
+            coords = list(path.coords)
+            start, end = Point(coords[0]), Point(coords[-1])
+            start_gap, end_gap = start.distance(printed), end.distance(printed)
+            if best is None or start_gap < best[0]:
+                best = (start_gap, index, False)
+            if end_gap < best[0]:
+                best = (end_gap, index, True)
+        gap, index, reverse = best
+        if gap > arc_width * 0.5 + tolerance:
+            return None
+        path = pending.pop(index)
+        if reverse:
+            path = LineString(list(path.coords)[::-1])
+        ordered.append(path)
+        printed = unary_union((printed, path.buffer(arc_width * 0.5)))
+    return ordered
+
 def fill_polygon(poly, support, cfg, printer, cancelled):
     params = parameters(cfg, printer, cancelled)
     overlap = support.intersection(poly)
@@ -639,7 +667,11 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     coverage = 100 * (1 - remaining.area / poly.area)
     if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
         return None
-    return [ls for ls in lines if not ls.is_empty and ls.length > 1e-5], coverage
+    arc_width = params["ArcWidth"]
+    anchored = anchor_arc_paths(lines, support, arc_width, printer["outer_wall_line_width"])
+    if anchored is None:
+        return None
+    return anchored, coverage
 
 def emit_arcs(arcs, before, after, cfg, printer):
     if before.retracted > 1e-5 or after.retracted > 1e-5:

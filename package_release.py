@@ -42,6 +42,7 @@ files = {
     "README.md": ROOT / "README.md",
     "README_DE.md": ROOT / "README_DE.md",
     "VALIDATION.md": ROOT / "VALIDATION.md",
+    "COMMUNITY_ISSUE_AUDIT.md": ROOT / "COMMUNITY_ISSUE_AUDIT.md",
     "THIRD_PARTY_NOTICES.md": ROOT / "THIRD_PARTY_NOTICES.md",
     "LICENSE": ROOT / "LICENSE",
     "build_plugin.py": ROOT / "build_plugin.py",

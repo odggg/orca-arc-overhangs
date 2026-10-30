@@ -53,3 +53,22 @@ This validates transformation of the current file, not physical print quality.
 
 ## English UI in 0.2.3
 All plugin UI and runtime messages translated to English. Configuration keys and defaults unchanged. Regression suite rerun for this release.
+
+## Community issue review (2026-10-30)
+- Reviewed the open issue list in the original integration repository; most reports
+  target its legacy Prusa post-processing script rather than this Orca 2.5 port.
+- Added support anchoring and path ordering for generated arcs. Every path must
+  begin on prior-layer wall support or on an already-connected arc. Otherwise
+  that Bridge feature stays byte-for-byte unchanged. Regression covers path order,
+  reversal, isolated paths, and an isolated path mixed into a valid group.
+- Existing regression coverage verifies active-tool material settings and
+  preserving tool changes between Bridge features. Updated README_DE.md to remove
+  the obsolete statement that multi-material is unsupported.
+- 32 Python regression tests pass after the anchor change.
+- The attached Orca Cloud.htm is a static app shell with no report contents; it
+  supplied no user-specific issue data.
+- Remaining limitations: issues without a reproducible G-code sample cannot be
+  safely claimed fixed. In particular, repeated same-area overhang reports need
+  a matching model/G-code reproducer to verify the previous layer's actual wall
+  support. Legacy-only UI/features (for example Hilbert infill) are not part of
+  this Orca 2.5 port. See COMMUNITY_ISSUE_AUDIT.md for the per-report review.

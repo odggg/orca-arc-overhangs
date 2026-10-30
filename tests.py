@@ -65,6 +65,21 @@ class Tests(unittest.TestCase):
         self.assertNotIn(a.MARKER, output)
         self.assertEqual(output, source)
 
+    def test_arc_paths_start_on_support_or_previous_arc(self):
+        support = a.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+        disconnected = a.LineString([(8, 0.5), (9, 0.5)])
+        bridge = a.LineString([(1, 0.5), (2, 0.5)])
+        continuation = a.LineString([(3, 0.5), (2, 0.5)])
+        ordered = a.anchor_arc_paths(
+            [continuation, bridge], support, 0.4, 0.42)
+        self.assertIsNotNone(ordered)
+        self.assertEqual(list(ordered[0].coords)[0], (1.0, 0.5))
+        self.assertEqual(list(ordered[1].coords)[0], (2.0, 0.5))
+        self.assertIsNone(a.anchor_arc_paths(
+            [disconnected], support, 0.4, 0.42))
+        self.assertIsNone(a.anchor_arc_paths(
+            [bridge, disconnected], support, 0.4, 0.42))
+
     def test_wall_overlap_is_zero_when_disabled_and_grows_with_setting(self):
         self.assertEqual(a.DEFAULTS["wall_overlap_mm"], 0.2)
         source = fixture()
