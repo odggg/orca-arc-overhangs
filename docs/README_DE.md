@@ -206,3 +206,6 @@ Quellen:
 
 
 Das Füllmuster der Folgeschicht ist auswählbar: Standardmäßig bleibt Orças Muster erhalten. Optional kann in geeigneten Bereichen mit massiver Innenfüllung über ersetzten Arc-Bereichen eine Hilbert-Kurve verwendet werden. Das kann die Druckzeit erhöhen; andere Füllbereiche bleiben unverändert.
+
+
+Druckreihenfolge auf betroffenen Schichten: normale Wände und Infill, danach Arcs, zuletzt Overhang-Walls. Vorhandene Werkzeugwechsel bleiben erhalten; die Reihenfolge wird innerhalb des jeweiligen Werkzeugabschnitts angewendet.

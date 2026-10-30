@@ -39,7 +39,8 @@ class Tests(unittest.TestCase):
                 self.assertEqual(report["replaced_features"], 1, report)
                 self.assertGreater(report["generated_arcs"], 5)
                 self.assertIn(a.MARKER, output)
-                self.assertTrue(output.endswith(source[source.index("; FEATURE: Sparse"):] if style == "modern" else source[source.index(";TYPE:Sparse"):]))
+                self.assertIn("G1 X15 Y15 E0.3 F2400", output)
+                self.assertIn("M106 P2 S120", output)
                 self.assertEqual(a.process_text(output)[0], output)
                 original_end = a.parse(source.splitlines(True))[-1].moves[-1].after
                 new_end = a.parse(output.splitlines(True))[-1].moves[-1].after
@@ -72,18 +73,30 @@ class Tests(unittest.TestCase):
         self.assertTrue(any("Hilbert" in line for line in replacement))
         self.assertTrue(any(line.startswith("G92 E1.0000000") for line in replacement))
 
-    def test_arcs_are_injected_before_current_layer_walls(self):
-        output, report = a.process_text(fixture())
-        self.assertEqual(report["replaced_features"], 1, report)
-        first_change = output.index("; CHANGE_LAYER")
-        current_change = output.index("; CHANGE_LAYER", first_change + 1)
-        first_wall = output.index("; FEATURE: Outer wall", current_change)
-        arc_start = output.index(a.MARKER + "BEGIN")
-        self.assertLess(arc_start, first_wall)
-        overhang_wall = output.index("; FEATURE: Overhang wall", current_change)
-        self.assertLess(arc_start, overhang_wall)
-        self.assertIn("; FEATURE: Overhang wall", output)
-        self.assertNotIn("E0.15", output)
+    def test_normal_features_then_arcs_then_overhang_walls(self):
+        for style in ("modern", "legacy"):
+            source = fixture(style)
+            role = "; FEATURE: " if style == "modern" else ";TYPE:"
+            source = source.replace(role + "Sparse infill", ring(11, 11, 18, 28, "Inner wall") + role + "Sparse infill")
+            change = "; CHANGE_LAYER" if style == "modern" else ";LAYER_CHANGE"
+            source += change + "\nG1 Z0.6\n" + ring(10, 10, 30, 30) + "M104 S0\n"
+            output, report = a.process_text(source)
+            self.assertEqual(report["replaced_features"], 1, report)
+            self.assertLess(output.index(a.MARKER + "BEGIN"), output.rindex(change))
+            self.assertTrue(output.endswith("M104 S0\n"))
+            printed = [f for f in a.parse(output.splitlines(True)) if f.layer == 1
+                       and any(a.segment(m) is not None for m in f.moves)]
+            roles = [f.role for f in printed]
+            self.assertEqual(roles[-2:], ["bridge", "overhang wall"], roles)
+            self.assertIn("outer wall", roles[:-2])
+            self.assertIn("inner wall", roles[:-2])
+            self.assertIn("sparse infill", roles[:-2])
+            original_wall = [m for f in a.parse(source.splitlines(True)) if f.role == "overhang wall"
+                             for m in f.moves if a.segment(m) is not None]
+            moved_wall = [m for f in printed if f.role == "overhang wall"
+                          for m in f.moves if a.segment(m) is not None]
+            self.assertEqual([(list(a.segment(m).coords), m.delta_e) for m in original_wall],
+                             [(list(a.segment(m).coords), m.delta_e) for m in moved_wall])
 
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"
@@ -215,7 +228,7 @@ class Tests(unittest.TestCase):
         output, report = a.process_text(source)
         self.assertEqual(report["replaced_features"], 1)
         self.assertEqual(report["skipped_features"], 1)
-        self.assertTrue(output.endswith(interior))
+        self.assertIn(interior, output)
 
     def test_default_coverage_and_toolpath_envelope(self):
         output, report = a.process_text(fixture())

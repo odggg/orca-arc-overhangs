@@ -66,3 +66,11 @@
 - Preserve Bridge features that cross firmware-retract commands or begin/end while firmware retraction is active, instead of failing the complete export.
 - Keep parameterized G10/G11 and unrelated unsupported state commands rejected.
 - Add regressions for balanced firmware retracts, safe Bridge preservation and unsupported parameterized commands.
+
+
+## 2026-10-30 correction: finish the layer with Arcs and overhang walls
+
+- Keep normal walls and infill first, then print generated Arcs and finish with Overhang wall paths. This supersedes the earlier Arc-before-all-walls placement.
+- Relocate complete motion blocks with their original start coordinates, extrusion coordinate and feed; restore the state expected by subsequent G-code.
+- Preserve tool-selection boundaries and end/layer commands. Unsupported relocation states keep the original slice.
+- Verify modern/legacy feature tags, unchanged overhang geometry and layer/end-code boundaries.

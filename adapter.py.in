@@ -641,6 +641,98 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
     out.append(f"G92 E{after.e:.7f}\nG1 F{after.feed:.2f}\n")
     return out
 
+def relocate_travel(target, cfg):
+    """Restore the state needed by an unchanged block without extruding a path."""
+    if is_retracted(target) or None in (target.x, target.y, target.z):
+        raise UnsupportedGCode("Cannot safely relocate a retracted or unknown-position block.")
+    retract = cfg["retract_length_mm"]
+    feed = cfg["retract_speed_mm_s"] * 60
+    out = []
+    if retract:
+        out.append(f"G1 E{-retract:.7f} F{feed:.2f}\n")
+    out.append(f"G0 X{target.x:.5f} Y{target.y:.5f} Z{target.z:.5f} F{cfg['travel_speed_mm_s'] * 60:.2f}\n")
+    if retract:
+        out.append(f"G1 E{retract:.7f} F{feed:.2f}\n")
+    out.append(f"G92 E{target.e:.7f}\nG1 F{target.feed:.2f}\n")
+    return out
+
+def schedule_arc_tails(lines, cfg, cancelled):
+    """Within each layer/tool run: normal material, then Arcs, then overhang walls.
+
+    Tool-selection boundaries stay in place, including their purge macros.
+    Every moved block retains its original start coordinates, feed and E state.
+    """
+    features = parse(lines, cancelled)
+    moves = {m.index: m for f in features for m in f.moves}
+    boundaries = [0]
+    for index, line in enumerate(lines):
+        cmd, _ = command(line)
+        if re.match(r"^;\s*(?:LAYER_CHANGE|CHANGE_LAYER)\s*$", line) or (cmd.startswith("T") and cmd[1:].isdigit()):
+            boundaries.append(index)
+    boundaries.append(len(lines))
+    boundaries = sorted(set(boundaries))
+    def window(index):
+        return next((a, b) for a, b in zip(boundaries, boundaries[1:]) if a <= index < b)
+    groups = {}
+    start = None
+    for index, line in enumerate(lines):
+        if line.strip() == MARKER + "BEGIN":
+            start = index
+        elif line.strip() == MARKER + "END" and start is not None:
+            block_moves = [m for i, m in moves.items() if start <= i <= index]
+            if not block_moves:
+                raise UnsupportedGCode("Arc block has no movement state.")
+            block_moves.sort(key=lambda m: m.index)
+            key = window(start)
+            if index >= key[1]:
+                raise UnsupportedGCode("Arc block crosses a tool or layer boundary.")
+            groups.setdefault(key, {"arcs": [], "walls": []})["arcs"].append(
+                (start, index + 1, list(lines[start:index + 1]), block_moves[0].before, block_moves[-1].after))
+            start = None
+    for feature in features:
+        if feature.role not in ("overhang wall", "overhang perimeter"):
+            continue
+        printed = [m for m in feature.moves if segment(m) is not None]
+        if not printed:
+            continue
+        first, last = printed[0], printed[-1]
+        key = window(first.index)
+        if key not in groups:
+            continue
+        if last.index >= key[1]:
+            raise UnsupportedGCode("Overhang wall crosses a tool or layer boundary.")
+        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
+               for i in range(first.index, last.index + 1)):
+            raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
+        raw = [lines[feature.start]] + list(lines[first.index:last.index + 1])
+        groups[key]["walls"].append((first.index, last.index + 1, raw, first.before, last.after))
+    edits = []
+    for (lo, hi), group in groups.items():
+        blocks = group["arcs"] + group["walls"]
+        for start, end, raw, before, after in blocks:
+            if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
+                raise UnsupportedGCode("Cannot move an Arc/overhang block across an active retraction or tool change.")
+            edits.append((start, end, relocate_travel(after, cfg)))
+        remaining = [m for i, m in moves.items() if lo <= i < hi and segment(m) is not None
+                     and not any(a <= i < b for a, b, *_ in blocks)]
+        if remaining:
+            anchor = max(remaining, key=lambda m: m.index)
+            insertion, restore = anchor.index + 1, anchor.after
+        else:
+            first_block = min(blocks, key=lambda b: b[0])
+            insertion, restore = first_block[0], first_block[3]
+        tail = []
+        for start, end, raw, before, after in blocks:
+            if before.tool != restore.tool:
+                raise UnsupportedGCode("Arc tail would require an additional material change.")
+            tail.extend(relocate_travel(before, cfg))
+            tail.extend(raw)
+        tail.extend(relocate_travel(restore, cfg))
+        edits.append((insertion, insertion, tail))
+    for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
+        lines[start:end] = replacement
+    return lines
+
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
     report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "skip_reasons": {}}
@@ -723,42 +815,10 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if not valid or not arcs:
             skipped("Insufficient area, anchoring or coverage")
             continue
-        # Replacement is all-or-nothing for this feature, never all bridges in a layer.
-        # Arcs are a support layer for this layer's overhang walls, so put
-        # them before the first wall for this tool instead of where Bridge
-        # infill normally appears (after the walls).
-        wall_roles = ("outer wall", "external perimeter", "overhang wall",
-                      "overhang perimeter", "inner wall", "internal perimeter")
-        wall_candidates = []
-        for wall in by_layer.get(feature.layer, []):
-            if wall.role not in wall_roles or not wall.moves:
-                continue
-            wall_moves = [move for move in wall.moves if segment(move) is not None]
-            wall_tools = {move.before.tool for move in wall_moves}
-            if tool_index in wall_tools:
-                wall_candidates.append((wall.start, wall))
-        if wall_candidates:
-            insertion_index, first_wall = min(wall_candidates, key=lambda item: item[0])
-            restore_state = first_wall.moves[0].before
-            if is_retracted(restore_state):
-                skipped("Arc insertion point is firmware-retracted")
-                continue
-            replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, restore_state)
-            replacements.append((insertion_index, insertion_index, replacement))
-            # Keep progress markers but remove the original Bridge extrusion.
-            bridge_cleanup = [lines[i] for i in range(first.index, last.index + 1)
-                              if command(lines[i])[0] == "M73"]
-            # The Arc material was emitted earlier. Restore the slicer's
-            # logical extrusion/feed state where the original Bridge ended.
-            bridge_cleanup.extend((f"G92 E{last.after.e:.7f}\n",
-                                   f"G1 F{last.after.feed:.2f}\n"))
-            replacements.append((first.index, last.index + 1, bridge_cleanup))
-        else:
-            # No same-tool wall on this layer: retain the original insertion
-            # point because there is no wall toolpath to precede.
-            replacement = emit_arcs(arcs, first.before, last.after, cfg, printer)
-            replacement.extend(lines[i] for i in range(first.index,last.index+1) if command(lines[i])[0] == "M73")
-            replacements.append((first.index, last.index + 1, replacement))
+        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer)
+        replacement.extend(lines[i] for i in range(first.index, last.index + 1)
+                           if command(lines[i])[0] == "M73")
+        replacements.append((first.index, last.index + 1, replacement))
         if cfg["next_layer_pattern"] == "hilbert":
             hilbert_targets.setdefault((feature.layer + 1, tool_index), []).append(region)
         report["replaced_features"] += 1
@@ -796,6 +856,13 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     spans.extend((index, index, replacement) for index, replacement in insertions.items())
     for start, end, replacement in sorted(spans, key=lambda item: (item[0], item[1]), reverse=True):
         lines[start:end] = replacement
+    try:
+        lines = schedule_arc_tails(lines, cfg, cancelled)
+    except UnsupportedGCode as error:
+        report["skip_reasons"]["Unsafe Arc tail scheduling: " + str(error)] = report["replaced_features"]
+        report["skipped_features"] += report["replaced_features"]
+        report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = 0
+        return text, report
     return MARKER + VERSION + "\n" + "".join(lines), report
 
 def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
