@@ -139,6 +139,7 @@ class State:
     relative_e: bool = False
     absolute_xyz: bool = True
     retracted: float = 0.0
+    firmware_retracted: bool = False
     tool: int = 0
 
 @dataclass
@@ -230,7 +231,13 @@ def parse(lines, cancelled=lambda: False):
                         state.retracted = 0.0
             if feature:
                 feature.moves.append(Move(i, before, replace(state), delta, cmd, words))
-        elif cmd in ("G10", "G11", "G60", "G61", "G90.1", "G18", "G19", "G68", "G69"):
+        elif cmd in ("G10", "G11"):
+            if words:
+                raise UnsupportedGCode(cmd + " with parameters is not supported; expected firmware retract/unretract.")
+            # Orca emits parameterless G10/G11 for firmware retract. Track the
+            # state independently from E-based retracts because only G11 clears it.
+            state.firmware_retracted = cmd == "G10"
+        elif cmd in ("G60", "G61", "G90.1", "G18", "G19", "G68", "G69"):
             raise UnsupportedGCode("Unsupported state command: " + cmd)
         elif cmd.startswith("T") and cmd[1:].isdigit():
             tool = int(cmd[1:])
@@ -464,14 +471,17 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
         return None
     return anchored, coverage
 
+def is_retracted(state):
+    return state.retracted > 1e-5 or state.firmware_retracted
+
 def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
-    if before.retracted > 1e-5 or after.retracted > 1e-5:
+    if is_retracted(before) or is_retracted(after):
         raise UnsupportedGCode(
             f"Bridge region starts or ends with unrecovered retraction "
             f"(start {before.retracted:.5f} mm, end {after.retracted:.5f} mm). "
             "The region will not be modified.")
     restore = restore_state or after
-    if restore.retracted > 1e-5:
+    if is_retracted(restore):
         raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
     e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * cfg["flow_multiplier"] * printer["filament_flow_ratio"]
     travel = cfg["travel_speed_mm_s"] * 60
@@ -579,7 +589,7 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
     if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
            for i in range(feature.start, feature.end)):
         return None
-    if any(move.before.retracted > 1e-5 or move.after.retracted > 1e-5 for move in moves):
+    if any(is_retracted(move.before) or is_retracted(move.after) for move in moves):
         return None
     width = printer["outer_wall_line_width"]
     footprints = [line.buffer(width * 0.5) for _, line in strokes]
@@ -673,6 +683,9 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             continue
         if any(m.before.z != z or m.after.z != z for m in moves):
             raise UnsupportedGCode("Non-planar bridges are not supported.")
+        if is_retracted(first.before) or is_retracted(last.after):
+            skipped("Bridge starts or ends during firmware retraction")
+            continue
         if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73") for i in range(first.index, last.index + 1)):
             skipped("State command inside bridge region")
             continue
@@ -727,6 +740,9 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if wall_candidates:
             insertion_index, first_wall = min(wall_candidates, key=lambda item: item[0])
             restore_state = first_wall.moves[0].before
+            if is_retracted(restore_state):
+                skipped("Arc insertion point is firmware-retracted")
+                continue
             replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, restore_state)
             replacements.append((insertion_index, insertion_index, replacement))
             # Keep progress markers but remove the original Bridge extrusion.

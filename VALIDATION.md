@@ -79,3 +79,6 @@ All plugin UI and runtime messages translated to English. Configuration keys and
   its comments endpoint returned `missing_authorization` outside an authenticated
   browser session. The user then supplied a screenshot; visible comments and
   their dispositions are recorded in COMMUNITY_ISSUE_AUDIT.md.
+
+
+- Firmware retraction: parameterless G10/G11 are tracked as a balanced firmware-retract state. The 39-test suite covers a balanced pair, preservation of a Bridge feature containing retract commands, and rejection of parameterized G10.

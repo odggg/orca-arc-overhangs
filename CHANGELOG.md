@@ -58,3 +58,11 @@
 - Insert generated Arcs before the first same-tool wall feature on that layer so the Arc support is laid down before inner, outer, and overhang walls.
 - Remove the original Bridge extrusion at its original location while preserving progress markers and restore the slicer position at the insertion point.
 - Add a regression for Arc-before-wall ordering.
+
+
+## 2026-10-30 local repair: firmware retract commands
+
+- Accept parameterless G10/G11 firmware retract/unretract commands and track their state separately from E-based retraction.
+- Preserve Bridge features that cross firmware-retract commands or begin/end while firmware retraction is active, instead of failing the complete export.
+- Keep parameterized G10/G11 and unrelated unsupported state commands rejected.
+- Add regressions for balanced firmware retracts, safe Bridge preservation and unsupported parameterized commands.

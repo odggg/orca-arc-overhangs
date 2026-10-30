@@ -447,6 +447,30 @@ class Tests(unittest.TestCase):
         self.assertEqual(report["replaced_features"],1)
         self.assertIn(a.MARKER,output)
 
+    def test_firmware_retract_and_unretract_are_supported(self):
+        source = fixture().replace("G92 E0\n", "G92 E0\nG10\nG11\n", 1)
+        parsed = a.parse(source.splitlines(True))
+        self.assertFalse(parsed[0].moves[-1].after.firmware_retracted)
+        output, report = a.process_text(source)
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertIn(a.MARKER, output)
+
+    def test_bridge_with_firmware_retract_inside_is_preserved(self):
+        source = fixture()
+        source = source.replace(
+            "G1 X29.5 Y10.5 E0.15 F1200\n",
+            "G1 X29.5 Y10.5 E0.15 F1200\nG10\n", 1)
+        source = source.replace(
+            "G1 X19 Y10.9 E0.15 F1200\n",
+            "G11\nG1 X19 Y10.9 E0.15 F1200\n", 1)
+        output, report = a.process_text(source)
+        self.assertEqual(report["replaced_features"], 0, report)
+        self.assertEqual(output, source)
+
+    def test_g10_with_parameters_remains_unsupported(self):
+        with self.assertRaises(a.UnsupportedGCode):
+            a.parse("G90\nM83\nG10 P1 X2\n".splitlines(True))
+
     def test_real_unrecovered_retraction_remains_protected(self):
         cfg=a.configuration()
         printer=a.printer_settings(fixture().splitlines())
