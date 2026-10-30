@@ -69,17 +69,25 @@ def configuration(overrides=None):
         raise ValueError("z_min_mm exceeds z_max_mm.")
     return result
 
-def scalar(value, key):
+def scalar(value, key, tool_index=0):
     if isinstance(value, (list, tuple)):
-        if len(value) != 1:
-            raise UnsupportedGCode("Multiple values for " + key + ": only single-extruder configurations are supported.")
-        value = value[0]
+        if len(value) == 1:
+            value = value[0]
+        elif 0 <= tool_index < len(value):
+            value = value[tool_index]
+        else:
+            raise UnsupportedGCode(f"No {key} value for physical tool T{tool_index}.")
     if isinstance(value, str):
-        value = value.strip().strip('[]"')
-        if ";" in value or "," in value:
-            parts = re.split(r"[;,]", value)
-            if len(parts) != 1:
-                raise UnsupportedGCode("Multiple values for " + key + ": only single-extruder configurations are supported.")
+        value = value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            value = value[1:-1].strip()
+        parts = [part.strip().strip('[]"') for part in re.split(r"[;,]", value)]
+        if len(parts) > 1:
+            if not 0 <= tool_index < len(parts):
+                raise UnsupportedGCode(f"No {key} value for physical tool T{tool_index}.")
+            value = parts[tool_index]
+        else:
+            value = parts[0]
         if value.endswith("%"):
             return ("percent", float(value[:-1]))
     try:
@@ -90,7 +98,7 @@ def scalar(value, key):
         raise UnsupportedGCode("Invalid print setting: " + key)
     return value
 
-def printer_settings(lines, resolved=None):
+def printer_settings(lines, resolved=None, tool_index=0):
     raw = {}
     for line in lines:
         match = re.match(r"^;\s*(\w+)\s*=\s*(.*?)\s*$", line)
@@ -99,16 +107,16 @@ def printer_settings(lines, resolved=None):
     raw.update({k: v for k, v in (resolved or {}).items() if v is not None})
     result = {}
     for key in ("nozzle_diameter", "filament_diameter", "layer_height"):
-        result[key] = scalar(raw.get(key), key)
+        result[key] = scalar(raw.get(key), key, tool_index)
         if not isinstance(result[key], float) or result[key] <= 0:
             raise UnsupportedGCode(key + " must be positive.")
-    width = scalar(raw.get("outer_wall_line_width", raw.get("line_width", result["nozzle_diameter"])), "outer_wall_line_width")
+    width = scalar(raw.get("outer_wall_line_width", raw.get("line_width", result["nozzle_diameter"])), "outer_wall_line_width", tool_index)
     if isinstance(width, tuple):
         width = result["layer_height"] * width[1] / 100
     if width == 0:
         width = result["nozzle_diameter"] * 1.125
     result["outer_wall_line_width"] = width
-    flow = scalar(raw.get("filament_flow_ratio", 1), "filament_flow_ratio")
+    flow = scalar(raw.get("filament_flow_ratio", 1), "filament_flow_ratio", tool_index)
     if not isinstance(flow, float) or flow <= 0:
         raise UnsupportedGCode("Invalid filament_flow_ratio.")
     result["filament_flow_ratio"] = flow
@@ -127,6 +135,7 @@ class State:
     relative_e: bool = False
     absolute_xyz: bool = True
     retracted: float = 0.0
+    tool: int = 0
 
 @dataclass
 class Move:
@@ -159,7 +168,13 @@ def parse(lines, cancelled=lambda: False):
     features = []
     feature = None
     layer = -1
-    physical_tools = set()
+    # Bambu inserts T1000/T255 as virtual markers; T0 in that stream is not
+    # a physical multi-tool change. Ordinary Orca T0/T1 commands are physical.
+    has_bambu_virtual_markers = any(command(line)[0] in ("T255", "T1000") for line in lines)
+    has_nonzero_physical_tool = any(command(line)[0].startswith("T")
+                                    and command(line)[0][1:].isdigit()
+                                    and int(command(line)[0][1:]) not in (0, 255, 1000)
+                                    for line in lines)
     for i, line in enumerate(lines):
         if i % 2048 == 0 and cancelled():
             raise Cancelled("Cancelled.")
@@ -215,12 +230,9 @@ def parse(lines, cancelled=lambda: False):
             raise UnsupportedGCode("Unsupported state command: " + cmd)
         elif cmd.startswith("T") and cmd[1:].isdigit():
             tool = int(cmd[1:])
-            # Orca can number the sole active extruder with a non-zero index.
-            # Bambu's T0/T255/T1000 are virtual markers, not physical tools.
-            if tool not in (0, 255, 1000):
-                physical_tools.add(tool)
-                if len(physical_tools) > 1:
-                    raise UnsupportedGCode("Tool changes and multiple materials are not supported.")
+            if tool in (255, 1000) or (has_bambu_virtual_markers and not has_nonzero_physical_tool and tool == 0):
+                continue
+            state.tool = tool
         elif cmd == "M200" and words.get("D", 0) > 0:
             raise UnsupportedGCode("M200/volumetric extrusion is not supported.")
     if feature:
@@ -453,8 +465,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         report["skip_reasons"][reason] = report["skip_reasons"].get(reason, 0) + 1
     if not bridges:
         return text, report
-    printer = printer_settings(lines, resolved)
-    width = printer["outer_wall_line_width"]
+    printer_by_tool = {}
     by_layer = {}
     for feature in features:
         by_layer.setdefault(feature.layer, []).append(feature)
@@ -466,6 +477,15 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         moves = [m for m in feature.moves if segment(m) is not None]
         if not moves:
             continue
+        selected_tools = {m.before.tool for m in moves}
+        if len(selected_tools) != 1:
+            skipped("Tool change inside bridge feature")
+            continue
+        tool_index = selected_tools.pop()
+        if tool_index not in printer_by_tool:
+            printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
+        printer = printer_by_tool[tool_index]
+        width = printer["outer_wall_line_width"]
         first, last = moves[0], moves[-1]
         z = first.after.z
         if feature.layer < 1 or z is None or not cfg["z_min_mm"] <= z <= cfg["z_max_mm"]:
@@ -476,9 +496,10 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             skipped("State command inside bridge region")
             continue
         for layer in (feature.layer - 1, feature.layer):
-            if layer not in shapes:
-                shapes[layer] = layer_shape(by_layer.get(layer, []), width)
-        support, current = shapes[feature.layer - 1], shapes[feature.layer]
+            shape_key = (layer, tool_index)
+            if shape_key not in shapes:
+                shapes[shape_key] = layer_shape(by_layer.get(layer, []), width)
+        support, current = shapes[(feature.layer - 1, tool_index)], shapes[(feature.layer, tool_index)]
         if support.is_empty or current.is_empty:
             skipped("No closed contour")
             continue

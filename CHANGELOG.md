@@ -36,3 +36,10 @@
 - Reduce the default wall overlap from 0.8 mm to 0.2 mm.
 - Account for the printed widths of the Arc path and wall so a 0 mm setting creates no overlap with the wall.
 - Add geometry coverage checks for zero, normal and high overlap settings.
+
+## 2026-10-30 local repair: multi-material support
+
+- Track physical T-tool selection through G-code and retain tool changes.
+- Select per-tool nozzle, filament, wall-width and flow values for each Bridge feature.
+- Leave a Bridge feature unchanged if it switches tools internally.
+- Add regression coverage for material-specific extrusion and preserved tool switches.

@@ -96,6 +96,11 @@ Die darunterliegende Schicht wird zur Stuetzerkennung geprueft. Support fuer die
 zu ersetzende Flaeche entsprechend deaktivieren. Die Overhang-Wanderkennung muss
 aktiv sein.
 
+Mehrmaterial-Drucke mit Werkzeugwechseln werden unterstuetzt. Fuer jede Bridge nutzt
+das Plugin die Werte des aktiven Werkzeugs (Duese, Filament, Wandbreite und Flow);
+die Werkzeugwechsel im G-Code bleiben erhalten. Eine einzelne Bridge, die mitten
+im Abschnitt das Werkzeug wechselt, bleibt unveraendert.
+
 Der Parser benoetigt absolute XYZ-Koordinaten (G90), relative Extrusion (M83),
 Text-G-Code mit Feature-Kommentaren und lineare Druckbewegungen (G1).
 G2/G3-Arc-Fitting mit relativen I/J-Zentren oder R ist unterstuetzt.

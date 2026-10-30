@@ -4,7 +4,7 @@ A local, rebuildable archive of the Arc Overhang plugin, including the 0.2.3 sou
 
 ## Current repair
 
-The prior parser rejected every physical tool selector other than T0, so a one-tool print using (for example) T1 was reported as unsupported multimaterial. The parser now permits one distinct physical tool index and rejects a second. Bambu virtual markers (T0, T255, T1000) remain excluded from the physical-tool count.
+The parser now supports real multi-material tool changes. Each Bridge feature uses the active tool's nozzle, filament diameter, line width and flow ratio; the slicer's T commands remain in place. A single Bridge feature that changes tools internally is left untouched. Bambu virtual markers (T0, T255, T1000) remain handled separately.
 
 The installed OrcaSlicer copy was registered as 0.2.2. Its original module and wheel are preserved under evidence/installed-v0.2.2/; the patched installed copy is preserved there too. The corrected 0.2.3 source is the canonical rebuild source in adapter.py.in plus upstream/.
 

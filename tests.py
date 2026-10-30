@@ -236,10 +236,16 @@ class Tests(unittest.TestCase):
 
     def test_missing_settings_and_unsupported_modes(self):
         for source in (fixture().replace("; nozzle_diameter = 0.4\n",""),
-                       fixture().replace("M83","M83\nG20"),
-                       fixture().replace("; nozzle_diameter = 0.4","; nozzle_diameter = 0.4;0.6")):
+                       fixture().replace("M83","M83\nG20")):
             with self.subTest(source=source[:60]), self.assertRaises(a.UnsupportedGCode):
                 a.process_text(source)
+        source = fixture().replace("; nozzle_diameter = 0.4",
+                                   "; nozzle_diameter = 0.4;0.6")
+        source = source.replace("; filament_diameter = 1.75",
+                                "; filament_diameter = 1.75;2.85")
+        self.assertEqual(a.printer_settings(source.splitlines(), tool_index=1)["nozzle_diameter"], 0.6)
+        output, report = a.process_text(source)
+        self.assertEqual(report["replaced_features"], 1, report)
 
     def test_single_nonzero_tool_index_is_supported(self):
         source = fixture().replace("G90\nM83", "T1\nT1\nG90\nM83")
@@ -247,10 +253,37 @@ class Tests(unittest.TestCase):
         self.assertEqual(report["replaced_features"], 1)
         self.assertIn(a.MARKER, output)
 
-    def test_multiple_physical_tools_are_rejected(self):
-        source = fixture().replace("G90\nM83", "T1\nG90\nM83") + "T2\n"
-        with self.assertRaises(a.UnsupportedGCode):
-            a.process_text(source)
+    def test_multiple_physical_tools_use_selected_material_and_preserve_switches(self):
+        source = fixture().replace("G90\nM83", "T0\nG90\nM83")
+        source = source.replace("; FEATURE: Bridge", "T1\n; FEATURE: Bridge")
+        source = source.replace("; FEATURE: Sparse infill", "T0\n; FEATURE: Sparse infill")
+        resolved = {
+            "nozzle_diameter": [0.4, 0.6],
+            "filament_diameter": [1.75, 2.85],
+            "outer_wall_line_width": [0.42, 0.62],
+            "filament_flow_ratio": [1.0, 0.9],
+        }
+        selected = a.printer_settings(source.splitlines(), resolved, tool_index=1)
+        self.assertEqual(selected["nozzle_diameter"], 0.6)
+        self.assertEqual(selected["filament_diameter"], 2.85)
+        output, report = a.process_text(source, resolved=resolved)
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertIn("T1\n; FEATURE: Bridge", output)
+        self.assertTrue(output.endswith("T0\n; FEATURE: Sparse infill" + fixture().split("; FEATURE: Sparse infill",1)[1]))
+        arc_block = output.split(a.MARKER + "BEGIN",1)[1].split(a.MARKER + "END",1)[0]
+        arc_lines = arc_block.splitlines()
+        first_extrusion_index = next(i for i,line in enumerate(arc_lines)
+                                     if a.command(line)[0] == "G1"
+                                     and "X" in a.command(line)[1] and "Y" in a.command(line)[1]
+                                     and a.command(line)[1].get("E", 0) > 0)
+        first_extrusion = a.command(arc_lines[first_extrusion_index])[1]
+        travel_words = next(a.command(line)[1] for line in reversed(arc_lines[:first_extrusion_index])
+                            if a.command(line)[0] == "G1" and "X" in a.command(line)[1]
+                            and "Y" in a.command(line)[1] and "E" not in a.command(line)[1])
+        distance = ((first_extrusion["X"] - travel_words["X"])**2
+                    + (first_extrusion["Y"] - travel_words["Y"])**2)**0.5
+        expected_e_per_mm = (0.6 / 2.85) ** 2 * 1.35 * 0.9
+        self.assertAlmostEqual(first_extrusion["E"], distance * expected_e_per_mm, places=6)
 
     def test_seam_gap_is_closed_for_support_detection(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"
@@ -258,6 +291,26 @@ class Tests(unittest.TestCase):
         shape = a.layer_shape(a.parse(source.splitlines(True)), 0.42)
         self.assertGreater(shape.area, 399)
 
+
+    def test_tool_change_inside_bridge_feature_is_preserved(self):
+        source = fixture().replace("G1 X29.5 Y10.5 E0.15 F1200",
+                                   "G1 X29.5 Y10.5 E0.15 F1200\nT1", 1)
+        output, report = a.process_text(source)
+        self.assertEqual(report["replaced_features"], 0)
+        self.assertIn("T1\nG1 X29.5 Y10.9", output)
+
+    def test_bambu_markers_do_not_hide_real_multimaterial_switches(self):
+        source = fixture().replace("G90\nM83", "T1000\nT0\nG90\nM83")
+        source = source.replace("; FEATURE: Bridge", "T1\n; FEATURE: Bridge")
+        source = source.replace("; FEATURE: Sparse infill", "T0\nT255\n; FEATURE: Sparse infill")
+        resolved = {
+            "nozzle_diameter": [0.4, 0.6],
+            "filament_diameter": [1.75, 2.85],
+        }
+        output, report = a.process_text(source, resolved=resolved)
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertIn("T1\n; FEATURE: Bridge", output)
+        self.assertIn("T0\nT255\n; FEATURE: Sparse infill", output)
 
     def test_bambu_virtual_tool_markers_are_not_physical_tool_changes(self):
         source = fixture().replace("G90\nM83", "T1000\nT0\nG90\nM83") + "T255\n"
