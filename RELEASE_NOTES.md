@@ -15,7 +15,7 @@ Enable both Pages and Slicing Pipeline capabilities. In advanced mode, select Ar
 The plugin modifies G-code during export. Reopen exported G-code to inspect the result; the original slicing preview does not show these changes.
 
 ## Compatibility and status
-Experimental version 0.2.3. Requires OrcaSlicer 2.5.0 or later with native Python plugin support.
+Experimental version 0.2.4. Requires OrcaSlicer 2.5.0 or later with native Python plugin support.
 Initial release target: Windows x86-64. API checked against v2.5.0-alpha; later API changes may need adjustments.
 
 Requires absolute XYZ (G90), relative extrusion (M83), single-tool text G-code and reconstructable contours.
@@ -26,6 +26,10 @@ Based on Kelsch's Orca integration and work by Nicolai Wachenschwan and Steven M
 Independent adaptation; not an official OrcaSlicer project. GNU GPL version 3.
 
 Original integration: https://github.com/Kelsch/arc-overhang-orcaslicer-integration
+
+## Changes in 0.2.4
+
+Release identifier and package filenames updated for Orca Cloud. Plugin behavior is unchanged from the current GitHub source.
 
 ## Changes in 0.2.3
 

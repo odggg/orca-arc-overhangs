@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 — 2026-10-30
+- Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.
+- No toolpath or configuration behavior changes in this version bump.
+
 ## 0.2.3 â€” 2026-10-24
 - Repay tracked retraction during positive XY extrusion.
 - Clear submicron wipe rounding residue after positive extrusion.

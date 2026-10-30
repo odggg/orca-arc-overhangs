@@ -1,4 +1,4 @@
-# Validation - Arc Overhang 0.2.2
+# Validation - Arc Overhang 0.2.4
 Date: 2026-10-24
 
 ## Retraction regression in 0.2.2

@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.2.3  -  24.10.2026  -  experimentell
+Version 0.2.4  -  30.10.2026  -  experimentell
 
 Portierung von https://github.com/Kelsch/arc-overhang-orcaslicer-integration
 auf Orcas natives Python-Pluginsystem. Grundlage ist der konzentrische

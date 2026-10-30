@@ -6,7 +6,7 @@
 # name = "Arc Overhang"
 # description = "Concentric arc overhangs for OrcaSlicer 2.5. GPL-3.0; based on Kelsch, Nicolai Wachenschwan and Steven McCulloch."
 # author = "Kelsch / Nicolai Wachenschwan / Steven McCulloch; Orca 2.5 adaptation"
-# version = "0.2.3"
+# version = "0.2.4"
 # ///
 """Arc Overhang for OrcaSlicer 2.5. Modified 2026-10-24.
 GPL-3.0, no warranty. See LICENSE in the source distribution.
@@ -226,7 +226,7 @@ def getArcBoundarys(concentricArcs: list) -> list:
             boundarys.append(arcLine)
     return boundarys
 
-VERSION = "0.2.3"
+VERSION = "0.2.4"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
@@ -1165,7 +1165,7 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
 __ROWS__
 <button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>
-</div><small>Version 0.2.3  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
+</div><small>Version 0.2.4  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
 <script>
 const defaults = __DEFAULTS__;
 const fields = Object.keys(defaults);

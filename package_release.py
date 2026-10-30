@@ -6,7 +6,7 @@ from wheel.wheelfile import WheelFile
 
 ROOT = Path(__file__).parent
 DIST = ROOT / "dist"
-version = "0.2.3"
+version = "0.2.4"
 name = "orca_arc_overhang"
 info = name + "-" + version + ".dist-info"
 wheel = DIST / f"{name}-{version}-py3-none-any.whl"
@@ -64,7 +64,7 @@ files = {
     "icon.png": ROOT / "icon.png",
 }
 manifest = {path: hashlib.sha256(file.read_bytes()).hexdigest() for path, file in files.items()}
-package = ROOT / "Arc_Overhang_OrcaSlicer_2.5_v0.2.3.zip"
+package = ROOT / "Arc_Overhang_OrcaSlicer_2.5_v0.2.4.zip"
 with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED) as archive:
     for path, file in files.items():
         archive.write(file, path)
