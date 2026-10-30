@@ -70,7 +70,20 @@ class Tests(unittest.TestCase):
             a.printer_settings(source.splitlines()), lambda: False)
         self.assertIsNotNone(replacement)
         self.assertTrue(any("Hilbert" in line for line in replacement))
-        self.assertIn("G92 E1.0000000\n", replacement)
+        self.assertTrue(any(line.startswith("G92 E1.0000000") for line in replacement))
+
+    def test_arcs_are_injected_before_current_layer_walls(self):
+        output, report = a.process_text(fixture())
+        self.assertEqual(report["replaced_features"], 1, report)
+        first_change = output.index("; CHANGE_LAYER")
+        current_change = output.index("; CHANGE_LAYER", first_change + 1)
+        first_wall = output.index("; FEATURE: Outer wall", current_change)
+        arc_start = output.index(a.MARKER + "BEGIN")
+        self.assertLess(arc_start, first_wall)
+        overhang_wall = output.index("; FEATURE: Overhang wall", current_change)
+        self.assertLess(arc_start, overhang_wall)
+        self.assertIn("; FEATURE: Overhang wall", output)
+        self.assertNotIn("E0.15", output)
 
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"

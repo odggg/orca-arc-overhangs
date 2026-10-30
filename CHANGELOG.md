@@ -51,3 +51,10 @@
 - Limit replacement to solid internal infill overlapping the Arc zone; preserve sliced extrusion outside the zone.
 - Keep the slicer pattern as the default because Hilbert can increase print time.
 - Add selector, geometry, and setting-validation regressions.
+
+
+## 2026-10-30 local repair: Arc ordering
+
+- Insert generated Arcs before the first same-tool wall feature on that layer so the Arc support is laid down before inner, outer, and overhang walls.
+- Remove the original Bridge extrusion at its original location while preserving progress markers and restore the slicer position at the insertion point.
+- Add a regression for Arc-before-wall ordering.

@@ -464,12 +464,15 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
         return None
     return anchored, coverage
 
-def emit_arcs(arcs, before, after, cfg, printer):
+def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
     if before.retracted > 1e-5 or after.retracted > 1e-5:
         raise UnsupportedGCode(
             f"Bridge region starts or ends with unrecovered retraction "
             f"(start {before.retracted:.5f} mm, end {after.retracted:.5f} mm). "
             "The region will not be modified.")
+    restore = restore_state or after
+    if restore.retracted > 1e-5:
+        raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
     e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * cfg["flow_multiplier"] * printer["filament_flow_ratio"]
     travel = cfg["travel_speed_mm_s"] * 60
     retract = cfg["retract_length_mm"]
@@ -495,10 +498,10 @@ def emit_arcs(arcs, before, after, cfg, printer):
             last = pt
     if retract:
         out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
-    out.append(f"G1 X{after.x:.5f} Y{after.y:.5f} F{travel:.1f}\n")
+    out.append(f"G1 X{restore.x:.5f} Y{restore.y:.5f} F{travel:.1f}\n")
     if retract:
         out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
-    out.append(f"G92 E{after.e:.7f}\nG1 F{after.feed:.2f}\n")
+    out.append(f"G92 E{restore.e:.7f}\nG1 F{restore.feed:.2f}\n")
     out.append(MARKER + "END\n")
     return out
 
@@ -708,10 +711,38 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             skipped("Insufficient area, anchoring or coverage")
             continue
         # Replacement is all-or-nothing for this feature, never all bridges in a layer.
-        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer)
-        # Progress messages do not change tool state and must not disable a bridge.
-        replacement.extend(lines[i] for i in range(first.index,last.index+1) if command(lines[i])[0] == "M73")
-        replacements.append((first.index, last.index + 1, replacement))
+        # Arcs are a support layer for this layer's overhang walls, so put
+        # them before the first wall for this tool instead of where Bridge
+        # infill normally appears (after the walls).
+        wall_roles = ("outer wall", "external perimeter", "overhang wall",
+                      "overhang perimeter", "inner wall", "internal perimeter")
+        wall_candidates = []
+        for wall in by_layer.get(feature.layer, []):
+            if wall.role not in wall_roles or not wall.moves:
+                continue
+            wall_moves = [move for move in wall.moves if segment(move) is not None]
+            wall_tools = {move.before.tool for move in wall_moves}
+            if tool_index in wall_tools:
+                wall_candidates.append((wall.start, wall))
+        if wall_candidates:
+            insertion_index, first_wall = min(wall_candidates, key=lambda item: item[0])
+            restore_state = first_wall.moves[0].before
+            replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, restore_state)
+            replacements.append((insertion_index, insertion_index, replacement))
+            # Keep progress markers but remove the original Bridge extrusion.
+            bridge_cleanup = [lines[i] for i in range(first.index, last.index + 1)
+                              if command(lines[i])[0] == "M73"]
+            # The Arc material was emitted earlier. Restore the slicer's
+            # logical extrusion/feed state where the original Bridge ended.
+            bridge_cleanup.extend((f"G92 E{last.after.e:.7f}\n",
+                                   f"G1 F{last.after.feed:.2f}\n"))
+            replacements.append((first.index, last.index + 1, bridge_cleanup))
+        else:
+            # No same-tool wall on this layer: retain the original insertion
+            # point because there is no wall toolpath to precede.
+            replacement = emit_arcs(arcs, first.before, last.after, cfg, printer)
+            replacement.extend(lines[i] for i in range(first.index,last.index+1) if command(lines[i])[0] == "M73")
+            replacements.append((first.index, last.index + 1, replacement))
         if cfg["next_layer_pattern"] == "hilbert":
             hilbert_targets.setdefault((feature.layer + 1, tool_index), []).append(region)
         report["replaced_features"] += 1
@@ -737,7 +768,17 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
                 report["hilbert_features"] += 1
     if not replacements:
         return text, report
-    for start, end, replacement in reversed(replacements):
+    # Zero-width arc insertions can be earlier or later than the Bridge
+    # feature they replace. Group coincident insertions and apply every edit
+    # from the end of the original file toward its beginning.
+    insertions, spans = {}, []
+    for start, end, replacement in replacements:
+        if start == end:
+            insertions.setdefault(start, []).extend(replacement)
+        else:
+            spans.append((start, end, replacement))
+    spans.extend((index, index, replacement) for index, replacement in insertions.items())
+    for start, end, replacement in sorted(spans, key=lambda item: (item[0], item[1]), reverse=True):
         lines[start:end] = replacement
     return MARKER + VERSION + "\n" + "".join(lines), report
 
