@@ -4,3 +4,15 @@ __pycache__/
 venv/
 test-deps/
 browser-test-profile/
+
+# Private local archive material (kept outside the public project history)
+archive/
+evidence/
+release/
+fixtures/
+docs/cloud-chat*
+docs/archive-notes.md
+docs/test-record.md
+REAL_FILE_VALIDATION.json
+docs/REAL_FILE_VALIDATION.json
+publish-filter.log

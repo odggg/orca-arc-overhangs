@@ -1,35 +1,45 @@
 # Arc Overhang for OrcaSlicer 2.5
 
-A local, rebuildable archive of the Arc Overhang plugin, including the 0.2.3 source and release files, the single-tool detection repair, regression tests, original working assets, relevant Orca logs, and the related Cloud chat context.
+Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.2.3 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
 
-## Current repair
+## Current behavior
 
-The parser now supports real multi-material tool changes. Each Bridge feature uses the active tool's nozzle, filament diameter, line width and flow ratio; the slicer's T commands remain in place. A single Bridge feature that changes tools internally is left untouched. Bambu virtual markers (T0, T255, T1000) remain handled separately.
+- Replace eligible, geometrically unsupported Bridge regions with concentric Arc paths.
+- Print normal walls and infill first, then Arcs, and finish with Overhang walls within each tool section.
+- Preserve material changes and use the active tool's nozzle, filament and flow settings.
+- Support parameterless G10/G11 firmware retract commands.
+- Adjust inner wall overlap independently from Arc spacing.
+- Optionally select Hilbert infill for the next layer; the default keeps the slicer's pattern.
 
-The installed OrcaSlicer copy was registered as 0.2.2. Its original module and wheel are preserved under evidence/installed-v0.2.2/; the patched installed copy is preserved there too. The corrected 0.2.3 source is the canonical rebuild source in adapter.py.in plus upstream/.
+## Install and use
 
-## Rebuild
+Use the generated wheel in [dist/](dist/) or the ZIP package in this repository. German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
 
-Use Python 3.12 and the packages in requirements-dev.txt.
+## Build and check
 
-    python build_plugin.py
-    python -m pip install -r requirements-dev.txt
-    python tests.py
-    python package_release.py
+Requires Python 3.12 and Node.js for the UI bridge check.
 
-The installable script is dist/arc_overhang.py. The wheel and Orca plugin ZIP are generated into dist/ and the repository root. The package includes a SHA-256 manifest.
+```sh
+python -m pip install -r requirements-dev.txt
+python build_plugin.py
+python tests.py
+python test_audit.py
+node test_tab.js
+python package_release.py
+```
 
-## Repository layout
+Canonical source inputs are `adapter.py.in` and `upstream/`. `build_plugin.py` generates `dist/arc_overhang.py`; `package_release.py` creates the wheel and ZIP with a SHA-256 manifest. GitHub Actions runs the regression checks on pushes and pull requests.
 
-- adapter.py.in, upstream/: canonical source inputs.
-- dist/, build_plugin.py, package_release.py: generated plugin and rebuild steps.
-- tests.py, examples/, fixtures/: regression suite and saved G-code evidence.
-- release/: earlier 0.1.0–0.2.3 packages as found in the prior workspace.
-- evidence/: installed 0.2.2 originals, repaired files, and relevant log excerpt.
-- docs/cloud-chat-transcript.md: export of the related cloud conversation and attachment notes.
-- archive/legacy-workspace/: prior working files and both publish trees, excluding temporary browser profiles and vendored Python test dependencies.
+## Project files
 
-This repository is local-only; no remote was configured. A Git bundle and ZIP snapshot are stored beside the repository.
+- `adapter.py.in`, `upstream/`: canonical adapter and upstream geometry.
+- `dist/`, build scripts: generated plugin and distributable packages.
+- `tests.py`, `test_audit.py`, `test_tab.js`, `test_ui.js`: regression and UI checks.
+- `examples/`: synthetic G-code examples.
+- `CHANGELOG.md`, `COMMUNITY_ISSUE_AUDIT.md`, `VALIDATION.md`: changes, reviewed reports and verification.
 
+Private conversation exports, screenshots, local installation logs and printer files are retained in a separate local archive and are excluded from this repository's published history.
 
-The next-layer infill pattern is selectable: keep Orca’s original pattern by default, or use the optional Hilbert curve in eligible internal solid infill above replaced Arc regions. Hilbert can increase print time; unrelated infill is preserved.
+## License
+
+GPL-3.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
