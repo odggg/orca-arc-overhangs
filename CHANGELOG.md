@@ -6,7 +6,9 @@
 - Fix the extruder counter and feed restored after relocated blocks (previously taken before the block's final reset).
 - Fix the next-layer Hilbert option doing nothing: Orca opens a feature with retract, travel and unretract, and the retraction/unretract guards rejected every such feature. Hilbert jumps now retract and unretract around travel.
 - New optional **Wave** overhang mode (`overhang_mode`, default `arc`): the bridge is filled with offset wavefronts grown from the supported edge instead of concentric arcs. Port of the wavefront propagation from OrcaSlicer-WaveOverhangs; narrow-neck splitting, corner taper, ZigZag chaining and wave-aware supports are not ported. Spacing is set by `wave_spacing_nozzle_ratio` (default 0.875).
-- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (42 total).
+- Wave mode now has its own settings group: `wave_speed_mm_s` (default 8), `wave_flow_multiplier` (default 1.0) and `wave_spacing_nozzle_ratio`; Arc settings are untouched. The Wave defaults are untested on a printer.
+- New `z_hop_mm` (default 0 = off, behavior unchanged): lift Z for the travel between Arcs/Waves so the nozzle does not drag across freshly printed lines. Idea from jforbestyr/bambu-arc-overhang.
+- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (43 total).
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.

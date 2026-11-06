@@ -269,6 +269,21 @@ class Tests(unittest.TestCase):
         self.assertIn("G1 F600.00", out)
         self.assertIn("E0.1410612", out)
 
+    def test_wave_has_own_speed_flow_and_optional_z_hop(self):
+        printer = a.printer_settings(fixture().splitlines())
+        line = [a.LineString([(20, 20), (22, 20)])]
+        before, after = a.State(x=20, y=20, z=0.4, relative_e=True), a.State(x=22, y=20, z=0.4, relative_e=True)
+        arc = "".join(a.emit_arcs(line, before, after, a.configuration({"arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
+        wave = "".join(a.emit_arcs(line, before, after, a.configuration(
+            {"overhang_mode": "wave", "wave_speed_mm_s": 7, "wave_flow_multiplier": 1.0, "arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
+        self.assertIn("G1 F600.00", arc)
+        self.assertIn("G1 F420.00", wave)
+        self.assertNotIn("E0.1410612", wave)
+        self.assertNotIn("Z0.8", arc)
+        hop = "".join(a.emit_arcs(line, before, after, a.configuration({"z_hop_mm": 0.4}), printer))
+        self.assertIn("G1 Z0.80000", hop)
+        self.assertEqual(hop.count("G1 Z0.40000"), 2)
+
 
     def test_split_outer_overhang_wall_ring(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"

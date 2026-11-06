@@ -5,6 +5,9 @@ DEFAULTS = {
     "next_layer_pattern": "slicer",
     "overhang_mode": "arc",
     "wave_spacing_nozzle_ratio": 0.875,
+    "wave_speed_mm_s": 8.0,
+    "wave_flow_multiplier": 1.0,
+    "z_hop_mm": 0.0,
     "arc_speed_mm_s": 1.5,
     "minimum_arc_speed_mm_s": 0.5,
     "travel_speed_mm_s": 30.0,
@@ -59,7 +62,8 @@ def configuration(overrides=None):
             raise ValueError(key + " must not be negative.")
     for key in ("arc_speed_mm_s", "minimum_arc_speed_mm_s", "travel_speed_mm_s",
                 "arc_spacing_nozzle_ratio", "max_radius_mm", "flow_multiplier",
-                "minimum_arc_time_s", "max_edge_gap_mm", "retract_speed_mm_s"):
+                "minimum_arc_time_s", "max_edge_gap_mm", "retract_speed_mm_s",
+                "wave_speed_mm_s", "wave_flow_multiplier"):
         if result[key] <= 0:
             raise ValueError(key + " must be greater than 0.")
     if result["minimum_arc_speed_mm_s"] > result["arc_speed_mm_s"]:
@@ -531,8 +535,12 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
     restore = restore_state or after
     if is_retracted(restore):
         raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
-    e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * cfg["flow_multiplier"] * printer["filament_flow_ratio"]
+    wave = cfg["overhang_mode"] == "wave"
+    flow = cfg["wave_flow_multiplier"] if wave else cfg["flow_multiplier"]
+    e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * flow * printer["filament_flow_ratio"]
     travel = cfg["travel_speed_mm_s"] * 60
+    hop = cfg["z_hop_mm"]
+    z = before.z
     retract = cfg["retract_length_mm"]
     retract_feed = cfg["retract_speed_mm_s"] * 60
     out = [MARKER + "BEGIN\n", ";TYPE:Bridge\n"]
@@ -540,11 +548,18 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
         coords = list(arc.coords)
         if len(coords) < 2:
             continue
-        speed = max(cfg["minimum_arc_speed_mm_s"], min(cfg["arc_speed_mm_s"], arc.length / cfg["minimum_arc_time_s"])) * 60
+        if wave:
+            speed = cfg["wave_speed_mm_s"] * 60
+        else:
+            speed = max(cfg["minimum_arc_speed_mm_s"], min(cfg["arc_speed_mm_s"], arc.length / cfg["minimum_arc_time_s"])) * 60
         if retract:
             out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
         x, y = coords[0]
+        if hop:
+            out.append(f"G1 Z{z + hop:.5f} F{travel:.1f}\n")
         out.append(f"G1 X{x:.5f} Y{y:.5f} F{travel:.1f}\n")
+        if hop:
+            out.append(f"G1 Z{z:.5f} F{travel:.1f}\n")
         if retract:
             out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
         out.append(f"; Arc {i + 1}\nG1 F{speed:.2f}\n")
@@ -556,7 +571,11 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
             last = pt
     if retract:
         out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
+    if hop:
+        out.append(f"G1 Z{z + hop:.5f} F{travel:.1f}\n")
     out.append(f"G1 X{restore.x:.5f} Y{restore.y:.5f} F{travel:.1f}\n")
+    if hop:
+        out.append(f"G1 Z{z:.5f} F{travel:.1f}\n")
     if retract:
         out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
     out.append(f"G92 E{restore.e:.7f}\nG1 F{restore.feed:.2f}\n")
@@ -966,10 +985,10 @@ def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
 
 def config_page(as_tab=False):
     fields = [
+        (None, "Arc mode", ""),
         ("arc_speed_mm_s", "Arc speed", "mm/s"),
         ("minimum_arc_speed_mm_s", "Minimum arc speed", "mm/s"),
         ("arc_spacing_nozzle_ratio", "Arc spacing / nozzle diameter", "Factor"),
-        ("wave_spacing_nozzle_ratio", "Wave line spacing / nozzle diameter", "Factor"),
         ("wall_overlap_mm", "Inner wall overlap", "mm"),
         ("arc_center_offset_mm", "Arc center offset", "mm"),
         ("max_radius_mm", "Maximum radius", "mm"),
@@ -977,6 +996,12 @@ def config_page(as_tab=False):
         ("minimum_overhang_length_mm", "Minimum overhang length", "mm"),
         ("flow_multiplier", "Arc flow", "Factor"),
         ("minimum_arc_time_s", "Minimum time per arc", "s"),
+        (None, "Wave mode", ""),
+        ("wave_spacing_nozzle_ratio", "Wave line spacing / nozzle diameter", "Factor"),
+        ("wave_speed_mm_s", "Wave speed", "mm/s"),
+        ("wave_flow_multiplier", "Wave flow", "Factor"),
+        (None, "Both modes", ""),
+        ("z_hop_mm", "Z hop between arcs/waves (0 = off)", "mm"),
         ("max_edge_gap_mm", "Maximum edge gap", "mm"),
         ("minimum_coverage_percent", "Required area coverage", "%"),
         ("travel_speed_mm_s", "Travel speed", "mm/s"),
@@ -987,7 +1012,7 @@ def config_page(as_tab=False):
         ("z_min_mm", "Minimum Z", "mm"),
         ("z_max_mm", "Maximum Z", "mm"),
     ]
-    rows = "".join(f'<label>{label}<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span></label>' for key, label, unit in fields)
+    rows = "".join(f'<h3>{label}</h3>' if key is None else f'<label>{label}<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span></label>' for key, label, unit in fields)
     page = r"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arc Overhang</title>
