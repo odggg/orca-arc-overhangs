@@ -21,5 +21,5 @@ jobs:
       - run: python package_release.py
       - uses: actions/upload-artifact@v4
         with:
-          name: arc-overhang-v0.2.4
-          path: Arc_Overhang_OrcaSlicer_2.5_v0.2.4.zip
+          name: arc-overhang-v0.3.0
+          path: Arc_Overhang_OrcaSlicer_2.5_v0.3.0.zip

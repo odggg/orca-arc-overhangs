@@ -28,7 +28,7 @@ header = '''# /// script
 # name = "Arc Overhang"
 # description = "Concentric arc overhangs for OrcaSlicer 2.5. GPL-3.0; based on Kelsch, Nicolai Wachenschwan and Steven McCulloch."
 # author = "Kelsch / Nicolai Wachenschwan / Steven McCulloch; Orca 2.5 adaptation"
-# version = "0.2.4"
+# version = "0.3.0"
 # ///
 """Arc Overhang for OrcaSlicer 2.5. Modified 2026-10-24.
 GPL-3.0, no warranty. See LICENSE in the source distribution.

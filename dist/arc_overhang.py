@@ -6,7 +6,7 @@
 # name = "Arc Overhang"
 # description = "Concentric arc overhangs for OrcaSlicer 2.5. GPL-3.0; based on Kelsch, Nicolai Wachenschwan and Steven McCulloch."
 # author = "Kelsch / Nicolai Wachenschwan / Steven McCulloch; Orca 2.5 adaptation"
-# version = "0.2.4"
+# version = "0.3.0"
 # ///
 """Arc Overhang for OrcaSlicer 2.5. Modified 2026-10-24.
 GPL-3.0, no warranty. See LICENSE in the source distribution.
@@ -227,15 +227,30 @@ def getArcBoundarys(concentricArcs: list) -> list:
             boundarys.append(arcLine)
     return boundarys
 
-VERSION = "0.2.4"
+VERSION = "0.3.0"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
     "next_layer_pattern": "slicer",
     "overhang_mode": "arc",
+    "wave_pattern": "smart",
     "wave_spacing_nozzle_ratio": 0.875,
-    "wave_speed_mm_s": 8.0,
-    "wave_flow_multiplier": 1.0,
+    "wave_speed_mm_s": 2.0,
+    "wave_travel_speed_mm_s": 40.0,
+    "wave_flow_mm3_per_mm": 0.15,
+    "wave_perimeter_overlap_mm": 0.1,
+    "wave_min_width_mm": 0.7,
+    "wave_min_new_area_mm2": 0.01,
+    "wave_min_length_mm": 0.0,
+    "wave_max_iterations": 0,
+    "wave_corner_taper": False,
+    "wave_corner_spacing_mm": 0.2,
+    "wave_corner_distance_mm": 3.0,
+    "wave_corner_angle_deg": 90.0,
+    "wave_fan_override": False,
+    "wave_fan_percent": 100.0,
+    "wave_temperature_c": 0.0,
+    "wave_min_time_s": 0.0,
     "z_hop_mm": 0.0,
     "arc_speed_mm_s": 1.5,
     "minimum_arc_speed_mm_s": 0.5,
@@ -257,9 +272,11 @@ DEFAULTS = {
     "z_min_mm": 0.0,
     "z_max_mm": 10000.0,
 }
-CHOICES = {"next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave")}
+CHOICES = {"next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
+           "wave_pattern": ("smart", "zigzag", "monotonic")}
 CONFIG_KEYS = ("nozzle_diameter", "filament_diameter", "outer_wall_line_width",
-               "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e")
+               "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e",
+               "filament_max_volumetric_speed")
 NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 WORD = re.compile(r"([A-Z])\s*(" + NUMBER + r")", re.I)
 
@@ -292,7 +309,7 @@ def configuration(overrides=None):
     for key in ("arc_speed_mm_s", "minimum_arc_speed_mm_s", "travel_speed_mm_s",
                 "arc_spacing_nozzle_ratio", "max_radius_mm", "flow_multiplier",
                 "minimum_arc_time_s", "max_edge_gap_mm", "retract_speed_mm_s",
-                "wave_speed_mm_s", "wave_flow_multiplier"):
+                "wave_speed_mm_s", "wave_flow_mm3_per_mm", "wave_travel_speed_mm_s"):
         if result[key] <= 0:
             raise ValueError(key + " must be greater than 0.")
     if result["minimum_arc_speed_mm_s"] > result["arc_speed_mm_s"]:
@@ -300,6 +317,18 @@ def configuration(overrides=None):
     for key in ("arc_spacing_nozzle_ratio", "wave_spacing_nozzle_ratio"):
         if not 0.1 <= result[key] <= 1.5:
             raise ValueError(key + " must be between 0.1 and 1.5.")
+    if not 0 <= result["wave_fan_percent"] <= 100:
+        raise ValueError("wave_fan_percent must be between 0 and 100.")
+    if result["wave_temperature_c"] and not 100 <= result["wave_temperature_c"] <= 400:
+        raise ValueError("wave_temperature_c must be 0 (off) or between 100 and 400.")
+    if not 10 <= result["wave_corner_angle_deg"] <= 179:
+        raise ValueError("wave_corner_angle_deg must be between 10 and 179.")
+    if int(result["wave_max_iterations"]) != result["wave_max_iterations"]:
+        raise ValueError("wave_max_iterations must be a whole number.")
+    if result["wave_corner_taper"] and not 0 < result["wave_corner_spacing_mm"]:
+        raise ValueError("wave_corner_spacing_mm must be greater than 0 when the corner taper is on.")
+    if result["wave_min_time_s"] > 600:
+        raise ValueError("wave_min_time_s must not exceed 600.")
     if not 50 <= result["minimum_coverage_percent"] <= 100:
         raise ValueError("minimum_coverage_percent must be between 50 and 100.")
     if not 16 <= result["points_per_circle"] <= 80 or int(result["points_per_circle"]) != result["points_per_circle"]:
@@ -361,6 +390,11 @@ def printer_settings(lines, resolved=None, tool_index=0):
     if not isinstance(flow, float) or flow <= 0:
         raise UnsupportedGCode("Invalid filament_flow_ratio.")
     result["filament_flow_ratio"] = flow
+    try:
+        cap = scalar(raw.get("filament_max_volumetric_speed", 0), "filament_max_volumetric_speed", tool_index)
+    except UnsupportedGCode:
+        cap = 0.0
+    result["max_volumetric_speed"] = cap if isinstance(cap, float) and cap > 0 else 0.0
     volumetric = raw.get("use_volumetric_e", False)
     if str(volumetric).strip().lower() not in ("0", "false", "none", ""):
         raise UnsupportedGCode("Volumetric extrusion is not supported.")
@@ -708,54 +742,431 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
         return None
     return anchored, coverage
 
-def fill_polygon_wave(poly, support, cfg, printer, cancelled):
-    """Wave overhang fill: grow the printed region outward from the supported edge.
+def _parts(geom, kind):
+    return [g for g in shapely.get_parts(geom) if g.geom_type == kind and not g.is_empty]
 
-    Each step offsets the region by one line spacing; the new boundary, clipped
-    inside the walls, is one extrusion path laterally anchored to the previous
-    one. Same return contract as fill_polygon: (ordered paths, coverage %) or None.
-    Algorithm: Janis A. Andersons; wavefront port: Dennis Klappe's
-    OrcaSlicer-WaveOverhangs. Not ported: narrow-neck splitting, corner taper,
-    ZigZag/Smart chaining and wave-aware supports.
-    """
-    spacing = printer["nozzle_diameter"] * cfg["wave_spacing_nozzle_ratio"]
-    width = printer["outer_wall_line_width"]
-    printed = poly.intersection(support.buffer(width * 0.05))
-    if printed.is_empty or printed.area < 1e-5:
+def _lines(geom):
+    """Coordinate lists of every LineString in a geometry (clipper intersection_pl)."""
+    return [list(g.coords) for g in _parts(geom, "LineString") if len(g.coords) >= 2]
+
+def _simplify(line, tolerance):
+    return list(LineString(line).simplify(tolerance, preserve_topology=False).coords)
+
+def _path_length(line):
+    return sum(math.dist(a, b) for a, b in zip(line, line[1:]))
+
+def reconnect_polylines(polylines, limit):
+    """Greedily chain polylines whose end points are closer than limit (WaveOverhangs detail::reconnect_polylines)."""
+    chains = [list(p) for p in polylines]
+    alive = [bool(p) for p in chains]
+    close = lambda p, q: math.dist(p, q) ** 2 < limit * limit
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(chains)):
+            if not alive[i]:
+                continue
+            for j in range(i + 1, len(chains)):
+                if not alive[j]:
+                    continue
+                base, nxt = chains[i], chains[j]
+                if close(base[-1], nxt[0]):
+                    base.extend(nxt)
+                elif close(base[-1], nxt[-1]):
+                    base.extend(reversed(nxt))
+                elif close(base[0], nxt[-1]):
+                    chains[i] = nxt + base
+                elif close(base[0], nxt[0]):
+                    chains[i] = base[::-1] + nxt
+                else:
+                    continue
+                alive[j] = False
+                changed = True
+    return [c for c, ok in zip(chains, alive) if ok]
+
+def detect_overhang_corners(geom, angle_rad):
+    """Convex vertices whose interior angle is below the threshold."""
+    corners = []
+    for poly in polygons(geom):
+        poly = shapely.geometry.polygon.orient(poly, 1.0)
+        rings = [(list(poly.exterior.coords)[:-1], True)] + [(list(r.coords)[:-1], False) for r in poly.interiors]
+        for pts, ccw in rings:
+            n = len(pts)
+            if n < 3:
+                continue
+            for i in range(n):
+                a, b, c = pts[i - 1], pts[i], pts[(i + 1) % n]
+                v1, v2 = (b[0] - a[0], b[1] - a[1]), (c[0] - b[0], c[1] - b[1])
+                if v1[0] ** 2 + v1[1] ** 2 < 1e-12 or v2[0] ** 2 + v2[1] ** 2 < 1e-12:
+                    continue
+                turn = math.atan2(v1[0] * v2[1] - v1[1] * v2[0], v1[0] * v2[0] + v1[1] * v2[1])
+                if (turn > 0 if ccw else turn < 0) and math.pi - abs(turn) < angle_rad:
+                    corners.append(b)
+    return corners
+
+def corner_influence(corners, radius):
+    """Union of 16-sided disks around each corner: the reinforcement zone mask."""
+    if not corners or radius <= 0:
+        return GeometryCollection()
+    disks = [Polygon([(x + math.cos(2 * math.pi * k / 16) * radius, y + math.sin(2 * math.pi * k / 16) * radius)
+                      for k in range(16)]) for x, y in corners]
+    return unary_union(disks)
+
+def _boundary_points(poly):
+    return list(poly.exterior.coords)[:-1] + [p for r in poly.interiors for p in list(r.coords)[:-1]]
+
+def _closest_boundary_pair(a, b, container):
+    best = None
+    for src_poly, other, src_is_a in ((a, b, True), (b, a, False)):
+        for src in _boundary_points(src_poly):
+            projected = nearest_points(other.boundary, Point(src))[0]
+            dist = math.dist(src, (projected.x, projected.y))
+            if best is not None and dist >= best[0]:
+                continue
+            mid = Point((src[0] + projected.x) / 2, (src[1] + projected.y) / 2)
+            if not container.covers(mid):
+                continue
+            pair = (src, (projected.x, projected.y)) if src_is_a else ((projected.x, projected.y), src)
+            best = (dist, pair[0], pair[1])
+    return best
+
+def _slit(a, b, extension, half_width):
+    length = math.dist(a, b)
+    if length <= 0:
         return None
-    trim = poly.buffer(-width / 2)
-    if trim.is_empty:
+    dx, dy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+    nx, ny = -dy * half_width, dx * half_width
+    s = (a[0] - dx * extension, a[1] - dy * extension)
+    e = (b[0] + dx * extension, b[1] + dy * extension)
+    return Polygon([(s[0] + nx, s[1] + ny), (e[0] + nx, e[1] + ny), (e[0] - nx, e[1] - ny), (s[0] - nx, s[1] - ny)])
+
+def _hole_count(geom):
+    return sum(len(p.interiors) for p in polygons(geom))
+
+def _effective_slit(cover, a, b, extension, spacing):
+    """A slit about one line spacing wide that really splits the cover (or opens a hole)."""
+    half = spacing / 2 + 1e-6
+    for _ in range(6):
+        slit = _slit(a, b, extension, half)
+        if slit is not None and slit.is_valid:
+            split = cover.difference(slit)
+            if len(polygons(split)) != 1 or _hole_count(split) != len(cover.interiors):
+                return slit
+        half = max(half + 1e-6, half * 2)
+    return None
+
+def narrow_split_slits(cover, spacing, minimum_width):
+    """Slits that cut the wave cover where a neck is narrower than minimum_width."""
+    if minimum_width <= 0:
         return None
-    region, fronts = printed, []
-    # Bound the loop by geometry, not only by growth: one ring per spacing step.
-    for _ in range(int(cfg["max_radius_mm"] / spacing) + 2):
+    max_gap = minimum_width
+    thin = max(1e-6, spacing / 20)
+    extension = max(thin, minimum_width)
+    holes = len(cover.interiors)
+    candidates = []
+    def add(pair):
+        if pair is None or pair[0] > max_gap:
+            return
+        slit = _effective_slit(cover, pair[1], pair[2], spacing + extension, spacing)
+        if slit is not None:
+            candidates.append((pair[0], ((pair[1][0] + pair[2][0]) / 2, (pair[1][1] + pair[2][1]) / 2), slit))
+    for fraction in (0.25, 0.5, 0.75, 1.0):
+        inset = cover.buffer(-max(1e-6, fraction * spacing), join_style="round")
+        parts = polygons(inset)
+        count_changed, hole_changed = len(parts) > 1, _hole_count(inset) != holes
+        if not count_changed and not hole_changed:
+            continue
+        if count_changed:
+            for i in range(len(parts)):
+                for j in range(i + 1, len(parts)):
+                    add(_closest_boundary_pair(parts[i], parts[j], cover))
+        if hole_changed and cover.interiors:
+            outer = Polygon(cover.exterior)
+            for i, hole in enumerate(cover.interiors):
+                hp = Polygon(hole)
+                add(_closest_boundary_pair(outer, hp, cover))
+                for other in list(cover.interiors)[i + 1:]:
+                    add(_closest_boundary_pair(hp, Polygon(other), cover))
+    kept, slits = [], []
+    for dist, mid, slit in sorted(candidates, key=lambda c: c[0]):
+        if any(math.dist(mid, m) <= spacing / 2 for m in kept):
+            continue
+        kept.append(mid)
+        slits.append(slit)
+    return unary_union(slits) if slits else None
+
+def _point_at(line, distance):
+    if distance <= 0 or len(line) == 1:
+        return line[0]
+    walked = 0.0
+    for a, b in zip(line, line[1:]):
+        seg = math.dist(a, b)
+        if seg <= 0:
+            continue
+        if walked + seg >= distance:
+            t = (distance - walked) / seg
+            return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+        walked += seg
+    return line[-1]
+
+def _foot(line, pt):
+    """Segment index and clamped foot point of pt on a polyline."""
+    best = None
+    for i, (a, b) in enumerate(zip(line, line[1:])):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        denom = dx * dx + dy * dy
+        t = 0.0 if denom == 0 else max(0.0, min(1.0, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / denom))
+        foot = (a[0] + t * dx, a[1] + t * dy)
+        d = math.dist(pt, foot)
+        if best is None or d < best[0]:
+            best = (d, i, foot, 0.0 < t < 1.0)
+    return best
+
+def _support_score(candidate, supports, reach, prefix):
+    if not supports or len(candidate) < 2:
+        return -1.0
+    length = _path_length(candidate)
+    if length <= 0:
+        return -1.0
+    sample = min(length, max(1e-6, prefix))
+    best = -1.0
+    for support in reversed(supports):
+        if len(support) < 2:
+            continue
+        score = 0.0
+        for dist, weight in ((0.0, 3.0), (0.5 * sample, 2.0), (sample, 1.0)):
+            found = _foot(support, _point_at(candidate, dist))
+            if found is None:
+                continue
+            normalized = max(0.0, 1.0 - found[0] / max(1e-6, reach))
+            score += weight * (3.0 * normalized + (1.5 if found[3] else 0.2))
+        best = max(best, score)
+    return best
+
+def wave_smart_order(fronts, reach, prefix):
+    """Smart pattern: flip each front to start nearest the paths already laid down."""
+    laid = []
+    for front in fronts:
+        if len(front) < 2:
+            continue
+        if _support_score(front[::-1], laid, reach, prefix) > _support_score(front, laid, reach, prefix):
+            front = front[::-1]
+        laid.append(front)
+    return laid
+
+def wave_zigzag(levels, connector_limit):
+    """ZigZag pattern: chain fronts of successive levels into continuous paths."""
+    used = [[False] * len(level) for level in levels]
+    limit_sq = connector_limit * connector_limit
+    region = []
+    def append_or_start(front):
+        if not region:
+            region.append(list(front))
+            return
+        cur = region[-1]
+        d_keep, d_flip = math.dist(cur[-1], front[0]) ** 2, math.dist(cur[-1], front[-1]) ** 2
+        if min(d_keep, d_flip) > limit_sq:
+            region.append(list(front))
+            return
+        if d_flip < d_keep:
+            front = front[::-1]
+        cur.extend(front[1:] if cur[-1] == front[0] else front)
+    def follow(level, idx, rev):
+        while True:
+            used[level][idx] = True
+            cur = levels[level][idx]
+            if len(cur) < 2:
+                return
+            append_or_start(cur[::-1] if rev else cur)
+            anchor, found = region[-1][-1], None
+            for nl in range(level + 1, len(levels)):
+                best_idx, best_d, best_rev = None, limit_sq, False
+                for ci, cand in enumerate(levels[nl]):
+                    if used[nl][ci] or len(cand) < 2:
+                        continue
+                    d = math.dist(anchor, cand[0]) ** 2
+                    if d <= best_d:
+                        best_d, best_idx, best_rev = d, ci, False
+                    d = math.dist(anchor, cand[-1]) ** 2
+                    if d <= best_d:
+                        best_d, best_idx, best_rev = d, ci, True
+                if best_idx is not None:
+                    found = (nl, best_idx, best_rev)
+                break
+            if found is None:
+                return
+            level, idx, rev = found
+    for li, level in enumerate(levels):
+        for fi in range(len(level)):
+            if not used[li][fi]:
+                follow(li, fi, False)
+    return region
+
+def _clean_fronts(next_region, trim, tolerance, reconnect, mask=None):
+    fronts = next_region.boundary.intersection(trim)
+    if mask is not None:
+        fronts = fronts.intersection(mask)
+    lines = [_simplify(l, tolerance) for l in _lines(fronts)]
+    return reconnect_polylines([l for l in lines if len(l) >= 2], reconnect)
+
+def wave_generate(poly, support, cfg, printer, cancelled):
+    """Port of WaveOverhangs::generate (Andersons / Klappe). Returns (paths as point lists, covered geometry) or None."""
+    nozzle = printer["nozzle_diameter"]
+    spacing = max(1e-6, nozzle * cfg["wave_spacing_nozzle_ratio"])
+    width = nozzle
+    base = spacing
+    overlap = cfg["wave_perimeter_overlap_mm"]
+    resolution = 0.0125
+    anchors_size = min(3.0, base * 2)
+    seed_expansion = max(1e-6, base / 10)
+    connector = max(spacing, width) + overlap
+    growth = cfg["wave_min_new_area_mm2"] if cfg["wave_min_new_area_mm2"] > 0 else 0.05 * spacing * spacing
+    corner_spacing = cfg["wave_corner_spacing_mm"]
+    taper = cfg["wave_corner_taper"] and 0 < corner_spacing < spacing and cfg["wave_corner_distance_mm"] > 0
+    substeps = min(8, max(2, round(spacing / corner_spacing))) if taper else 1
+    step = max(corner_spacing, spacing / substeps) if taper else spacing
+    angle = math.radians(max(10.0, min(179.0, cfg["wave_corner_angle_deg"])))
+    pattern = cfg["wave_pattern"]
+    max_iter = int(cfg["wave_max_iterations"])
+
+    lower = support
+    overhangs = poly.difference(lower)
+    if overhangs.is_empty:
+        return None
+    anchors = poly.intersection(lower)
+    inset_anchors = anchors.difference(overhangs.buffer(anchors_size + 0.1 * width, join_style="bevel"))
+    inset_area = poly.difference(inset_anchors)
+    out_paths, filled = [], []
+    for overhang in polygons(unary_union(polygons(inset_area))):
         if cancelled():
             raise Cancelled("Cancelled.")
-        grown = region.buffer(spacing).intersection(poly)
-        if grown.area <= region.area + 0.01:
-            break
-        boundary = grown.boundary.intersection(trim)
-        parts = [g for g in shapely.get_parts(boundary) if g.geom_type == "LineString" and not g.is_empty]
-        merged = linemerge(parts) if parts else None
-        for line in ([] if merged is None else shapely.get_parts(merged)):
-            line = line.simplify(0.05 * spacing)
-            if line.length > 1e-5 and len(line.coords) >= 2:
-                fronts.append(line)
-        region = grown
-    if not fronts:
+        if cfg["wave_min_length_mm"] > 0 and overhang.exterior.length < cfg["wave_min_length_mm"]:
+            continue
+        cover_area = overhang.buffer(overlap, join_style="round")
+        influence = GeometryCollection()
+        if taper:
+            influence = corner_influence(detect_overhang_corners(overhang, angle), cfg["wave_corner_distance_mm"])
+        if cover_area.intersection(overhangs).is_empty:
+            continue
+        region_paths = []
+        for cover in polygons(unary_union(polygons(cover_area))):
+            slits = narrow_split_slits(cover, spacing, cfg["wave_min_width_mm"])
+            splits = polygons(cover.difference(slits)) if slits is not None else [cover]
+            splits = polygons(unary_union(splits))
+            anchoring = cover.buffer(1.1 * base, join_style="round").intersection(inset_anchors)
+            if anchoring.is_empty:
+                anchoring = cover.buffer(1.1 * base, join_style="round").intersection(anchors)
+            if anchoring.is_empty:
+                anchoring = cover.buffer(1.1 * base, join_style="round").intersection(lower)
+            if anchoring.is_empty:
+                continue
+            base_seeds = cover.boundary.intersection(anchoring.buffer(seed_expansion, join_style="round"))
+            if base_seeds.is_empty:
+                continue
+            for split in splits:
+                seeds = base_seeds.intersection(split)
+                if seeds.is_empty:
+                    continue
+                trim = split.buffer(-width / 2, join_style="round")
+                if trim.is_empty:
+                    trim = split.buffer(-0.1 * base, join_style="round")
+                if trim.is_empty:
+                    trim = split
+                accumulated = seeds.buffer(seed_expansion, cap_style="round").intersection(split)
+                if accumulated.is_empty:
+                    continue
+                levels, area, iteration = [], accumulated.area, 0
+                taper_active = taper and not influence.is_empty and not influence.intersection(split).is_empty
+                while True:
+                    if cancelled():
+                        raise Cancelled("Cancelled.")
+                    if max_iter > 0 and iteration >= max_iter:
+                        break
+                    iteration += 1
+                    if taper_active:
+                        for sub in range(1, substeps):
+                            grown = accumulated.buffer(sub * step, join_style="round").intersection(split)
+                            if grown.is_empty:
+                                continue
+                            fronts = _clean_fronts(grown, trim, min(0.05 * step, resolution), step, influence)
+                            if fronts:
+                                levels.append(fronts)
+                    next_region = accumulated.buffer(spacing, join_style="round").intersection(split)
+                    if next_region.is_empty or next_region.area <= area + growth:
+                        break
+                    fronts = _clean_fronts(next_region, trim, min(0.05 * spacing, resolution), spacing)
+                    if fronts:
+                        levels.append(fronts)
+                    accumulated, area = next_region, next_region.area
+                if not levels:
+                    continue
+                if pattern == "zigzag":
+                    paths = wave_zigzag(levels, connector)
+                elif pattern == "smart":
+                    paths = wave_smart_order([f for level in levels for f in level], max(width, connector), max(width, connector / 2))
+                else:
+                    paths = [f for level in levels for f in level]
+                if paths:
+                    region_paths.extend(paths)
+                    filled.append(accumulated)
+        out_paths.extend(region_paths)
+    if not out_paths:
         return None
-    coverage = 100 * region.area / poly.area
+    return out_paths, unary_union(filled).buffer(base / 2).buffer(-base / 2)
+
+def fill_polygon_wave(poly, support, cfg, printer, cancelled):
+    """Wave overhang fill. Same return contract as fill_polygon: (ordered paths, coverage %) or None.
+
+    Algorithm: Janis Andersons; Orca C++ port: Dennis Klappe's OrcaSlicer-WaveOverhangs (AGPL-3.0).
+    Ported: narrow-neck slit splitting, anchor fallbacks, wavefront propagation with
+    min-new-area / max-iterations / min-length, corner taper, reconnect, Smart / ZigZag /
+    Monotonic patterns. Not ported: the library's wave_seeds (a boundary-clip fallback is
+    used instead) and the bridge-versus-wave heuristic (the slicer already marked a Bridge).
+    """
+    printed = poly.intersection(support.buffer(printer["outer_wall_line_width"] * 0.05))
+    result = wave_generate(poly, support, cfg, printer, cancelled)
+    if result is None:
+        return None
+    paths, filled = result
+    covered = unary_union((printed, filled.intersection(poly)))
+    coverage = 100 * covered.area / poly.area
     if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
         return None
-    ordered = anchor_arc_paths(fronts, support, spacing, width)
-    if ordered is None:
-        return None
-    return ordered, coverage
+    lines = [LineString(p) for p in paths if len(p) >= 2 and _path_length(p) > 1e-5]
+    return (lines, coverage) if lines else None
+
+def previous_setting(lines, index, commands, key, skip=None):
+    """Last value of `key` set by one of `commands` before lines[index], or None."""
+    for text in reversed(lines[:index]):
+        cmd, words = command(text)
+        if cmd in commands and key in words and not (skip and skip(words)):
+            return words[key]
+        if cmd == "M107" and "M107" in commands:
+            return 0.0
+    return None
+
+def wave_wrappers(lines, index, arcs, cfg):
+    """G-code run before and after a wave block: fan, nozzle temperature, minimum time."""
+    pre, post = [], []
+    if cfg["wave_fan_override"]:
+        part_fan = lambda words: "P" in words and words["P"] not in (0, 1)
+        old = previous_setting(lines, index, ("M106", "M107"), "S", part_fan) or 0.0
+        pre.append(f"M106 S{round(cfg['wave_fan_percent'] * 2.55)}{chr(10)}")
+        post.append(f"M106 S{round(old)}{chr(10)}" if old else f"M107{chr(10)}")
+    if cfg["wave_temperature_c"]:
+        old = previous_setting(lines, index, ("M104", "M109"), "S")
+        if old:
+            pre.append(f"M104 S{cfg['wave_temperature_c']:g}{chr(10)}")
+            post.append(f"M104 S{old:g}{chr(10)}")
+    spent = sum(arc.length for arc in arcs) / cfg["wave_speed_mm_s"]
+    if spent < cfg["wave_min_time_s"]:
+        post.insert(0, f"G4 P{round((cfg['wave_min_time_s'] - spent) * 1000)}{chr(10)}")
+    return pre, post
 
 def is_retracted(state):
     return state.retracted > 1e-5 or state.firmware_retracted
 
-def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
+def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), post=()):
     if is_retracted(before) or is_retracted(after):
         raise UnsupportedGCode(
             f"Bridge region starts or ends with unrecovered retraction "
@@ -765,20 +1176,26 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
     if is_retracted(restore):
         raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
     wave = cfg["overhang_mode"] == "wave"
-    flow = cfg["wave_flow_multiplier"] if wave else cfg["flow_multiplier"]
-    e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * flow * printer["filament_flow_ratio"]
-    travel = cfg["travel_speed_mm_s"] * 60
+    if wave:
+        e_per_mm = cfg["wave_flow_mm3_per_mm"] / (math.pi * (printer["filament_diameter"] / 2) ** 2) * printer["filament_flow_ratio"]
+    else:
+        e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * cfg["flow_multiplier"] * printer["filament_flow_ratio"]
+    travel = (cfg["wave_travel_speed_mm_s"] if wave else cfg["travel_speed_mm_s"]) * 60
     hop = cfg["z_hop_mm"]
     z = before.z
     retract = cfg["retract_length_mm"]
     retract_feed = cfg["retract_speed_mm_s"] * 60
-    out = [MARKER + "BEGIN\n", ";TYPE:Bridge\n"]
+    out = [MARKER + "BEGIN\n", ";TYPE:Bridge\n", *pre]
     for i, arc in enumerate(arcs):
         coords = list(arc.coords)
         if len(coords) < 2:
             continue
         if wave:
-            speed = cfg["wave_speed_mm_s"] * 60
+            # Respect the filament's volumetric limit, as WaveOverhangs does (PR 115).
+            speed = cfg["wave_speed_mm_s"]
+            if printer.get("max_volumetric_speed"):
+                speed = min(speed, printer["max_volumetric_speed"] / cfg["wave_flow_mm3_per_mm"])
+            speed *= 60
         else:
             speed = max(cfg["minimum_arc_speed_mm_s"], min(cfg["arc_speed_mm_s"], arc.length / cfg["minimum_arc_time_s"])) * 60
         if retract:
@@ -807,6 +1224,7 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
         out.append(f"G1 Z{z:.5f} F{travel:.1f}\n")
     if retract:
         out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
+    out.extend(post)
     out.append(f"G92 E{restore.e:.7f}\nG1 F{restore.feed:.2f}\n")
     out.append(MARKER + "END\n")
     return out
@@ -1131,7 +1549,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if not valid or not arcs:
             skipped("Insufficient area, anchoring or coverage")
             continue
-        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer)
+        pre, post = wave_wrappers(lines, first.index, arcs, cfg) if cfg["overhang_mode"] == "wave" else ((), ())
+        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
                            if command(lines[i])[0] == "M73")
         replacements.append((first.index, last.index + 1, replacement))
@@ -1226,9 +1645,24 @@ def config_page(as_tab=False):
         ("flow_multiplier", "Arc flow", "Factor"),
         ("minimum_arc_time_s", "Minimum time per arc", "s"),
         (None, "Wave mode", ""),
+        ("wave_pattern", "Wave pattern", "select"),
         ("wave_spacing_nozzle_ratio", "Wave line spacing / nozzle diameter", "Factor"),
         ("wave_speed_mm_s", "Wave speed", "mm/s"),
-        ("wave_flow_multiplier", "Wave flow", "Factor"),
+        ("wave_travel_speed_mm_s", "Wave travel speed", "mm/s"),
+        ("wave_flow_mm3_per_mm", "Wave flow", "mm3/mm"),
+        ("wave_perimeter_overlap_mm", "Perimeter overlap", "mm"),
+        ("wave_min_width_mm", "Minimum wave width (splits narrow necks)", "mm"),
+        ("wave_min_new_area_mm2", "Minimum new area per wave", "mm2"),
+        ("wave_min_length_mm", "Minimum overhang length (skip shorter)", "mm"),
+        ("wave_max_iterations", "Maximum waves per region (0 = unlimited)", "Count"),
+        ("wave_corner_taper", "Denser lines at sharp corners", "bool"),
+        ("wave_corner_spacing_mm", "Corner line spacing", "mm"),
+        ("wave_corner_distance_mm", "Corner influence distance", "mm"),
+        ("wave_corner_angle_deg", "Corner angle threshold", "deg"),
+        ("wave_fan_override", "Override fan during waves", "bool"),
+        ("wave_fan_percent", "Wave fan speed", "%"),
+        ("wave_temperature_c", "Wave nozzle temperature (0 = off)", "C"),
+        ("wave_min_time_s", "Minimum wave time (dwell, 0 = off)", "s"),
         (None, "Both modes", ""),
         ("z_hop_mm", "Z hop between arcs/waves (0 = off)", "mm"),
         ("max_edge_gap_mm", "Maximum edge gap", "mm"),
@@ -1241,7 +1675,16 @@ def config_page(as_tab=False):
         ("z_min_mm", "Minimum Z", "mm"),
         ("z_max_mm", "Maximum Z", "mm"),
     ]
-    rows = "".join(f'<h3>{label}</h3>' if key is None else f'<label>{label}<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span></label>' for key, label, unit in fields)
+    def row(key, label, unit):
+        if key is None:
+            return f"<h3>{label}</h3>"
+        if unit == "bool":
+            return f'<label>{label}<input id="{key}" type="checkbox"></label>'
+        if unit == "select":
+            options = "".join(f'<option value="{c}">{c.capitalize()}</option>' for c in CHOICES[key])
+            return f'<label>{label}<span><select id="{key}">{options}</select></span></label>'
+        return f'<label>{label}<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span></label>'
+    rows = "".join(row(*field) for field in fields)
     page = r"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arc Overhang</title>
@@ -1261,7 +1704,7 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
 __ROWS__
 <button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>
-</div><small>Version 0.2.4  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
+</div><small>Version 0.3.0  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
 <script>
 const defaults = __DEFAULTS__;
 const fields = Object.keys(defaults);

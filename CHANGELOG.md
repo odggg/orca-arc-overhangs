@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-06
 - Respect the slicer's wall/infill order again, including Orca's "Print infill first": Arcs stay where the Bridge they replace was and normal walls/infill are never moved. This reverts the 0.2.4 behavior that forced every wall to print before the Arcs and degraded quality.
 - Only Overhang walls that the slicer printed before the Arcs of the same layer and tool run are moved, to just after the last Arc block, so they rest on the Arcs.
 - Fix the extruder counter and feed restored after relocated blocks (previously taken before the block's final reset).
 - Fix the next-layer Hilbert option doing nothing: Orca opens a feature with retract, travel and unretract, and the retraction/unretract guards rejected every such feature. Hilbert jumps now retract and unretract around travel.
-- New optional **Wave** overhang mode (`overhang_mode`, default `arc`): the bridge is filled with offset wavefronts grown from the supported edge instead of concentric arcs. Port of the wavefront propagation from OrcaSlicer-WaveOverhangs; narrow-neck splitting, corner taper, ZigZag chaining and wave-aware supports are not ported. Spacing is set by `wave_spacing_nozzle_ratio` (default 0.875).
-- Wave mode now has its own settings group: `wave_speed_mm_s` (default 8), `wave_flow_multiplier` (default 1.0) and `wave_spacing_nozzle_ratio`; Arc settings are untouched. The Wave defaults are untested on a printer.
+- New optional **Wave** overhang mode (`overhang_mode`, default `arc`), a Python/Shapely port of the algorithm in OrcaSlicer-WaveOverhangs (current main, including its PRs #114-#121): wavefront propagation with min-new-area, max-iterations and minimum-length limits, narrow-neck slit splitting (`wave_min_width_mm`), anchor fallbacks for thin supports, corner taper (`wave_corner_*`), deterministic polyline reconnection, and the Smart, ZigZag and Monotonic patterns (`wave_pattern`). Arc mode is unchanged.
+- Wave emission settings: `wave_speed_mm_s` (2), `wave_travel_speed_mm_s` (40), absolute `wave_flow_mm3_per_mm` (0.15), speed capped by the filament's max volumetric speed, optional fan override, nozzle temperature override and minimum wave time (dwell), each restored after the wave block. Defaults follow WaveOverhangs and are untested on a printer.
+- Not ported: the library's `wave_seeds` (a boundary clip is used instead), the bridge-versus-wave heuristic (the slicer's Bridge is always replaced), floor layers with speed ramp, per-region perimeter speed, wave-aware supports.
 - New `z_hop_mm` (default 0 = off, behavior unchanged): lift Z for the travel between Arcs/Waves so the nozzle does not drag across freshly printed lines. Idea from jforbestyr/bambu-arc-overhang.
 - Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (43 total).
 

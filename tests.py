@@ -275,7 +275,7 @@ class Tests(unittest.TestCase):
         before, after = a.State(x=20, y=20, z=0.4, relative_e=True), a.State(x=22, y=20, z=0.4, relative_e=True)
         arc = "".join(a.emit_arcs(line, before, after, a.configuration({"arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
         wave = "".join(a.emit_arcs(line, before, after, a.configuration(
-            {"overhang_mode": "wave", "wave_speed_mm_s": 7, "wave_flow_multiplier": 1.0, "arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
+            {"overhang_mode": "wave", "wave_speed_mm_s": 7, "arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
         self.assertIn("G1 F600.00", arc)
         self.assertIn("G1 F420.00", wave)
         self.assertNotIn("E0.1410612", wave)
@@ -284,6 +284,66 @@ class Tests(unittest.TestCase):
         self.assertIn("G1 Z0.80000", hop)
         self.assertEqual(hop.count("G1 Z0.40000"), 2)
 
+
+    def test_wave_components(self):
+        from shapely.geometry import box
+        from shapely.ops import unary_union
+        # reconnect joins touching ends and leaves distant pieces alone
+        joined = a.reconnect_polylines([[(0, 0), (1, 0)], [(1.05, 0), (2, 0)], [(5, 5), (6, 5)]], 0.2)
+        self.assertEqual(len(joined), 2)
+        self.assertEqual(joined[0][0], (0, 0))
+        # a 0.5 mm neck gets a slit that changes topology; a wide neck is not
+        narrow = unary_union([box(0, 0, 10, 10), box(10, 4.75, 10.5, 5.25), box(10.5, 0, 20.5, 10)])
+        slit = a.narrow_split_slits(narrow, 0.35, 0.7)
+        self.assertEqual(a._hole_count(narrow.difference(slit)), 1)  # the slit opens a hole, as in the C++ topology test
+        self.assertIsNone(a.narrow_split_slits(unary_union([box(0, 0, 10, 10), box(10, 3, 14, 7), box(14, 0, 24, 10)]), 0.35, 0.7))
+        # square has 4 sharp corners at 100 degrees, none at 80
+        self.assertEqual(len(a.detect_overhang_corners(box(0, 0, 4, 4), 1.7)), 4)
+        self.assertEqual(len(a.detect_overhang_corners(box(0, 0, 4, 4), 1.4)), 0)
+        printer = {"nozzle_diameter": 0.4, "outer_wall_line_width": 0.42}
+        poly, support = box(10, 10, 30, 30), box(10, 10, 20, 30)
+        counts = {}
+        for pattern in ("smart", "zigzag", "monotonic"):
+            cfg = a.configuration({"overhang_mode": "wave", "wave_pattern": pattern})
+            paths, coverage = a.fill_polygon_wave(poly, support, cfg, printer, lambda: False)
+            counts[pattern] = len(paths)
+            self.assertGreater(coverage, 95)
+            for path in paths:
+                self.assertLess(path.difference(poly).length, 1e-6)
+        self.assertLess(counts["zigzag"], counts["smart"])
+        self.assertEqual(counts["smart"], counts["monotonic"])
+        # corner taper adds lines; max_iterations limits them
+        base = a.configuration({"overhang_mode": "wave", "wave_pattern": "monotonic"})
+        taper = a.configuration({"overhang_mode": "wave", "wave_pattern": "monotonic", "wave_corner_taper": True,
+                                 "wave_corner_spacing_mm": 0.175, "wave_corner_angle_deg": 100, "wave_corner_distance_mm": 3, "minimum_coverage_percent": 50})
+        capped = a.configuration({"overhang_mode": "wave", "wave_max_iterations": 3, "minimum_coverage_percent": 50})
+        n_base = len(a.fill_polygon_wave(poly, support, base, printer, lambda: False)[0])
+        self.assertGreater(len(a.fill_polygon_wave(poly, support, taper, printer, lambda: False)[0]), n_base)
+        self.assertLessEqual(len(a.fill_polygon_wave(poly, support, capped, printer, lambda: False)[0]), 3)
+        long_only = a.configuration({"overhang_mode": "wave", "wave_min_length_mm": 500})
+        self.assertIsNone(a.fill_polygon_wave(poly, support, long_only, printer, lambda: False))
+
+    def test_wave_fan_temperature_dwell_and_volumetric_cap(self):
+        source = "M104 S210\nM106 S128\n" + fixture()
+        cfg = {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_fan_override": True,
+               "wave_temperature_c": 230, "wave_min_time_s": 500}
+        output, report = a.process_text(source, cfg)
+        self.assertEqual(report["replaced_features"], 1, report)
+        block = output[output.index(a.MARKER + "BEGIN"):output.index(a.MARKER + "END")]
+        self.assertIn("M106 S255", block)
+        self.assertIn("M106 S128", block)
+        self.assertIn("M104 S230", block)
+        self.assertIn("M104 S210", block)
+        self.assertIn("G4 P", block)
+        printer = a.printer_settings(fixture().splitlines())
+        printer["max_volumetric_speed"] = 0.15
+        before, after = a.State(x=20, y=20, z=0.4, relative_e=True), a.State(x=22, y=20, z=0.4, relative_e=True)
+        out = "".join(a.emit_arcs([a.LineString([(20, 20), (22, 20)])], before, after,
+                                  a.configuration({"overhang_mode": "wave", "wave_speed_mm_s": 5}), printer))
+        self.assertIn("G1 F60.00", out)
+        for bad in ({"wave_pattern": "spiral"}, {"wave_fan_percent": 101}, {"wave_temperature_c": 50}, {"wave_corner_angle_deg": 5}):
+            with self.assertRaises(ValueError):
+                a.configuration(bad)
 
     def test_split_outer_overhang_wall_ring(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"

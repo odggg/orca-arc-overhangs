@@ -1,6 +1,6 @@
 # Arc Overhang for OrcaSlicer 2.5
 
-Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.2.4 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
+Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.3.0 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## Current behavior
 
