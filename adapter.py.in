@@ -579,7 +579,9 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
         return None
     moves = feature.moves
     strokes = [(move, segment(move)) for move in moves]
-    if any(move.delta_e > 1e-9 and line is None for move, line in strokes):
+    # A pure-E move (unretract/prime) has no geometry and is not an extrusion stroke.
+    if any(move.delta_e > 1e-9 and line is None and ("X" in move.words or "Y" in move.words)
+           for move, line in strokes):
         return None
     strokes = [(move, line) for move, line in strokes if line is not None]
     if not strokes or any(move.before.z != strokes[0][0].before.z or move.after.z != strokes[0][0].after.z for move, _ in strokes):
@@ -589,7 +591,11 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
     if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
            for i in range(feature.start, feature.end)):
         return None
-    if any(is_retracted(move.before) or is_retracted(move.after) for move in moves):
+    # Orca writes ;TYPE before the retract/travel/unretract that opens a feature, so
+    # moves inside it are legitimately retracted. Only the boundaries and the
+    # extruding strokes must be unretracted for the replacement to be balanced.
+    if is_retracted(moves[0].before) or is_retracted(moves[-1].after) \
+            or any(is_retracted(move.before) or is_retracted(move.after) for move, _ in strokes):
         return None
     width = printer["outer_wall_line_width"]
     footprints = [line.buffer(width * 0.5) for _, line in strokes]
@@ -609,6 +615,13 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
     travel = cfg["travel_speed_mm_s"] * 60
     hilbert_feed = max(60.0, strokes[0][0].before.feed)
     out = ["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n"]
+    retract, retract_feed = cfg["retract_length_mm"], cfg["retract_speed_mm_s"] * 60
+    def jump(x, y):
+        if retract:
+            out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
+        out.append(f"G0 X{x:.5f} Y{y:.5f} F{travel:.1f}\n")
+        if retract:
+            out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
     # Preserve the sliced infill outside the replacement zone, clipping only
     # the material footprint that the Hilbert paths will cover.
     cut_zone = unary_union(fill_polys).buffer(0.01)
@@ -619,7 +632,7 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
             coords = list(part.coords)
             if len(coords) < 2 or part.length <= 1e-5:
                 continue
-            out.append(f"G0 X{coords[0][0]:.5f} Y{coords[0][1]:.5f} F{travel:.1f}\n")
+            jump(*coords[0])
             out.append(f"G1 F{max(60.0, move.before.feed):.1f}\n")
             e_per_mm = move.delta_e / line.length
             for a, b in zip(coords, coords[1:]):
@@ -630,14 +643,14 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
         coords = list(path.coords)
         if len(coords) < 2:
             continue
-        out.append(f"G0 X{coords[0][0]:.5f} Y{coords[0][1]:.5f} F{travel:.1f}\n")
+        jump(*coords[0])
         out.append(f"G1 F{hilbert_feed:.1f}\n")
         e_per_mm = (path_spacing * printer["layer_height"] / filament_area) * printer["filament_flow_ratio"]
         for a, b in zip(coords, coords[1:]):
             distance = math.dist(a, b)
             if distance > 1e-8:
                 out.append(f"G1 X{b[0]:.5f} Y{b[1]:.5f} E{distance * e_per_mm:.7f}\n")
-    out.append(f"G0 X{after.x:.5f} Y{after.y:.5f} F{travel:.1f}\n")
+    jump(after.x, after.y)
     out.append(f"G92 E{after.e:.7f}\nG1 F{after.feed:.2f}\n")
     return out
 
@@ -657,9 +670,13 @@ def relocate_travel(target, cfg):
     return out
 
 def schedule_arc_tails(lines, cfg, cancelled):
-    """Within each layer/tool run: normal material, then Arcs, then overhang walls.
+    """Keep the slicer's order, except print overhang walls after the Arcs they rest on.
 
-    Tool-selection boundaries stay in place, including their purge macros.
+    Arcs stay exactly where the Bridge they replace was. Normal walls and infill
+    are never moved, so Orca's wall/infill order setting ("infill first" etc.)
+    still decides how Arcs and walls interleave. Only overhang walls that the
+    slicer printed before the Arcs of the same layer/tool run are moved, to just
+    after the last Arc block. Tool-selection boundaries stay in place.
     Every moved block retains its original start coordinates, feed and E state.
     """
     features = parse(lines, cancelled)
@@ -679,15 +696,23 @@ def schedule_arc_tails(lines, cfg, cancelled):
         if line.strip() == MARKER + "BEGIN":
             start = index
         elif line.strip() == MARKER + "END" and start is not None:
-            block_moves = [m for i, m in moves.items() if start <= i <= index]
+            block_moves = sorted((m for i, m in moves.items() if start <= i <= index), key=lambda m: m.index)
             if not block_moves:
                 raise UnsupportedGCode("Arc block has no movement state.")
-            block_moves.sort(key=lambda m: m.index)
             key = window(start)
             if index >= key[1]:
                 raise UnsupportedGCode("Arc block crosses a tool or layer boundary.")
+            # The block ends with G92 E / G1 F that restore the pre-bridge extruder
+            # counter and feed; the last move's own state still holds Arc extrusion.
+            restored = replace(block_moves[-1].after)
+            for text in lines[start:index]:
+                cmd, words = command(text)
+                if cmd == "G92" and "E" in words:
+                    restored.e = words["E"]
+                elif cmd == "G1" and "F" in words and "X" not in words and "E" not in words:
+                    restored.feed = words["F"]
             groups.setdefault(key, {"arcs": [], "walls": []})["arcs"].append(
-                (start, index + 1, list(lines[start:index + 1]), block_moves[0].before, block_moves[-1].after))
+                (start, index + 1, restored))
             start = None
     for feature in features:
         if feature.role not in ("overhang wall", "overhang perimeter"):
@@ -701,34 +726,28 @@ def schedule_arc_tails(lines, cfg, cancelled):
             continue
         if last.index >= key[1]:
             raise UnsupportedGCode("Overhang wall crosses a tool or layer boundary.")
-        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
-               for i in range(first.index, last.index + 1)):
-            raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
         raw = [lines[feature.start]] + list(lines[first.index:last.index + 1])
         groups[key]["walls"].append((first.index, last.index + 1, raw, first.before, last.after))
     edits = []
-    for (lo, hi), group in groups.items():
-        blocks = group["arcs"] + group["walls"]
-        for start, end, raw, before, after in blocks:
-            if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
-                raise UnsupportedGCode("Cannot move an Arc/overhang block across an active retraction or tool change.")
-            edits.append((start, end, relocate_travel(after, cfg)))
-        remaining = [m for i, m in moves.items() if lo <= i < hi and segment(m) is not None
-                     and not any(a <= i < b for a, b, *_ in blocks)]
-        if remaining:
-            anchor = max(remaining, key=lambda m: m.index)
-            insertion, restore = anchor.index + 1, anchor.after
-        else:
-            first_block = min(blocks, key=lambda b: b[0])
-            insertion, restore = first_block[0], first_block[3]
+    for group in groups.values():
+        arc_end, restore = max(group["arcs"], key=lambda arc: arc[1])[1:]
+        early = [wall for wall in group["walls"] if wall[0] < arc_end]
+        if not early:
+            continue
         tail = []
-        for start, end, raw, before, after in blocks:
-            if before.tool != restore.tool:
-                raise UnsupportedGCode("Arc tail would require an additional material change.")
+        for start, end, raw, before, after in early:
+            if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
+                raise UnsupportedGCode("Cannot move an overhang wall across an active retraction or tool change.")
+            if before.tool != restore.tool or is_retracted(restore):
+                raise UnsupportedGCode("Overhang wall move would require an additional material change.")
+            if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
+                   for i in range(start, end)):
+                raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
+            edits.append((start, end, relocate_travel(after, cfg)))
             tail.extend(relocate_travel(before, cfg))
             tail.extend(raw)
         tail.extend(relocate_travel(restore, cfg))
-        edits.append((insertion, insertion, tail))
+        edits.append((arc_end, arc_end, tail))
     for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
         lines[start:end] = replacement
     return lines

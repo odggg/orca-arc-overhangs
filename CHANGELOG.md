@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- Respect the slicer's wall/infill order again, including Orca's "Print infill first": Arcs stay where the Bridge they replace was and normal walls/infill are never moved. This reverts the 0.2.4 behavior that forced every wall to print before the Arcs and degraded quality.
+- Only Overhang walls that the slicer printed before the Arcs of the same layer and tool run are moved, to just after the last Arc block, so they rest on the Arcs.
+- Fix the extruder counter and feed restored after relocated blocks (previously taken before the block's final reset).
+- Fix the next-layer Hilbert option doing nothing: Orca opens a feature with retract, travel and unretract, and the retraction/unretract guards rejected every such feature. Hilbert jumps now retract and unretract around travel.
+- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction (41 total).
+
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.
 - No toolpath or configuration behavior changes in this version bump.

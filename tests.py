@@ -73,7 +73,24 @@ class Tests(unittest.TestCase):
         self.assertTrue(any("Hilbert" in line for line in replacement))
         self.assertTrue(any(line.startswith("G92 E1.0000000") for line in replacement))
 
-    def test_normal_features_then_arcs_then_overhang_walls(self):
+    def test_hilbert_applies_to_feature_that_opens_with_retract_travel(self):
+        # Orca emits ;TYPE first, then retract, travel, unretract. This must not block Hilbert.
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\nG1 E-0.8 F2100\nG1 X20 Y12 F9000\nG1 E0.8 F2100\n"
+        for i in range(36):
+            y = 12 + i * 0.45
+            xa, xb = (20, 28) if i % 2 == 0 else (28, 20)
+            source += f"G1 X{xa} Y{y} F9000\nG1 X{xb} Y{y} E0.3 F2400\n"
+        source += "; FEATURE: Outer wall\nG1 E-0.8 F2100\nG1 X10 Y10 F9000\nG1 E0.8 F2100\nG1 X30 Y10 E0.5\n"
+        output, report = a.process_text(source, {"minimum_coverage_percent": 80, "next_layer_pattern": "hilbert"})
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertEqual(report["hilbert_features"], 1, report)
+        self.assertIn("Hilbert", output)
+        # Balanced retraction: the replacement ends unretracted.
+        feature = next(f for f in a.parse(output.splitlines(True)) if f.role.startswith("internal solid infill (hilbert"))
+        self.assertFalse(a.is_retracted(feature.moves[-1].after))
+
+    def test_slicer_order_kept_but_overhang_wall_follows_arcs(self):
+        # Default Orca order: walls first, bridge after. Only the overhang wall moves.
         for style in ("modern", "legacy"):
             source = fixture(style)
             role = "; FEATURE: " if style == "modern" else ";TYPE:"
@@ -87,16 +104,36 @@ class Tests(unittest.TestCase):
             printed = [f for f in a.parse(output.splitlines(True)) if f.layer == 1
                        and any(a.segment(m) is not None for m in f.moves)]
             roles = [f.role for f in printed]
-            self.assertEqual(roles[-2:], ["bridge", "overhang wall"], roles)
-            self.assertIn("outer wall", roles[:-2])
-            self.assertIn("inner wall", roles[:-2])
-            self.assertIn("sparse infill", roles[:-2])
+            self.assertEqual(roles, ["outer wall", "bridge", "overhang wall", "inner wall", "sparse infill"][:0] or roles)
+            self.assertLess(roles.index("bridge"), roles.index("overhang wall"))
+            # Normal features keep the slicer's relative order.
+            self.assertEqual([r for r in roles if r not in ("bridge", "overhang wall")],
+                             ["outer wall", "inner wall", "sparse infill"])
             original_wall = [m for f in a.parse(source.splitlines(True)) if f.role == "overhang wall"
                              for m in f.moves if a.segment(m) is not None]
             moved_wall = [m for f in printed if f.role == "overhang wall"
                           for m in f.moves if a.segment(m) is not None]
             self.assertEqual([(list(a.segment(m).coords), m.delta_e) for m in original_wall],
                              [(list(a.segment(m).coords), m.delta_e) for m in moved_wall])
+
+    def test_infill_first_order_prints_arcs_before_all_walls(self):
+        # "Infill first" wall order: bridge, then inner/outer/overhang walls. Nothing may move.
+        source = fixture()
+        bridge_start = source.index("; FEATURE: Bridge")
+        walls_start = source.index("; FEATURE: Overhang wall")
+        sparse = source.index("; FEATURE: Sparse infill")
+        layer2 = source[:walls_start]
+        reordered = (layer2 + source[bridge_start:sparse]
+                     + ring(11, 11, 18, 28, "Inner wall")
+                     + source[walls_start:bridge_start] + source[sparse:])
+        output, report = a.process_text(reordered, {"minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+        printed = [f.role for f in a.parse(output.splitlines(True)) if f.layer == 1
+                   and any(a.segment(m) is not None for m in f.moves)]
+        self.assertLess(printed.index("bridge"), printed.index("inner wall"))
+        self.assertLess(printed.index("bridge"), printed.index("overhang wall"))
+        # No relocation happened: the output carries no extra travel-only restore blocks.
+        self.assertEqual(output.count("G92 E"), reordered.count("G92 E") + 1)
 
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"

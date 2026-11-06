@@ -5,7 +5,7 @@ Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsc
 ## Current behavior
 
 - Replace eligible, geometrically unsupported Bridge regions with concentric Arc paths.
-- Print normal walls and infill first, then Arcs, and finish with Overhang walls within each tool section.
+- Keep the slicer's wall/infill order (including "Print infill first"); Overhang walls that would print before the Arcs are moved after them.
 - Preserve material changes and use the active tool's nozzle, filament and flow settings.
 - Support parameterless G10/G11 firmware retract commands.
 - Adjust inner wall overlap independently from Arc spacing.
