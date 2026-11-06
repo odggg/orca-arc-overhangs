@@ -26,6 +26,7 @@ import warnings
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 import numpy as np
+import shapely
 from shapely import Point, Polygon, LineString, MultiLineString, MultiPolygon, GeometryCollection
 from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 
@@ -231,6 +232,8 @@ MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
     "next_layer_pattern": "slicer",
+    "overhang_mode": "arc",
+    "wave_spacing_nozzle_ratio": 0.875,
     "arc_speed_mm_s": 1.5,
     "minimum_arc_speed_mm_s": 0.5,
     "travel_speed_mm_s": 30.0,
@@ -251,6 +254,7 @@ DEFAULTS = {
     "z_min_mm": 0.0,
     "z_max_mm": 10000.0,
 }
+CHOICES = {"next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave")}
 CONFIG_KEYS = ("nozzle_diameter", "filament_diameter", "outer_wall_line_width",
                "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e")
 NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
@@ -276,8 +280,8 @@ def configuration(overrides=None):
             if type(value) is not bool:
                 raise ValueError(key + " must be true or false.")
         elif isinstance(DEFAULTS[key], str):
-            if type(value) is not str or value not in ("slicer", "hilbert"):
-                raise ValueError(key + " must be 'slicer' or 'hilbert'.")
+            if type(value) is not str or value not in CHOICES[key]:
+                raise ValueError(key + " must be one of: " + ", ".join(CHOICES[key]) + ".")
         elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(key + " must be a finite number.")
         elif value < 0:
@@ -289,8 +293,9 @@ def configuration(overrides=None):
             raise ValueError(key + " must be greater than 0.")
     if result["minimum_arc_speed_mm_s"] > result["arc_speed_mm_s"]:
         raise ValueError("Minimum arc speed exceeds maximum arc speed.")
-    if not 0.1 <= result["arc_spacing_nozzle_ratio"] <= 1.5:
-        raise ValueError("arc_spacing_nozzle_ratio must be between 0.1 and 1.5.")
+    for key in ("arc_spacing_nozzle_ratio", "wave_spacing_nozzle_ratio"):
+        if not 0.1 <= result[key] <= 1.5:
+            raise ValueError(key + " must be between 0.1 and 1.5.")
     if not 50 <= result["minimum_coverage_percent"] <= 100:
         raise ValueError("minimum_coverage_percent must be between 50 and 100.")
     if not 16 <= result["points_per_circle"] <= 80 or int(result["points_per_circle"]) != result["points_per_circle"]:
@@ -699,6 +704,50 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
         return None
     return anchored, coverage
 
+def fill_polygon_wave(poly, support, cfg, printer, cancelled):
+    """Wave overhang fill: grow the printed region outward from the supported edge.
+
+    Each step offsets the region by one line spacing; the new boundary, clipped
+    inside the walls, is one extrusion path laterally anchored to the previous
+    one. Same return contract as fill_polygon: (ordered paths, coverage %) or None.
+    Algorithm: Janis A. Andersons; wavefront port: Dennis Klappe's
+    OrcaSlicer-WaveOverhangs. Not ported: narrow-neck splitting, corner taper,
+    ZigZag/Smart chaining and wave-aware supports.
+    """
+    spacing = printer["nozzle_diameter"] * cfg["wave_spacing_nozzle_ratio"]
+    width = printer["outer_wall_line_width"]
+    printed = poly.intersection(support.buffer(width * 0.05))
+    if printed.is_empty or printed.area < 1e-5:
+        return None
+    trim = poly.buffer(-width / 2)
+    if trim.is_empty:
+        return None
+    region, fronts = printed, []
+    # Bound the loop by geometry, not only by growth: one ring per spacing step.
+    for _ in range(int(cfg["max_radius_mm"] / spacing) + 2):
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        grown = region.buffer(spacing).intersection(poly)
+        if grown.area <= region.area + 0.01:
+            break
+        boundary = grown.boundary.intersection(trim)
+        parts = [g for g in shapely.get_parts(boundary) if g.geom_type == "LineString" and not g.is_empty]
+        merged = linemerge(parts) if parts else None
+        for line in ([] if merged is None else shapely.get_parts(merged)):
+            line = line.simplify(0.05 * spacing)
+            if line.length > 1e-5 and len(line.coords) >= 2:
+                fronts.append(line)
+        region = grown
+    if not fronts:
+        return None
+    coverage = 100 * region.area / poly.area
+    if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
+        return None
+    ordered = anchor_arc_paths(fronts, support, spacing, width)
+    if ordered is None:
+        return None
+    return ordered, coverage
+
 def is_retracted(state):
     return state.retracted > 1e-5 or state.firmware_retracted
 
@@ -1052,7 +1101,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             if poly.area < cfg["minimum_area_mm2"] or not geometric_overhang:
                 valid = False
                 break
-            generated = fill_polygon(poly, support, cfg, printer, cancelled)
+            fill = fill_polygon_wave if cfg["overhang_mode"] == "wave" else fill_polygon
+            generated = fill(poly, support, cfg, printer, cancelled)
             if generated is None:
                 valid = False
                 break
@@ -1148,6 +1198,7 @@ def config_page(as_tab=False):
         ("arc_speed_mm_s", "Arc speed", "mm/s"),
         ("minimum_arc_speed_mm_s", "Minimum arc speed", "mm/s"),
         ("arc_spacing_nozzle_ratio", "Arc spacing / nozzle diameter", "Factor"),
+        ("wave_spacing_nozzle_ratio", "Wave line spacing / nozzle diameter", "Factor"),
         ("wall_overlap_mm", "Inner wall overlap", "mm"),
         ("arc_center_offset_mm", "Arc center offset", "mm"),
         ("max_radius_mm", "Maximum radius", "mm"),
@@ -1181,6 +1232,7 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <p>Concentric arc toolpaths for flat overhangs. Applied during G-code export.</p>
 <p id="last-report" role="status"></p><p class="notice">Inner wall overlap is the distance the Arc region can extend into printed walls. Larger values can reach inner wall lines. Arc spacing is independent: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
 <div id="settings"><label>Enable Arc Overhang<input id="enabled" type="checkbox"></label>
+<label>Overhang mode<span><select id="overhang_mode"><option value="arc">Arc (concentric arcs)</option><option value="wave">Wave (offset wavefronts)</option></select></span></label>
 <label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
 __ROWS__
 <button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>

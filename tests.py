@@ -73,6 +73,24 @@ class Tests(unittest.TestCase):
         self.assertTrue(any("Hilbert" in line for line in replacement))
         self.assertTrue(any(line.startswith("G92 E1.0000000") for line in replacement))
 
+    def test_wave_mode_replaces_bridge_with_anchored_fronts(self):
+        self.assertEqual(a.DEFAULTS["overhang_mode"], "arc")
+        with self.assertRaises(ValueError):
+            a.configuration({"overhang_mode": "spiral"})
+        self.assertIn('id="overhang_mode"', a.config_page())
+        source = fixture()
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertGreater(report["generated_arcs"], 5)
+        self.assertGreaterEqual(report["minimum_coverage_percent"], 80)
+        self.assertEqual(a.process_text(output)[0], output)
+        # Wave fronts are not the same toolpaths as concentric arcs.
+        arc_output, _ = a.process_text(source, {"minimum_coverage_percent": 80})
+        self.assertNotEqual(output, arc_output)
+        bridge = next(f for f in a.parse(output.splitlines(True)) if f.role == "bridge")
+        self.assertFalse(a.is_retracted(bridge.moves[-1].after))
+        self.assertNotIn("nan", output.lower())
+
     def test_hilbert_applies_to_feature_that_opens_with_retract_travel(self):
         # Orca emits ;TYPE first, then retract, travel, unretract. This must not block Hilbert.
         source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\nG1 E-0.8 F2100\nG1 X20 Y12 F9000\nG1 E0.8 F2100\n"

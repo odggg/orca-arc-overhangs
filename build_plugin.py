@@ -48,6 +48,7 @@ import warnings
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 import numpy as np
+import shapely
 from shapely import Point, Polygon, LineString, MultiLineString, MultiPolygon, GeometryCollection
 from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 

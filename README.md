@@ -8,6 +8,7 @@ Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsc
 - Keep the slicer's wall/infill order (including "Print infill first"); Overhang walls that would print before the Arcs are moved after them.
 - Preserve material changes and use the active tool's nozzle, filament and flow settings.
 - Support parameterless G10/G11 firmware retract commands.
+- Choose Arc (default) or Wave overhang mode. Wave grows offset fronts outward from the supported edge, ported from [OrcaSlicer-WaveOverhangs](https://github.com/dennisklappe/OrcaSlicer-WaveOverhangs); it is experimental and untested on a printer.
 - Adjust inner wall overlap independently from Arc spacing.
 - Optionally select Hilbert infill for the next layer; the default keeps the slicer's pattern.
 
