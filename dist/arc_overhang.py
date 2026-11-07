@@ -1920,15 +1920,37 @@ __ROWS__
 const defaults = __DEFAULTS__;
 const fields = Object.keys(defaults);
 const status = document.getElementById('status');
-async function initialize(){
+// Unsaved edits survive tab switches: keep a draft and never overwrite it on refocus.
+const DRAFT='arc_overhang_draft';
+let draft=null;
+try{draft=JSON.parse(localStorage.getItem(DRAFT)||'null');}catch(e){}
+function collect(){
+  const values={};
+  for(const key of fields){
+    const el=document.getElementById(key);
+    values[key]=typeof defaults[key]==='boolean'?el.checked:(typeof defaults[key]==='string'?el.value:Number(el.value));
+  }
+  return values;
+}
+function remember(){
+  draft=collect();
+  try{localStorage.setItem(DRAFT,JSON.stringify(draft));}catch(e){}
+  status.textContent='Unsaved changes.';
+}
+function forget(){draft=null;try{localStorage.removeItem(DRAFT);}catch(e){}}
+async function initialize(discard){
+  if(discard===true) forget();
+  else if(draft && document.getElementById(fields[0]).dataset.ready) return;
   try {
     let saved = await settingsBridge.getConfig();
     if(typeof saved === 'string') saved = JSON.parse(saved);
-    const values = {...defaults,...(saved||{})};
+    const values = {...defaults,...(saved||{}),...(draft||{})};
     for(const key of fields){
       const el=document.getElementById(key);
       if(typeof defaults[key]==='boolean') el.checked=values[key]; else el.value=values[key];
+      el.dataset.ready='1';
     }
+    if(draft) status.textContent='Unsaved changes.';
   }catch(error){status.textContent='Could not load settings: '+error.message;}
 }
 document.getElementById('save').onclick=async()=>{
@@ -1942,11 +1964,14 @@ document.getElementById('save').onclick=async()=>{
   if(values.z_min_mm>values.z_max_mm){status.textContent='Invalid Z range.';return;}
   try{
     const ok=await settingsBridge.saveConfig(values);
+    if(ok!==false) forget();
     status.textContent=ok===false?'Save failed.':
       (ok && ok.preset_override_active ? 'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.' : 'Saved.');
   }catch(error){status.textContent='Save failed: '+error.message;}
 };
-document.getElementById('refresh').onclick=initialize;
+document.getElementById('refresh').onclick=()=>initialize(true);
+document.getElementById('settings').addEventListener('input',remember);
+document.getElementById('settings').addEventListener('change',remember);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden) initialize();});
 initialize();
 </script></html>"""

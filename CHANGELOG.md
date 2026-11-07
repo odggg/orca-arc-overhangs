@@ -11,6 +11,7 @@
 - Wave floor layers, applied as G-code edits on the layers above a wave: `wave_perimeter_speed_mm_s` (walls next to the wave), `wave_floor_layers`, `wave_floor_print_speed_mm_s`, `wave_floor_perimeter_speed_mm_s`, `wave_floor_speed_ramp` (linear return to normal speed), Hilbert floor (`wave_floor_use_hilbert`, `wave_floor_hilbert_layers`, `wave_floor_hilbert_density_percent`) and part/auxiliary fan overrides on those layers. Also `wave_end_retract_mm` (retraction between wave lines) and `wave_min_layer_time_s` (dwell at the end of a layer with waves).
 - Not ported: wave-aware support generation and forcing solid shell layers (both need the slicer; the plugin only edits finished G-code, so floor settings change speed/pattern of the layers Orca already made solid, not how many exist).
 - New `z_hop_mm` (default 0 = off, behavior unchanged): lift Z for the travel between Arcs/Waves so the nozzle does not drag across freshly printed lines. Idea from jforbestyr/bambu-arc-overhang.
+- Settings page keeps unsaved edits when switching tabs or windows (draft kept until Save or Refresh).
 - Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (49 total).
 
 ## 0.2.4 — 2026-10-30
