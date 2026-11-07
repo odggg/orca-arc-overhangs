@@ -444,6 +444,14 @@ class Tests(unittest.TestCase):
         self.assertIn("M106 P2 S127", output)
         self.assertIn("M106 P2 S0", output)
 
+    def test_bridge_with_spiral_z_lift_is_replaced(self):
+        # Orca's z-hop between bridge lines: G17, a helical G3 with Z, a travel at the lifted Z, then the drop.
+        lift = "G1 E-0.8 F1800\nG17\nG3 Z0.6 I-.3 J-1 P1 F60000\nG1 X19 Y11.3 Z0.6\nG1 Z0.4\nG1 E0.8 F1800\n"
+        source = fixture().replace("G1 X29.5 Y10.5 E0.15 F1200\n", "G1 X29.5 Y10.5 E0.15 F1200\n" + lift, 1)
+        self.assertIn("G17", source)
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+
     def test_hilbert_floor_ignores_start_gcode_purge_line(self):
         text = fixture().replace("G90\nM83\nG92 E0\n", "G90\nM82\nG92 E0\n; FEATURE: Custom\nG1 X5 Y5 F3000\nG1 E50 F200\nM83\n", 1)
         _, report = a.process_text(text, {"overhang_mode": "wave", "wave_floor_use_hilbert": True, "minimum_area_mm2": 1})

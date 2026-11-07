@@ -22,7 +22,8 @@
 - New `wave_aux_fan_override` / `wave_aux_fan_percent`: auxiliary fan (M106 P2) while printing waves, restored afterwards. Imported from `wave_overhang_aux_fan_speed`.
 - The profile import no longer reports `wave_overhang_min_angle`, `spacing_mode`, `seam_mode`, `debug_gcode` and `outer_perimeters` as missing. In WaveOverhangs the first three do nothing, `debug_gcode` only adds comments, and `outer_perimeters` is covered by the walls Orca already printed.
 - "Minimum overhang area" and "Minimum overhang length" moved from the Arc section to "Both modes" with help text: they gate Wave mode too, and lowering them (for example to 1-5 mm2) turns small overhangs into waves.
-- Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan and `M204` inside a bridge (54 total).
+- Orca's Z hop (a printer setting) writes `G17` and a helical `G3 ... Z` lift between bridge lines. Those bridges, and walls or infill containing the same lift, were rejected as "State command inside bridge region", so no arcs or waves appeared on printers with Z hop (reported on the H2D profile). `G17` is now accepted. Reproduced by slicing the reported project with Z hop 0.4 mm: 0 of 2 bridges replaced before, 1 of 2 after (the other has full support).
+- Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan, `M204` inside a bridge and the spiral Z lift (55 total).
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.

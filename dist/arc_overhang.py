@@ -1235,6 +1235,10 @@ def wave_wrappers(lines, index, arcs, cfg):
         post.insert(0, f"G4 P{round((cfg['wave_min_time_s'] - spent) * 1000)}{chr(10)}")
     return pre, post
 
+# Commands that may sit inside a block the plugin edits. M204 is Orca's acceleration change; G17 selects the
+# XY plane before Orca's spiral Z lift (a G3 with Z), which the replaced block does not need.
+KEPT_COMMANDS = ("", "G0", "G1", "G2", "G3", "M73", "M204", "G17")
+
 WALL_ROLES = ("outer wall", "inner wall", "overhang wall")
 SOLID_ROLES = ("solid infill", "internal solid infill", "bottom surface")
 
@@ -1257,7 +1261,7 @@ def fan_wrappers(lines, index, cfg):
 
 def retime_feature(feature, lines, speed_for):
     """Rewrite feed rates of extruding moves. speed_for(move) -> mm/s or None (unchanged). Returns lines or None."""
-    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73") for i in range(feature.start, feature.end)):
+    if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(feature.start, feature.end)):
         return None
     if len({m.before.tool for m in feature.moves}) > 1:
         return None
@@ -1426,8 +1430,7 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
         return None
     if len({move.before.tool for move in moves}) != 1:
         return None
-    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
-           for i in range(feature.start, feature.end)):
+    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73", "G17") for i in range(feature.start, feature.end)):
         return None
     # Orca writes ;TYPE before the retract/travel/unretract that opens a feature, so
     # moves inside it are legitimately retracted. Only the boundaries and the
@@ -1579,8 +1582,7 @@ def schedule_arc_tails(lines, cfg, cancelled):
                 raise UnsupportedGCode("Cannot move an overhang wall across an active retraction or tool change.")
             if before.tool != restore.tool or is_retracted(restore):
                 raise UnsupportedGCode("Overhang wall move would require an additional material change.")
-            if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
-                   for i in range(start, end)):
+            if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(start, end)):
                 raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
             edits.append((start, end, relocate_travel(after, cfg)))
             tail.extend(relocate_travel(before, cfg))
@@ -1731,7 +1733,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if is_retracted(first.before) or is_retracted(last.after):
             skipped("Bridge starts or ends during firmware retraction")
             continue
-        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73", "M204") for i in range(first.index, last.index + 1)):  # M204 is Orca's acceleration changes
+        if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
             skipped("State command inside bridge region")
             continue
         for layer in (feature.layer - 1, feature.layer):
@@ -1772,7 +1774,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         pre, post = wave_wrappers(lines, first.index, arcs, cfg) if cfg["overhang_mode"] == "wave" else ((), ())
         replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
-                           if command(lines[i])[0] in ("M73", "M204"))
+                           if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
         for k in range(1, hilbert_layers + 1):
             hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
