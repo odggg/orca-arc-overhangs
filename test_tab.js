@@ -74,6 +74,7 @@ const tick=()=>new Promise(setImmediate);
  assert.equal(elements.wave_floor_fan_override.checked,true);
  assert.equal(elements.wave_floor_fan_percent.value,0);
  assert.equal(elements.overhang_mode.value,'wave');
+ assert.equal(elements.import_text.value,'','import box is cleared');
  assert.match(elements.status.textContent,/wave_overhang_unknown_thing/);
  visibility();
  await tick();

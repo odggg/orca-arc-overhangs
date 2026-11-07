@@ -145,6 +145,7 @@ document.getElementById('import').onclick=()=>{
     if(typeof value==='boolean') el.checked=value; else el.value=value;
   }
   remember();
+  document.getElementById('import_text').value='';
   status.textContent='Imported '+count+' settings; press Save to keep them.'+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
 };
 document.getElementById('refresh').onclick=()=>initialize(true);
