@@ -404,6 +404,30 @@ class Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 a.configuration(bad)
 
+    def test_import_wave_gallery_profile(self):
+        text = """; wave_overhang_pattern = zigzag
+; wave_overhang_line_spacing = 0.35
+; wave_overhang_perimeter_overlap = 0.15
+; wave_overhang_floor_use_hilbert = 1
+; wave_overhang_floor_hilbert_layers = 2
+; wave_overhang_floor_hilbert_density = 50
+; wave_overhang_floor_print_speed = 20
+; wave_overhang_floor_fan_speed = 0
+; wave_overhang_mystery = 1
+; WAVE_OVERHANG_CONFIG spacing=0.4 speed=3
+"""
+        values, ignored = a.import_wave_profile(text)
+        self.assertEqual(values["overhang_mode"], "wave")
+        self.assertEqual(values["wave_pattern"], "zigzag")
+        self.assertEqual(values["wave_line_spacing_mm"], 0.35)  # explicit line beats the marker summary
+        self.assertEqual(values["wave_speed_mm_s"], 3.0)
+        self.assertEqual(values["wave_perimeter_overlap_mm"], 0.15)
+        self.assertTrue(values["wave_floor_use_hilbert"])
+        self.assertEqual(values["wave_floor_hilbert_density_percent"], 50.0)
+        self.assertEqual((values["wave_floor_fan_override"], values["wave_floor_fan_percent"]), (True, 0.0))
+        self.assertEqual(ignored, ["wave_overhang_mystery"])
+        a.configuration(values)
+
     def test_wave_line_spacing_in_mm(self):
         coarse, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_line_spacing_mm": 0.35})
         default, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80})
