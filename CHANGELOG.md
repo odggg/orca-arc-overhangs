@@ -14,6 +14,7 @@
 - Settings page keeps unsaved edits when switching tabs or windows (draft kept until Save or Refresh).
 - Wave settings use the WaveOverhangs names and units ("Wave line spacing" in mm, default 0.35), each with a plain-language hint and its `wave_overhang_*` name.
 - The page and README say that "Extra perimeters on overhangs" must be off for both modes; the G90/M83 error now reports the G-code line.
+- README and settings page recommend "Bridge counterbore holes" = None: with "Partially bridged" Orca prints supported strips that the plugin skips (a counterbore test sliced that way produced no waves).
 - Fixed "Requires G90 and relative extrusion (M83)" when the Hilbert floor was on: the floor scan read the start G-code purge line (absolute E). Start G-code is now skipped.
 - Hilbert floor: leftover infill pieces shorter than one line width are dropped instead of getting their own retract and travel.
 - Print time: after editing, the plugin shifts the M73 remaining-time lines and the "model printing time / total estimated time" header by the time the new toolpaths add or remove (estimate from length and feed rate; arcs count as chords).

@@ -47,4 +47,4 @@ GPL-3.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES
 
 ## Orca setting required for both modes
 
-The plugin only replaces extrusions Orca labels Bridge or Internal Bridge. Turn off **Extra perimeters on overhangs** (Quality tab, Overhangs section), otherwise Orca fills overhangs with extra walls and there is nothing to replace.
+The plugin only replaces extrusions Orca labels Bridge or Internal Bridge. Turn off **Extra perimeters on overhangs** (Quality tab, Overhangs section), otherwise Orca fills overhangs with extra walls and there is nothing to replace. Also set **Bridge counterbore holes** to **None** (Quality tab, Bridging section): "Partially bridged" makes Orca print supported straight strips, which the plugin leaves alone, while "None" leaves the hole as an overhang that gets arcs or waves.
