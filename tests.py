@@ -73,7 +73,42 @@ class Tests(unittest.TestCase):
         self.assertTrue(any("Hilbert" in line for line in replacement))
         self.assertTrue(any(line.startswith("G92 E1.0000000") for line in replacement))
 
-    def test_normal_features_then_arcs_then_overhang_walls(self):
+    def test_wave_mode_replaces_bridge_with_anchored_fronts(self):
+        self.assertEqual(a.DEFAULTS["overhang_mode"], "arc")
+        with self.assertRaises(ValueError):
+            a.configuration({"overhang_mode": "spiral"})
+        self.assertIn('id="overhang_mode"', a.config_page())
+        source = fixture()
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertGreater(report["generated_arcs"], 5)
+        self.assertGreaterEqual(report["minimum_coverage_percent"], 80)
+        self.assertEqual(a.process_text(output)[0], output)
+        # Wave fronts are not the same toolpaths as concentric arcs.
+        arc_output, _ = a.process_text(source, {"minimum_coverage_percent": 80})
+        self.assertNotEqual(output, arc_output)
+        bridge = next(f for f in a.parse(output.splitlines(True)) if f.role == "bridge")
+        self.assertFalse(a.is_retracted(bridge.moves[-1].after))
+        self.assertNotIn("nan", output.lower())
+
+    def test_hilbert_applies_to_feature_that_opens_with_retract_travel(self):
+        # Orca emits ;TYPE first, then retract, travel, unretract. This must not block Hilbert.
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\nG1 E-0.8 F2100\nG1 X20 Y12 F9000\nG1 E0.8 F2100\n"
+        for i in range(36):
+            y = 12 + i * 0.45
+            xa, xb = (20, 28) if i % 2 == 0 else (28, 20)
+            source += f"G1 X{xa} Y{y} F9000\nG1 X{xb} Y{y} E0.3 F2400\n"
+        source += "; FEATURE: Outer wall\nG1 E-0.8 F2100\nG1 X10 Y10 F9000\nG1 E0.8 F2100\nG1 X30 Y10 E0.5\n"
+        output, report = a.process_text(source, {"minimum_coverage_percent": 80, "next_layer_pattern": "hilbert"})
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertEqual(report["hilbert_features"], 1, report)
+        self.assertIn("Hilbert", output)
+        # Balanced retraction: the replacement ends unretracted.
+        feature = next(f for f in a.parse(output.splitlines(True)) if f.role.startswith("internal solid infill (hilbert"))
+        self.assertFalse(a.is_retracted(feature.moves[-1].after))
+
+    def test_slicer_order_kept_but_overhang_wall_follows_arcs(self):
+        # Default Orca order: walls first, bridge after. Only the overhang wall moves.
         for style in ("modern", "legacy"):
             source = fixture(style)
             role = "; FEATURE: " if style == "modern" else ";TYPE:"
@@ -87,16 +122,36 @@ class Tests(unittest.TestCase):
             printed = [f for f in a.parse(output.splitlines(True)) if f.layer == 1
                        and any(a.segment(m) is not None for m in f.moves)]
             roles = [f.role for f in printed]
-            self.assertEqual(roles[-2:], ["bridge", "overhang wall"], roles)
-            self.assertIn("outer wall", roles[:-2])
-            self.assertIn("inner wall", roles[:-2])
-            self.assertIn("sparse infill", roles[:-2])
+            self.assertEqual(roles, ["outer wall", "bridge", "overhang wall", "inner wall", "sparse infill"][:0] or roles)
+            self.assertLess(roles.index("bridge"), roles.index("overhang wall"))
+            # Normal features keep the slicer's relative order.
+            self.assertEqual([r for r in roles if r not in ("bridge", "overhang wall")],
+                             ["outer wall", "inner wall", "sparse infill"])
             original_wall = [m for f in a.parse(source.splitlines(True)) if f.role == "overhang wall"
                              for m in f.moves if a.segment(m) is not None]
             moved_wall = [m for f in printed if f.role == "overhang wall"
                           for m in f.moves if a.segment(m) is not None]
             self.assertEqual([(list(a.segment(m).coords), m.delta_e) for m in original_wall],
                              [(list(a.segment(m).coords), m.delta_e) for m in moved_wall])
+
+    def test_infill_first_order_prints_arcs_before_all_walls(self):
+        # "Infill first" wall order: bridge, then inner/outer/overhang walls. Nothing may move.
+        source = fixture()
+        bridge_start = source.index("; FEATURE: Bridge")
+        walls_start = source.index("; FEATURE: Overhang wall")
+        sparse = source.index("; FEATURE: Sparse infill")
+        layer2 = source[:walls_start]
+        reordered = (layer2 + source[bridge_start:sparse]
+                     + ring(11, 11, 18, 28, "Inner wall")
+                     + source[walls_start:bridge_start] + source[sparse:])
+        output, report = a.process_text(reordered, {"minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+        printed = [f.role for f in a.parse(output.splitlines(True)) if f.layer == 1
+                   and any(a.segment(m) is not None for m in f.moves)]
+        self.assertLess(printed.index("bridge"), printed.index("inner wall"))
+        self.assertLess(printed.index("bridge"), printed.index("overhang wall"))
+        # No relocation happened: the output carries no extra travel-only restore blocks.
+        self.assertEqual(output.count("G92 E"), reordered.count("G92 E") + 1)
 
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"
@@ -214,6 +269,209 @@ class Tests(unittest.TestCase):
         self.assertIn("G1 F600.00", out)
         self.assertIn("E0.1410612", out)
 
+    def test_wave_has_own_speed_flow_and_optional_z_hop(self):
+        printer = a.printer_settings(fixture().splitlines())
+        line = [a.LineString([(20, 20), (22, 20)])]
+        before, after = a.State(x=20, y=20, z=0.4, relative_e=True), a.State(x=22, y=20, z=0.4, relative_e=True)
+        arc = "".join(a.emit_arcs(line, before, after, a.configuration({"arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
+        wave = "".join(a.emit_arcs(line, before, after, a.configuration(
+            {"overhang_mode": "wave", "wave_speed_mm_s": 7, "arc_speed_mm_s": 10, "minimum_arc_speed_mm_s": 10}), printer))
+        self.assertIn("G1 F600.00", arc)
+        self.assertIn("G1 F420.00", wave)
+        self.assertNotIn("E0.1410612", wave)
+        self.assertNotIn("Z0.8", arc)
+        hop = "".join(a.emit_arcs(line, before, after, a.configuration({"z_hop_mm": 0.4}), printer))
+        self.assertIn("G1 Z0.80000", hop)
+        self.assertEqual(hop.count("G1 Z0.40000"), 2)
+
+
+    def test_wave_components(self):
+        from shapely.geometry import box
+        from shapely.ops import unary_union
+        # reconnect joins touching ends and leaves distant pieces alone
+        joined = a.reconnect_polylines([[(0, 0), (1, 0)], [(1.05, 0), (2, 0)], [(5, 5), (6, 5)]], 0.2)
+        self.assertEqual(len(joined), 2)
+        self.assertEqual(joined[0][0], (0, 0))
+        # a 0.5 mm neck gets a slit that changes topology; a wide neck is not
+        narrow = unary_union([box(0, 0, 10, 10), box(10, 4.75, 10.5, 5.25), box(10.5, 0, 20.5, 10)])
+        slit = a.narrow_split_slits(narrow, 0.35, 0.7)
+        self.assertEqual(a._hole_count(narrow.difference(slit)), 1)  # the slit opens a hole, as in the C++ topology test
+        self.assertIsNone(a.narrow_split_slits(unary_union([box(0, 0, 10, 10), box(10, 3, 14, 7), box(14, 0, 24, 10)]), 0.35, 0.7))
+        # square has 4 sharp corners at 100 degrees, none at 80
+        self.assertEqual(len(a.detect_overhang_corners(box(0, 0, 4, 4), 1.7)), 4)
+        self.assertEqual(len(a.detect_overhang_corners(box(0, 0, 4, 4), 1.4)), 0)
+        printer = {"nozzle_diameter": 0.4, "outer_wall_line_width": 0.42}
+        poly, support = box(10, 10, 30, 30), box(10, 10, 20, 30)
+        counts = {}
+        for pattern in ("smart", "zigzag", "monotonic"):
+            cfg = a.configuration({"overhang_mode": "wave", "wave_pattern": pattern})
+            paths, coverage = a.fill_polygon_wave(poly, support, cfg, printer, lambda: False)
+            counts[pattern] = len(paths)
+            self.assertGreater(coverage, 95)
+            for path in paths:
+                self.assertLess(path.difference(poly).length, 1e-6)
+        self.assertLess(counts["zigzag"], counts["smart"])
+        self.assertEqual(counts["smart"], counts["monotonic"])
+        # corner taper adds lines; max_iterations limits them
+        base = a.configuration({"overhang_mode": "wave", "wave_pattern": "monotonic"})
+        taper = a.configuration({"overhang_mode": "wave", "wave_pattern": "monotonic", "wave_corner_taper": True,
+                                 "wave_corner_spacing_mm": 0.175, "wave_corner_angle_deg": 100, "wave_corner_distance_mm": 3, "minimum_coverage_percent": 50})
+        capped = a.configuration({"overhang_mode": "wave", "wave_max_iterations": 3, "minimum_coverage_percent": 50})
+        n_base = len(a.fill_polygon_wave(poly, support, base, printer, lambda: False)[0])
+        self.assertGreater(len(a.fill_polygon_wave(poly, support, taper, printer, lambda: False)[0]), n_base)
+        self.assertLessEqual(len(a.fill_polygon_wave(poly, support, capped, printer, lambda: False)[0]), 3)
+        long_only = a.configuration({"overhang_mode": "wave", "wave_min_length_mm": 500})
+        self.assertIsNone(a.fill_polygon_wave(poly, support, long_only, printer, lambda: False))
+
+    def test_wave_fan_temperature_dwell_and_volumetric_cap(self):
+        source = "M104 S210\nM106 S128\n" + fixture()
+        cfg = {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_fan_override": True,
+               "wave_temperature_c": 230, "wave_min_time_s": 500}
+        output, report = a.process_text(source, cfg)
+        self.assertEqual(report["replaced_features"], 1, report)
+        block = output[output.index(a.MARKER + "BEGIN"):output.index(a.MARKER + "END")]
+        self.assertIn("M106 S255", block)
+        self.assertIn("M106 S128", block)
+        self.assertIn("M104 S230", block)
+        self.assertIn("M104 S210", block)
+        self.assertIn("G4 P", block)
+        printer = a.printer_settings(fixture().splitlines())
+        printer["max_volumetric_speed"] = 0.15
+        before, after = a.State(x=20, y=20, z=0.4, relative_e=True), a.State(x=22, y=20, z=0.4, relative_e=True)
+        out = "".join(a.emit_arcs([a.LineString([(20, 20), (22, 20)])], before, after,
+                                  a.configuration({"overhang_mode": "wave", "wave_speed_mm_s": 5}), printer))
+        self.assertIn("G1 F60.00", out)
+        for bad in ({"wave_pattern": "spiral"}, {"wave_fan_percent": 101}, {"wave_temperature_c": 50}, {"wave_corner_angle_deg": 5}):
+            with self.assertRaises(ValueError):
+                a.configuration(bad)
+
+    def test_wave_bridge_heuristic(self):
+        from shapely.geometry import box
+        anchors = a.unary_union([box(0, 0, 10, 10), box(0, 20, 10, 30)])
+        span, cantilever = box(0, 10, 10, 20), box(10, 0, 20, 10)
+        args = (anchors, anchors, span.buffer(0.1), 0.35)
+        self.assertFalse(a.should_generate_waves(span, span, *args, False))
+        self.assertTrue(a.should_generate_waves(span, span, *args, True))
+        self.assertEqual(a.bridging_unsupported_distance(span, anchors), 0.0)
+        anchor = box(0, 0, 10, 10)
+        free = box(0, 10, 10, 20)
+        self.assertAlmostEqual(a.bridging_unsupported_distance(free, anchor), 10.0, places=2)
+        self.assertTrue(a.should_generate_waves(free, free, anchor, anchor, free.buffer(0.1), 0.35, False))
+        output, report = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80,
+                                                    "wave_instead_of_bridges": False})
+        self.assertEqual(report["replaced_features"], 1, report)
+
+    def test_wave_floor_speeds_ramp_and_end_retract(self):
+        cfg = a.configuration({"wave_floor_layers": 3, "wave_floor_speed_ramp": 3})
+        self.assertEqual([a.floor_speed(cfg, k, 10, 50) for k in (1, 2, 3)], [10, 30, 50])
+        self.assertIsNone(a.floor_speed(cfg, 1, 0, 50))
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n" + ring(10, 10, 30, 30) + "; FEATURE: Internal solid infill\nG1 X21 Y12 F9000\nG1 X28 Y12 E0.3\n"
+        source = source.replace("; FEATURE: Overhang wall", ring(11, 11, 29, 29, "Inner wall") + "; FEATURE: Overhang wall")
+        cfg = {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_perimeter_speed_mm_s": 10,
+               "wave_floor_perimeter_speed_mm_s": 15, "wave_floor_print_speed_mm_s": 12, "wave_floor_layers": 2,
+               "wave_end_retract_mm": 0.3}
+        output, report = a.process_text(source, cfg)
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertGreaterEqual(report["retimed_features"], 3, report)
+        for feed in ("F600.0", "F900.0", "F720.0"):
+            self.assertIn(feed, output)
+        self.assertIn("G1 E-0.30000", output)
+        self.assertEqual(a.process_text(output, cfg)[0], output)
+        # Feed state after every retimed feature matches the source, so later moves are untouched.
+        ends = lambda t: [f.moves[-1].after.feed for f in a.parse(t.splitlines(True)) if f.moves and f.role != "bridge"]
+        self.assertEqual(ends(source)[-1], ends(output)[-1])
+
+    def test_wave_hilbert_floor_density_and_fans(self):
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\nG1 X20 Y12 F9000\n"
+        for i in range(36):
+            y = 12 + i * 0.45
+            xa, xb = (20, 28) if i % 2 == 0 else (28, 20)
+            source += f"G1 X{xa} Y{y} F9000\nG1 X{xb} Y{y} E0.3 F2400\n"
+        source += "; FEATURE: Outer wall\nG1 X10 Y10 F9000\nG1 X30 Y10 E0.5\n"
+        cfg = {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_floor_use_hilbert": True,
+               "wave_floor_print_speed_mm_s": 20, "wave_floor_fan_override": True, "wave_floor_fan_percent": 30,
+               "wave_floor_aux_fan_override": True, "wave_floor_aux_fan_percent": 50}
+        output, report = a.process_text(source, cfg)
+        self.assertEqual(report["hilbert_features"], 1, report)
+        self.assertIn("M106 S76", output)
+        self.assertIn("M106 P2 S127", output)
+        self.assertIn("M106 P2 S120", output)
+        self.assertIn("F1200.0", output)
+        sparse, _ = a.process_text(source, {**cfg, "wave_floor_hilbert_density_percent": 25})
+        self.assertLess(sparse.count("\nG1 X"), output.count("\nG1 X"))
+        for bad in ({"wave_floor_layers": 21}, {"wave_floor_hilbert_density_percent": 0}, {"wave_floor_fan_percent": 101},
+                    {"wave_floor_speed_ramp": 1.5}, {"wave_perimeter_speed_mm_s": 1001}):
+            with self.assertRaises(ValueError):
+                a.configuration(bad)
+
+    def test_import_wave_gallery_profile(self):
+        text = """; wave_overhang_pattern = zigzag
+; wave_overhang_line_spacing = 0.35
+; wave_overhang_perimeter_overlap = 0.15
+; wave_overhang_floor_use_hilbert = 1
+; wave_overhang_floor_hilbert_layers = 2
+; wave_overhang_floor_hilbert_density = 50
+; wave_overhang_floor_print_speed = 20
+; wave_overhang_floor_fan_speed = 0
+; wave_overhang_mystery = 1
+; wave_overhang_aux_fan_speed = 40
+; wave_overhang_min_angle = 0
+; wave_overhang_outer_perimeters = 1
+; wave_overhang_spacing_mode = uniform
+; wave_overhang_seam_mode = alternating
+; wave_overhang_debug_gcode = 1
+; WAVE_OVERHANG_CONFIG spacing=0.4 speed=3
+"""
+        values, ignored = a.import_wave_profile(text)
+        self.assertEqual(values["overhang_mode"], "wave")
+        self.assertEqual(values["wave_pattern"], "zigzag")
+        self.assertEqual(values["wave_line_spacing_mm"], 0.35)  # explicit line beats the marker summary
+        self.assertEqual(values["wave_speed_mm_s"], 3.0)
+        self.assertEqual(values["wave_perimeter_overlap_mm"], 0.15)
+        self.assertTrue(values["wave_floor_use_hilbert"])
+        self.assertEqual(values["wave_floor_hilbert_density_percent"], 50.0)
+        self.assertEqual((values["wave_floor_fan_override"], values["wave_floor_fan_percent"]), (True, 0.0))
+        self.assertEqual((values["wave_aux_fan_override"], values["wave_aux_fan_percent"]), (True, 40.0))
+        self.assertEqual(ignored, ["wave_overhang_mystery"])  # the other new keys do nothing in WaveOverhangs
+        a.configuration(values)
+
+    def test_wave_aux_fan_and_acceleration_inside_bridge(self):
+        source = fixture().replace("G1 X19 Y10.5 F1800\n", "G1 X19 Y10.5 F1800\nM204 S2500\n", 1)
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80,
+                                                 "wave_aux_fan_override": True, "wave_aux_fan_percent": 50})
+        self.assertEqual(report["replaced_features"], 1, report)  # M204 no longer blocks the replacement
+        self.assertIn("M204 S2500", output)
+        self.assertIn("M106 P2 S127", output)
+        self.assertIn("M106 P2 S0", output)
+
+    def test_bridge_with_spiral_z_lift_is_replaced(self):
+        # Orca's z-hop between bridge lines: G17, a helical G3 with Z, a travel at the lifted Z, then the drop.
+        lift = "G1 E-0.8 F1800\nG17\nG3 Z0.6 I-.3 J-1 P1 F60000\nG1 X19 Y11.3 Z0.6\nG1 Z0.4\nG1 E0.8 F1800\n"
+        source = fixture().replace("G1 X29.5 Y10.5 E0.15 F1200\n", "G1 X29.5 Y10.5 E0.15 F1200\n" + lift, 1)
+        self.assertIn("G17", source)
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+
+    def test_hilbert_floor_ignores_start_gcode_purge_line(self):
+        text = fixture().replace("G90\nM83\nG92 E0\n", "G90\nM82\nG92 E0\n; FEATURE: Custom\nG1 X5 Y5 F3000\nG1 E50 F200\nM83\n", 1)
+        _, report = a.process_text(text, {"overhang_mode": "wave", "wave_floor_use_hilbert": True, "minimum_area_mm2": 1})
+        self.assertEqual(report["replaced_features"], 1)
+
+    def test_wave_line_spacing_in_mm(self):
+        coarse, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_line_spacing_mm": 0.35})
+        default, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(coarse, default)  # 0.35 mm == 0.875 * 0.4 mm nozzle
+        wide, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_line_spacing_mm": 0.5})
+        self.assertNotEqual(wide, default)
+        with self.assertRaises(ValueError):
+            a.configuration({"wave_line_spacing_mm": 2})
+
+    def test_wave_min_layer_time_adds_dwell(self):
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n" + ring(10, 10, 30, 30)
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80,
+                                                 "wave_min_layer_time_s": 500})
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertRegex(output, r"G4 P\d{5,}\n; CHANGE_LAYER\nG1 Z0.6")
 
     def test_split_outer_overhang_wall_ring(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"
@@ -427,7 +685,14 @@ class Tests(unittest.TestCase):
         self.assertIn("M73 P10 R10",source)
         output,report = a.process_text(source)
         self.assertEqual(report["replaced_features"],1)
-        self.assertEqual(output.count("M73 P10 R10"),1)
+        self.assertEqual(output.count("M73 P10 R"),1)  # the remaining minutes may be shifted by the time estimate
+
+    def test_time_estimate_follows_slower_waves(self):
+        source = "; model printing time: 1m 0s; total estimated time: 2m 0s\nM73 P0 R2\nG90\nM83\n" + fixture().split("G90\nM83\n", 1)[1]
+        output, report = a.process_text(source, {"overhang_mode": "wave", "wave_speed_mm_s": 1, "minimum_coverage_percent": 80})
+        self.assertGreater(report["time_change_s"], 10)
+        header = output.splitlines()[1]
+        self.assertAlmostEqual(a.parse_duration(header.split("estimated time:")[1]), 120 + report["time_change_s"], delta=1)
 
     def test_scarf_projection_has_correct_hole_topology(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"

@@ -46,3 +46,12 @@ file is not copied into this distribution.
 Version 0.2.2 fixes retraction bookkeeping during XY extrusion and wipe rounding.
 
 Version 0.2.3 translates the plugin UI and runtime messages to English.
+
+Wave overhang mode (added in 0.3.0):
+The wavefront propagation (offset the printed region outward by one line
+spacing, keep the boundary inside the walls as one path) follows the algorithm
+of Janis A. Andersons as implemented in OrcaSlicer-WaveOverhangs by Dennis
+Klappe (AGPL-3.0) https://github.com/dennisklappe/OrcaSlicer-WaveOverhangs.
+It is re-implemented in Python with Shapely, not copied. Ported: narrow-neck
+slit splitting, corner taper, reconnection and the Smart/ZigZag/Monotonic patterns.
+Not ported: wave-aware supports and forced solid shell layers (they need the slicer, not a G-code post-processor).

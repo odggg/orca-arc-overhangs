@@ -6,7 +6,7 @@
 # name = "Arc Overhang"
 # description = "Concentric arc overhangs for OrcaSlicer 2.5. GPL-3.0; based on Kelsch, Nicolai Wachenschwan and Steven McCulloch."
 # author = "Kelsch / Nicolai Wachenschwan / Steven McCulloch; Orca 2.5 adaptation"
-# version = "0.2.4"
+# version = "0.3.0"
 # ///
 """Arc Overhang for OrcaSlicer 2.5. Modified 2026-10-24.
 GPL-3.0, no warranty. See LICENSE in the source distribution.
@@ -26,6 +26,7 @@ import warnings
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 import numpy as np
+import shapely
 from shapely import Point, Polygon, LineString, MultiLineString, MultiPolygon, GeometryCollection
 from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 
@@ -226,11 +227,49 @@ def getArcBoundarys(concentricArcs: list) -> list:
             boundarys.append(arcLine)
     return boundarys
 
-VERSION = "0.2.4"
+VERSION = "0.3.0"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
     "next_layer_pattern": "slicer",
+    "overhang_mode": "arc",
+    "wave_pattern": "smart",
+    "wave_spacing_nozzle_ratio": 0.875,
+    "wave_line_spacing_mm": 0.35,
+    "wave_speed_mm_s": 2.0,
+    "wave_travel_speed_mm_s": 40.0,
+    "wave_flow_mm3_per_mm": 0.15,
+    "wave_perimeter_overlap_mm": 0.1,
+    "wave_min_width_mm": 0.7,
+    "wave_min_new_area_mm2": 0.01,
+    "wave_min_length_mm": 0.0,
+    "wave_max_iterations": 0,
+    "wave_corner_taper": False,
+    "wave_corner_spacing_mm": 0.2,
+    "wave_corner_distance_mm": 3.0,
+    "wave_corner_angle_deg": 90.0,
+    "wave_fan_override": False,
+    "wave_fan_percent": 100.0,
+    "wave_aux_fan_override": False,
+    "wave_aux_fan_percent": 0.0,
+    "wave_temperature_c": 0.0,
+    "wave_min_time_s": 0.0,
+    "wave_min_layer_time_s": 0.0,
+    "wave_instead_of_bridges": True,
+    "wave_end_retract_mm": 0.0,
+    "wave_perimeter_speed_mm_s": 0.0,
+    "wave_floor_layers": 2,
+    "wave_floor_print_speed_mm_s": 0.0,
+    "wave_floor_perimeter_speed_mm_s": 0.0,
+    "wave_floor_speed_ramp": 0,
+    "wave_floor_use_hilbert": False,
+    "wave_floor_hilbert_layers": 0,
+    "wave_floor_hilbert_density_percent": 100.0,
+    "wave_floor_fan_override": False,
+    "wave_floor_fan_percent": 0.0,
+    "wave_floor_aux_fan_override": False,
+    "wave_floor_aux_fan_percent": 0.0,
+    "z_hop_mm": 0.0,
     "arc_speed_mm_s": 1.5,
     "minimum_arc_speed_mm_s": 0.5,
     "travel_speed_mm_s": 30.0,
@@ -251,8 +290,11 @@ DEFAULTS = {
     "z_min_mm": 0.0,
     "z_max_mm": 10000.0,
 }
+CHOICES = {"next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
+           "wave_pattern": ("smart", "zigzag", "monotonic")}
 CONFIG_KEYS = ("nozzle_diameter", "filament_diameter", "outer_wall_line_width",
-               "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e")
+               "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e",
+               "filament_max_volumetric_speed")
 NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 WORD = re.compile(r"([A-Z])\s*(" + NUMBER + r")", re.I)
 
@@ -276,21 +318,51 @@ def configuration(overrides=None):
             if type(value) is not bool:
                 raise ValueError(key + " must be true or false.")
         elif isinstance(DEFAULTS[key], str):
-            if type(value) is not str or value not in ("slicer", "hilbert"):
-                raise ValueError(key + " must be 'slicer' or 'hilbert'.")
+            if type(value) is not str or value not in CHOICES[key]:
+                raise ValueError(key + " must be one of: " + ", ".join(CHOICES[key]) + ".")
         elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(key + " must be a finite number.")
         elif value < 0:
             raise ValueError(key + " must not be negative.")
     for key in ("arc_speed_mm_s", "minimum_arc_speed_mm_s", "travel_speed_mm_s",
                 "arc_spacing_nozzle_ratio", "max_radius_mm", "flow_multiplier",
-                "minimum_arc_time_s", "max_edge_gap_mm", "retract_speed_mm_s"):
+                "minimum_arc_time_s", "max_edge_gap_mm", "retract_speed_mm_s",
+                "wave_speed_mm_s", "wave_flow_mm3_per_mm", "wave_travel_speed_mm_s"):
         if result[key] <= 0:
             raise ValueError(key + " must be greater than 0.")
     if result["minimum_arc_speed_mm_s"] > result["arc_speed_mm_s"]:
         raise ValueError("Minimum arc speed exceeds maximum arc speed.")
-    if not 0.1 <= result["arc_spacing_nozzle_ratio"] <= 1.5:
-        raise ValueError("arc_spacing_nozzle_ratio must be between 0.1 and 1.5.")
+    for key in ("arc_spacing_nozzle_ratio", "wave_spacing_nozzle_ratio"):
+        if not 0.1 <= result[key] <= 1.5:
+            raise ValueError(key + " must be between 0.1 and 1.5.")
+    if result["wave_line_spacing_mm"] and not 0.05 <= result["wave_line_spacing_mm"] <= 1.5:
+        raise ValueError("wave_line_spacing_mm must be 0 (use the ratio) or between 0.05 and 1.5.")
+    if not 0 <= result["wave_fan_percent"] <= 100:
+        raise ValueError("wave_fan_percent must be between 0 and 100.")
+    if result["wave_temperature_c"] and not 100 <= result["wave_temperature_c"] <= 400:
+        raise ValueError("wave_temperature_c must be 0 (off) or between 100 and 400.")
+    if not 10 <= result["wave_corner_angle_deg"] <= 179:
+        raise ValueError("wave_corner_angle_deg must be between 10 and 179.")
+    if int(result["wave_max_iterations"]) != result["wave_max_iterations"]:
+        raise ValueError("wave_max_iterations must be a whole number.")
+    if result["wave_corner_taper"] and not 0 < result["wave_corner_spacing_mm"]:
+        raise ValueError("wave_corner_spacing_mm must be greater than 0 when the corner taper is on.")
+    for key in ("wave_min_time_s", "wave_min_layer_time_s"):
+        if result[key] > 600:
+            raise ValueError(key + " must not exceed 600.")
+    for key, top in (("wave_floor_layers", 20), ("wave_floor_hilbert_layers", 20), ("wave_floor_speed_ramp", 64)):
+        if int(result[key]) != result[key] or result[key] > top:
+            raise ValueError(f"{key} must be a whole number from 0 to {top}.")
+    for key in ("wave_perimeter_speed_mm_s", "wave_floor_print_speed_mm_s", "wave_floor_perimeter_speed_mm_s"):
+        if result[key] > 1000:
+            raise ValueError(key + " must not exceed 1000.")
+    for key in ("wave_floor_fan_percent", "wave_floor_aux_fan_percent", "wave_aux_fan_percent"):
+        if result[key] > 100:
+            raise ValueError(key + " must be between 0 and 100.")
+    if not 1 <= result["wave_floor_hilbert_density_percent"] <= 100:
+        raise ValueError("wave_floor_hilbert_density_percent must be between 1 and 100.")
+    if result["wave_end_retract_mm"] > 10:
+        raise ValueError("wave_end_retract_mm must not exceed 10.")
     if not 50 <= result["minimum_coverage_percent"] <= 100:
         raise ValueError("minimum_coverage_percent must be between 50 and 100.")
     if not 16 <= result["points_per_circle"] <= 80 or int(result["points_per_circle"]) != result["points_per_circle"]:
@@ -352,6 +424,11 @@ def printer_settings(lines, resolved=None, tool_index=0):
     if not isinstance(flow, float) or flow <= 0:
         raise UnsupportedGCode("Invalid filament_flow_ratio.")
     result["filament_flow_ratio"] = flow
+    try:
+        cap = scalar(raw.get("filament_max_volumetric_speed", 0), "filament_max_volumetric_speed", tool_index)
+    except UnsupportedGCode:
+        cap = 0.0
+    result["max_volumetric_speed"] = cap if isinstance(cap, float) and cap > 0 else 0.0
     volumetric = raw.get("use_volumetric_e", False)
     if str(volumetric).strip().lower() not in ("0", "false", "none", ""):
         raise UnsupportedGCode("Volumetric extrusion is not supported.")
@@ -525,7 +602,7 @@ def segment(move):
     if move.delta_e <= 1e-9 or None in (a.x, a.y, b.x, b.y):
         return None
     if not a.absolute_xyz or not a.relative_e:
-        raise UnsupportedGCode("Requires G90 and relative extrusion (M83).")
+        raise UnsupportedGCode(f"Requires G90 and relative extrusion (M83); at G-code line {move.index + 1} G90 is {'on' if a.absolute_xyz else 'off'} and M83 is {'on' if a.relative_e else 'off'}.")
     if move.command in ("G2", "G3"):
         return arc_polyline(move)
     if math.hypot(b.x - a.x, b.y - a.y) < 1e-8:
@@ -699,10 +776,525 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
         return None
     return anchored, coverage
 
+def _parts(geom, kind):
+    return [g for g in shapely.get_parts(geom) if g.geom_type == kind and not g.is_empty]
+
+def _lines(geom):
+    """Coordinate lists of every LineString in a geometry (clipper intersection_pl)."""
+    return [list(g.coords) for g in _parts(geom, "LineString") if len(g.coords) >= 2]
+
+def _simplify(line, tolerance):
+    return list(LineString(line).simplify(tolerance, preserve_topology=False).coords)
+
+def _path_length(line):
+    return sum(math.dist(a, b) for a, b in zip(line, line[1:]))
+
+def reconnect_polylines(polylines, limit):
+    """Greedily chain polylines whose end points are closer than limit (WaveOverhangs detail::reconnect_polylines)."""
+    chains = [list(p) for p in polylines]
+    alive = [bool(p) for p in chains]
+    close = lambda p, q: math.dist(p, q) ** 2 < limit * limit
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(chains)):
+            if not alive[i]:
+                continue
+            for j in range(i + 1, len(chains)):
+                if not alive[j]:
+                    continue
+                base, nxt = chains[i], chains[j]
+                if close(base[-1], nxt[0]):
+                    base.extend(nxt)
+                elif close(base[-1], nxt[-1]):
+                    base.extend(reversed(nxt))
+                elif close(base[0], nxt[-1]):
+                    chains[i] = nxt + base
+                elif close(base[0], nxt[0]):
+                    chains[i] = base[::-1] + nxt
+                else:
+                    continue
+                alive[j] = False
+                changed = True
+    return [c for c, ok in zip(chains, alive) if ok]
+
+def detect_overhang_corners(geom, angle_rad):
+    """Convex vertices whose interior angle is below the threshold."""
+    corners = []
+    for poly in polygons(geom):
+        poly = shapely.geometry.polygon.orient(poly, 1.0)
+        rings = [(list(poly.exterior.coords)[:-1], True)] + [(list(r.coords)[:-1], False) for r in poly.interiors]
+        for pts, ccw in rings:
+            n = len(pts)
+            if n < 3:
+                continue
+            for i in range(n):
+                a, b, c = pts[i - 1], pts[i], pts[(i + 1) % n]
+                v1, v2 = (b[0] - a[0], b[1] - a[1]), (c[0] - b[0], c[1] - b[1])
+                if v1[0] ** 2 + v1[1] ** 2 < 1e-12 or v2[0] ** 2 + v2[1] ** 2 < 1e-12:
+                    continue
+                turn = math.atan2(v1[0] * v2[1] - v1[1] * v2[0], v1[0] * v2[0] + v1[1] * v2[1])
+                if (turn > 0 if ccw else turn < 0) and math.pi - abs(turn) < angle_rad:
+                    corners.append(b)
+    return corners
+
+def corner_influence(corners, radius):
+    """Union of 16-sided disks around each corner: the reinforcement zone mask."""
+    if not corners or radius <= 0:
+        return GeometryCollection()
+    disks = [Polygon([(x + math.cos(2 * math.pi * k / 16) * radius, y + math.sin(2 * math.pi * k / 16) * radius)
+                      for k in range(16)]) for x, y in corners]
+    return unary_union(disks)
+
+def _boundary_points(poly):
+    return list(poly.exterior.coords)[:-1] + [p for r in poly.interiors for p in list(r.coords)[:-1]]
+
+def _closest_boundary_pair(a, b, container):
+    best = None
+    for src_poly, other, src_is_a in ((a, b, True), (b, a, False)):
+        for src in _boundary_points(src_poly):
+            projected = nearest_points(other.boundary, Point(src))[0]
+            dist = math.dist(src, (projected.x, projected.y))
+            if best is not None and dist >= best[0]:
+                continue
+            mid = Point((src[0] + projected.x) / 2, (src[1] + projected.y) / 2)
+            if not container.covers(mid):
+                continue
+            pair = (src, (projected.x, projected.y)) if src_is_a else ((projected.x, projected.y), src)
+            best = (dist, pair[0], pair[1])
+    return best
+
+def _slit(a, b, extension, half_width):
+    length = math.dist(a, b)
+    if length <= 0:
+        return None
+    dx, dy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+    nx, ny = -dy * half_width, dx * half_width
+    s = (a[0] - dx * extension, a[1] - dy * extension)
+    e = (b[0] + dx * extension, b[1] + dy * extension)
+    return Polygon([(s[0] + nx, s[1] + ny), (e[0] + nx, e[1] + ny), (e[0] - nx, e[1] - ny), (s[0] - nx, s[1] - ny)])
+
+def _hole_count(geom):
+    return sum(len(p.interiors) for p in polygons(geom))
+
+def _effective_slit(cover, a, b, extension, spacing):
+    """A slit about one line spacing wide that really splits the cover (or opens a hole)."""
+    half = spacing / 2 + 1e-6
+    for _ in range(6):
+        slit = _slit(a, b, extension, half)
+        if slit is not None and slit.is_valid:
+            split = cover.difference(slit)
+            if len(polygons(split)) != 1 or _hole_count(split) != len(cover.interiors):
+                return slit
+        half = max(half + 1e-6, half * 2)
+    return None
+
+def narrow_split_slits(cover, spacing, minimum_width):
+    """Slits that cut the wave cover where a neck is narrower than minimum_width."""
+    if minimum_width <= 0:
+        return None
+    max_gap = minimum_width
+    thin = max(1e-6, spacing / 20)
+    extension = max(thin, minimum_width)
+    holes = len(cover.interiors)
+    candidates = []
+    def add(pair):
+        if pair is None or pair[0] > max_gap:
+            return
+        slit = _effective_slit(cover, pair[1], pair[2], spacing + extension, spacing)
+        if slit is not None:
+            candidates.append((pair[0], ((pair[1][0] + pair[2][0]) / 2, (pair[1][1] + pair[2][1]) / 2), slit))
+    for fraction in (0.25, 0.5, 0.75, 1.0):
+        inset = cover.buffer(-max(1e-6, fraction * spacing), join_style="round")
+        parts = polygons(inset)
+        count_changed, hole_changed = len(parts) > 1, _hole_count(inset) != holes
+        if not count_changed and not hole_changed:
+            continue
+        if count_changed:
+            for i in range(len(parts)):
+                for j in range(i + 1, len(parts)):
+                    add(_closest_boundary_pair(parts[i], parts[j], cover))
+        if hole_changed and cover.interiors:
+            outer = Polygon(cover.exterior)
+            for i, hole in enumerate(cover.interiors):
+                hp = Polygon(hole)
+                add(_closest_boundary_pair(outer, hp, cover))
+                for other in list(cover.interiors)[i + 1:]:
+                    add(_closest_boundary_pair(hp, Polygon(other), cover))
+    kept, slits = [], []
+    for dist, mid, slit in sorted(candidates, key=lambda c: c[0]):
+        if any(math.dist(mid, m) <= spacing / 2 for m in kept):
+            continue
+        kept.append(mid)
+        slits.append(slit)
+    return unary_union(slits) if slits else None
+
+def _point_at(line, distance):
+    if distance <= 0 or len(line) == 1:
+        return line[0]
+    walked = 0.0
+    for a, b in zip(line, line[1:]):
+        seg = math.dist(a, b)
+        if seg <= 0:
+            continue
+        if walked + seg >= distance:
+            t = (distance - walked) / seg
+            return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+        walked += seg
+    return line[-1]
+
+def _foot(line, pt):
+    """Segment index and clamped foot point of pt on a polyline."""
+    best = None
+    for i, (a, b) in enumerate(zip(line, line[1:])):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        denom = dx * dx + dy * dy
+        t = 0.0 if denom == 0 else max(0.0, min(1.0, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / denom))
+        foot = (a[0] + t * dx, a[1] + t * dy)
+        d = math.dist(pt, foot)
+        if best is None or d < best[0]:
+            best = (d, i, foot, 0.0 < t < 1.0)
+    return best
+
+def _support_score(candidate, supports, reach, prefix):
+    if not supports or len(candidate) < 2:
+        return -1.0
+    length = _path_length(candidate)
+    if length <= 0:
+        return -1.0
+    sample = min(length, max(1e-6, prefix))
+    best = -1.0
+    for support in reversed(supports):
+        if len(support) < 2:
+            continue
+        score = 0.0
+        for dist, weight in ((0.0, 3.0), (0.5 * sample, 2.0), (sample, 1.0)):
+            found = _foot(support, _point_at(candidate, dist))
+            if found is None:
+                continue
+            normalized = max(0.0, 1.0 - found[0] / max(1e-6, reach))
+            score += weight * (3.0 * normalized + (1.5 if found[3] else 0.2))
+        best = max(best, score)
+    return best
+
+def wave_smart_order(fronts, reach, prefix):
+    """Smart pattern: flip each front to start nearest the paths already laid down."""
+    laid = []
+    for front in fronts:
+        if len(front) < 2:
+            continue
+        if _support_score(front[::-1], laid, reach, prefix) > _support_score(front, laid, reach, prefix):
+            front = front[::-1]
+        laid.append(front)
+    return laid
+
+def wave_zigzag(levels, connector_limit):
+    """ZigZag pattern: chain fronts of successive levels into continuous paths."""
+    used = [[False] * len(level) for level in levels]
+    limit_sq = connector_limit * connector_limit
+    region = []
+    def append_or_start(front):
+        if not region:
+            region.append(list(front))
+            return
+        cur = region[-1]
+        d_keep, d_flip = math.dist(cur[-1], front[0]) ** 2, math.dist(cur[-1], front[-1]) ** 2
+        if min(d_keep, d_flip) > limit_sq:
+            region.append(list(front))
+            return
+        if d_flip < d_keep:
+            front = front[::-1]
+        cur.extend(front[1:] if cur[-1] == front[0] else front)
+    def follow(level, idx, rev):
+        while True:
+            used[level][idx] = True
+            cur = levels[level][idx]
+            if len(cur) < 2:
+                return
+            append_or_start(cur[::-1] if rev else cur)
+            anchor, found = region[-1][-1], None
+            for nl in range(level + 1, len(levels)):
+                best_idx, best_d, best_rev = None, limit_sq, False
+                for ci, cand in enumerate(levels[nl]):
+                    if used[nl][ci] or len(cand) < 2:
+                        continue
+                    d = math.dist(anchor, cand[0]) ** 2
+                    if d <= best_d:
+                        best_d, best_idx, best_rev = d, ci, False
+                    d = math.dist(anchor, cand[-1]) ** 2
+                    if d <= best_d:
+                        best_d, best_idx, best_rev = d, ci, True
+                if best_idx is not None:
+                    found = (nl, best_idx, best_rev)
+                break
+            if found is None:
+                return
+            level, idx, rev = found
+    for li, level in enumerate(levels):
+        for fi in range(len(level)):
+            if not used[li][fi]:
+                follow(li, fi, False)
+    return region
+
+def _clean_fronts(next_region, trim, tolerance, reconnect, mask=None):
+    fronts = next_region.boundary.intersection(trim)
+    if mask is not None:
+        fronts = fronts.intersection(mask)
+    lines = [_simplify(l, tolerance) for l in _lines(fronts)]
+    return reconnect_polylines([l for l in lines if len(l) >= 2], reconnect)
+
+def bridging_unsupported_distance(real_overhang, anchors):
+    """Port of detect_bridging_direction's cost: length of overhang edge left floating for the best bridge direction."""
+    area = real_overhang.difference(anchors)
+    if area.is_empty:
+        return 0.0
+    floating = area.boundary.difference(anchors.buffer(1e-3))
+    edges = [(a, b) for line in _lines(floating) for a, b in zip(line, line[1:]) if math.dist(a, b) > 1e-9]
+    if not edges:
+        return 0.0
+    normals = {}
+    for (ax, ay), (bx, by) in edges:
+        length = math.hypot(bx - ax, by - ay)
+        nx, ny = -(by - ay) / length, (bx - ax) / length
+        normals.setdefault(math.ceil(math.atan2(ny, nx) * 1000.0), (nx, ny))
+    return min(sum(abs((bx - ax) * nx + (by - ay) * ny) for (ax, ay), (bx, by) in edges) for nx, ny in normals.values())
+
+def should_generate_waves(region, real_overhang, anchors, inset_anchors, cover_area, spacing, instead_of_bridges):
+    """Port of should_generate_waves_for_region: False means a plain bridge is good enough."""
+    if real_overhang.is_empty:
+        return False
+    if instead_of_bridges or region.interiors:
+        return True
+    anchoring = cover_area.buffer(1.1 * spacing, join_style="round").intersection(inset_anchors)
+    unbridgeable = real_overhang.difference(anchoring.convex_hull).area if not anchoring.is_empty else real_overhang.area
+    return (unbridgeable >= 0.2 * real_overhang.area
+            or bridging_unsupported_distance(real_overhang, anchors) >= real_overhang.length * 0.2)
+
+def wave_generate(poly, support, cfg, printer, cancelled):
+    """Port of WaveOverhangs::generate (Andersons / Klappe). Returns (paths as point lists, covered geometry) or None."""
+    nozzle = printer["nozzle_diameter"]
+    spacing = max(1e-6, cfg["wave_line_spacing_mm"] or nozzle * cfg["wave_spacing_nozzle_ratio"])
+    width = nozzle
+    base = spacing
+    overlap = cfg["wave_perimeter_overlap_mm"]
+    resolution = 0.0125
+    anchors_size = min(3.0, base * 2)
+    seed_expansion = max(1e-6, base / 10)
+    connector = max(spacing, width) + overlap
+    growth = cfg["wave_min_new_area_mm2"] if cfg["wave_min_new_area_mm2"] > 0 else 0.05 * spacing * spacing
+    corner_spacing = cfg["wave_corner_spacing_mm"]
+    taper = cfg["wave_corner_taper"] and 0 < corner_spacing < spacing and cfg["wave_corner_distance_mm"] > 0
+    substeps = min(8, max(2, round(spacing / corner_spacing))) if taper else 1
+    step = max(corner_spacing, spacing / substeps) if taper else spacing
+    angle = math.radians(max(10.0, min(179.0, cfg["wave_corner_angle_deg"])))
+    pattern = cfg["wave_pattern"]
+    max_iter = int(cfg["wave_max_iterations"])
+
+    lower = support
+    overhangs = poly.difference(lower)
+    if overhangs.is_empty:
+        return None
+    anchors = poly.intersection(lower)
+    inset_anchors = anchors.difference(overhangs.buffer(anchors_size + 0.1 * width, join_style="bevel"))
+    inset_area = poly.difference(inset_anchors)
+    out_paths, filled = [], []
+    for overhang in polygons(unary_union(polygons(inset_area))):
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        if cfg["wave_min_length_mm"] > 0 and overhang.exterior.length < cfg["wave_min_length_mm"]:
+            continue
+        cover_area = overhang.buffer(overlap, join_style="round")
+        influence = GeometryCollection()
+        if taper:
+            influence = corner_influence(detect_overhang_corners(overhang, angle), cfg["wave_corner_distance_mm"])
+        if cover_area.intersection(overhangs).is_empty:
+            continue
+        if not should_generate_waves(overhang, cover_area.intersection(overhangs), anchors, inset_anchors,
+                                     cover_area, base, cfg["wave_instead_of_bridges"]):
+            continue
+        region_paths = []
+        for cover in polygons(unary_union(polygons(cover_area))):
+            slits = narrow_split_slits(cover, spacing, cfg["wave_min_width_mm"])
+            splits = polygons(cover.difference(slits)) if slits is not None else [cover]
+            splits = polygons(unary_union(splits))
+            anchoring = cover.buffer(1.1 * base, join_style="round").intersection(inset_anchors)
+            if anchoring.is_empty:
+                anchoring = cover.buffer(1.1 * base, join_style="round").intersection(anchors)
+            if anchoring.is_empty:
+                anchoring = cover.buffer(1.1 * base, join_style="round").intersection(lower)
+            if anchoring.is_empty:
+                continue
+            # wave_seeds: the anchoring outline (grown a little) clipped to the cover; fallback is the cover edge inside it.
+            grown_anchor = anchoring.buffer(seed_expansion, join_style="round")
+            base_seeds = grown_anchor.boundary.intersection(cover)
+            if not _lines(base_seeds):
+                base_seeds = cover.boundary.intersection(grown_anchor)
+            if base_seeds.is_empty:
+                continue
+            for split in splits:
+                seeds = base_seeds.intersection(split)
+                if seeds.is_empty:
+                    continue
+                trim = split.buffer(-width / 2, join_style="round")
+                if trim.is_empty:
+                    trim = split.buffer(-0.1 * base, join_style="round")
+                if trim.is_empty:
+                    trim = split
+                accumulated = seeds.buffer(seed_expansion, cap_style="round").intersection(split)
+                if accumulated.is_empty:
+                    continue
+                levels, area, iteration = [], accumulated.area, 0
+                taper_active = taper and not influence.is_empty and not influence.intersection(split).is_empty
+                while True:
+                    if cancelled():
+                        raise Cancelled("Cancelled.")
+                    if max_iter > 0 and iteration >= max_iter:
+                        break
+                    iteration += 1
+                    if taper_active:
+                        for sub in range(1, substeps):
+                            grown = accumulated.buffer(sub * step, join_style="round").intersection(split)
+                            if grown.is_empty:
+                                continue
+                            fronts = _clean_fronts(grown, trim, min(0.05 * step, resolution), step, influence)
+                            if fronts:
+                                levels.append(fronts)
+                    next_region = accumulated.buffer(spacing, join_style="round").intersection(split)
+                    if next_region.is_empty or next_region.area <= area + growth:
+                        break
+                    fronts = _clean_fronts(next_region, trim, min(0.05 * spacing, resolution), spacing)
+                    if fronts:
+                        levels.append(fronts)
+                    accumulated, area = next_region, next_region.area
+                if not levels:
+                    continue
+                if pattern == "zigzag":
+                    paths = wave_zigzag(levels, connector)
+                elif pattern == "smart":
+                    paths = wave_smart_order([f for level in levels for f in level], max(width, connector), max(width, connector / 2))
+                else:
+                    paths = [f for level in levels for f in level]
+                if paths:
+                    region_paths.extend(paths)
+                    filled.append(accumulated)
+        out_paths.extend(region_paths)
+    if not out_paths:
+        return None
+    return out_paths, unary_union(filled).buffer(base / 2).buffer(-base / 2)
+
+def fill_polygon_wave(poly, support, cfg, printer, cancelled):
+    """Wave overhang fill. Same return contract as fill_polygon: (ordered paths, coverage %) or None.
+
+    Algorithm: Janis Andersons; Orca C++ port: Dennis Klappe's OrcaSlicer-WaveOverhangs (AGPL-3.0).
+    Ported: narrow-neck slit splitting, anchor fallbacks, wavefront propagation with
+    min-new-area / max-iterations / min-length, corner taper, reconnect, Smart / ZigZag /
+    Monotonic patterns, wave_seeds (with the library's own boundary fallback) and the
+    bridge-versus-wave heuristic (wave_instead_of_bridges).
+    """
+    printed = poly.intersection(support.buffer(printer["outer_wall_line_width"] * 0.05))
+    result = wave_generate(poly, support, cfg, printer, cancelled)
+    if result is None:
+        return None
+    paths, filled = result
+    covered = unary_union((printed, filled.intersection(poly)))
+    coverage = 100 * covered.area / poly.area
+    if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
+        return None
+    lines = [LineString(p) for p in paths if len(p) >= 2 and _path_length(p) > 1e-5]
+    return (lines, coverage) if lines else None
+
+def previous_setting(lines, index, commands, key, skip=None):
+    """Last value of `key` set by one of `commands` before lines[index], or None."""
+    for text in reversed(lines[:index]):
+        cmd, words = command(text)
+        if cmd in commands and key in words and not (skip and skip(words)):
+            return words[key]
+        if cmd == "M107" and "M107" in commands:
+            return 0.0
+    return None
+
+def wave_wrappers(lines, index, arcs, cfg):
+    """G-code run before and after a wave block: fan, nozzle temperature, minimum time."""
+    pre, post = [], []
+    if cfg["wave_fan_override"]:
+        part_fan = lambda words: "P" in words and words["P"] not in (0, 1)
+        old = previous_setting(lines, index, ("M106", "M107"), "S", part_fan) or 0.0
+        pre.append(f"M106 S{round(cfg['wave_fan_percent'] * 2.55)}{chr(10)}")
+        post.append(f"M106 S{round(old)}{chr(10)}" if old else f"M107{chr(10)}")
+    if cfg["wave_aux_fan_override"]:
+        old = previous_setting(lines, index, ("M106",), "S", lambda w: w.get("P") != 2) or 0.0
+        pre.append(f"M106 P2 S{round(cfg['wave_aux_fan_percent'] * 2.55)}{chr(10)}")
+        post.append(f"M106 P2 S{round(old)}{chr(10)}")
+    if cfg["wave_temperature_c"]:
+        old = previous_setting(lines, index, ("M104", "M109"), "S")
+        if old:
+            pre.append(f"M104 S{cfg['wave_temperature_c']:g}{chr(10)}")
+            post.append(f"M104 S{old:g}{chr(10)}")
+    spent = sum(arc.length for arc in arcs) / cfg["wave_speed_mm_s"]
+    if spent < cfg["wave_min_time_s"]:
+        post.insert(0, f"G4 P{round((cfg['wave_min_time_s'] - spent) * 1000)}{chr(10)}")
+    return pre, post
+
+# Commands that may sit inside a block the plugin edits. M204 is Orca's acceleration change; G17 selects the
+# XY plane before Orca's spiral Z lift (a G3 with Z), which the replaced block does not need.
+KEPT_COMMANDS = ("", "G0", "G1", "G2", "G3", "M73", "M204", "G17")
+
+WALL_ROLES = ("outer wall", "inner wall", "overhang wall")
+SOLID_ROLES = ("solid infill", "internal solid infill", "bottom surface")
+
+def fan_wrappers(lines, index, cfg):
+    """Floor-layer fan overrides: lines to run before and after a feature."""
+    pre, post = [], []
+    for aux in (False, True):
+        if not cfg["wave_floor_aux_fan_override" if aux else "wave_floor_fan_override"]:
+            continue
+        percent = cfg["wave_floor_aux_fan_percent" if aux else "wave_floor_fan_percent"]
+        if aux:
+            old = previous_setting(lines, index, ("M106",), "S", lambda w: w.get("P") != 2) or 0.0
+            pre.append(f"M106 P2 S{round(percent * 2.55)}\n")
+            post.append(f"M106 P2 S{round(old)}\n")
+        else:
+            old = previous_setting(lines, index, ("M106", "M107"), "S", lambda w: "P" in w and w["P"] not in (0, 1)) or 0.0
+            pre.append(f"M106 S{round(percent * 2.55)}\n")
+            post.append(f"M106 S{round(old)}\n" if old else "M107\n")
+    return pre, post
+
+def retime_feature(feature, lines, speed_for):
+    """Rewrite feed rates of extruding moves. speed_for(move) -> mm/s or None (unchanged). Returns lines or None."""
+    if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(feature.start, feature.end)):
+        return None
+    if len({m.before.tool for m in feature.moves}) > 1:
+        return None
+    by_index = {m.index: m for m in feature.moves}
+    running = feature.moves[0].before.feed if feature.moves else None
+    out, changed = [], False
+    for i in range(feature.start, feature.end):
+        move = by_index.get(i)
+        if move is None:
+            out.append(lines[i])
+            continue
+        speed = speed_for(move) if move.delta_e > 0 else None
+        want = speed * 60 if speed else move.after.feed
+        reference = move.words["F"] if "F" in move.words else running
+        if abs(want - reference) < 1e-6:
+            out.append(lines[i])
+            running = want
+            continue
+        body, sep, comment = lines[i].partition(";")
+        ending = body[len(body.rstrip("\r\n")):] if not sep else ""
+        body = re.sub(r"\s[Ff]\s*" + NUMBER, "", body.rstrip("\r\n")).rstrip()
+        text = f"{body} F{want:.1f}"
+        out.append(text + (" ;" + comment.rstrip("\r\n") if sep else "") + (ending or "\n"))
+        running, changed = want, True
+    if feature.moves and running is not None and abs(running - feature.moves[-1].after.feed) > 1e-6:
+        out.append(f"G1 F{feature.moves[-1].after.feed:.2f}\n")
+        changed = True
+    return out if changed else None
+
 def is_retracted(state):
     return state.retracted > 1e-5 or state.firmware_retracted
 
-def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
+def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), post=()):
     if is_retracted(before) or is_retracted(after):
         raise UnsupportedGCode(
             f"Bridge region starts or ends with unrecovered retraction "
@@ -711,20 +1303,37 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
     restore = restore_state or after
     if is_retracted(restore):
         raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
-    e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * cfg["flow_multiplier"] * printer["filament_flow_ratio"]
-    travel = cfg["travel_speed_mm_s"] * 60
-    retract = cfg["retract_length_mm"]
+    wave = cfg["overhang_mode"] == "wave"
+    if wave:
+        e_per_mm = cfg["wave_flow_mm3_per_mm"] / (math.pi * (printer["filament_diameter"] / 2) ** 2) * printer["filament_flow_ratio"]
+    else:
+        e_per_mm = (printer["nozzle_diameter"] / printer["filament_diameter"]) ** 2 * cfg["flow_multiplier"] * printer["filament_flow_ratio"]
+    travel = (cfg["wave_travel_speed_mm_s"] if wave else cfg["travel_speed_mm_s"]) * 60
+    hop = cfg["z_hop_mm"]
+    z = before.z
+    retract = cfg["wave_end_retract_mm"] if wave and cfg["wave_end_retract_mm"] else cfg["retract_length_mm"]
     retract_feed = cfg["retract_speed_mm_s"] * 60
-    out = [MARKER + "BEGIN\n", ";TYPE:Bridge\n"]
+    out = [MARKER + "BEGIN\n", ";TYPE:Bridge\n", *pre]
     for i, arc in enumerate(arcs):
         coords = list(arc.coords)
         if len(coords) < 2:
             continue
-        speed = max(cfg["minimum_arc_speed_mm_s"], min(cfg["arc_speed_mm_s"], arc.length / cfg["minimum_arc_time_s"])) * 60
+        if wave:
+            # Respect the filament's volumetric limit, as WaveOverhangs does (PR 115).
+            speed = cfg["wave_speed_mm_s"]
+            if printer.get("max_volumetric_speed"):
+                speed = min(speed, printer["max_volumetric_speed"] / cfg["wave_flow_mm3_per_mm"])
+            speed *= 60
+        else:
+            speed = max(cfg["minimum_arc_speed_mm_s"], min(cfg["arc_speed_mm_s"], arc.length / cfg["minimum_arc_time_s"])) * 60
         if retract:
             out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
         x, y = coords[0]
+        if hop:
+            out.append(f"G1 Z{z + hop:.5f} F{travel:.1f}\n")
         out.append(f"G1 X{x:.5f} Y{y:.5f} F{travel:.1f}\n")
+        if hop:
+            out.append(f"G1 Z{z:.5f} F{travel:.1f}\n")
         if retract:
             out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
         out.append(f"; Arc {i + 1}\nG1 F{speed:.2f}\n")
@@ -736,9 +1345,14 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None):
             last = pt
     if retract:
         out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
+    if hop:
+        out.append(f"G1 Z{z + hop:.5f} F{travel:.1f}\n")
     out.append(f"G1 X{restore.x:.5f} Y{restore.y:.5f} F{travel:.1f}\n")
+    if hop:
+        out.append(f"G1 Z{z:.5f} F{travel:.1f}\n")
     if retract:
         out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
+    out.extend(post)
     out.append(f"G92 E{restore.e:.7f}\nG1 F{restore.feed:.2f}\n")
     out.append(MARKER + "END\n")
     return out
@@ -801,23 +1415,28 @@ def hilbert_paths(poly, spacing, cancelled=lambda: False):
     flush()
     return paths
 
-def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled):
+def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled, feed=None, density=100.0, pre=(), post=()):
     """Replace infill inside the Arc zone and retain original infill outside it."""
     if feature.role not in ("solid infill", "internal solid infill"):
         return None
     moves = feature.moves
     strokes = [(move, segment(move)) for move in moves]
-    if any(move.delta_e > 1e-9 and line is None for move, line in strokes):
+    # A pure-E move (unretract/prime) has no geometry and is not an extrusion stroke.
+    if any(move.delta_e > 1e-9 and line is None and ("X" in move.words or "Y" in move.words)
+           for move, line in strokes):
         return None
     strokes = [(move, line) for move, line in strokes if line is not None]
     if not strokes or any(move.before.z != strokes[0][0].before.z or move.after.z != strokes[0][0].after.z for move, _ in strokes):
         return None
     if len({move.before.tool for move in moves}) != 1:
         return None
-    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
-           for i in range(feature.start, feature.end)):
+    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73", "G17") for i in range(feature.start, feature.end)):
         return None
-    if any(is_retracted(move.before) or is_retracted(move.after) for move in moves):
+    # Orca writes ;TYPE before the retract/travel/unretract that opens a feature, so
+    # moves inside it are legitimately retracted. Only the boundaries and the
+    # extruding strokes must be unretracted for the replacement to be balanced.
+    if is_retracted(moves[0].before) or is_retracted(moves[-1].after) \
+            or any(is_retracted(move.before) or is_retracted(move.after) for move, _ in strokes):
         return None
     width = printer["outer_wall_line_width"]
     footprints = [line.buffer(width * 0.5) for _, line in strokes]
@@ -828,15 +1447,22 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
         return None
     hilbert = []
     for poly in fill_polys:
-        hilbert.extend(hilbert_paths(poly, width, cancelled))
+        hilbert.extend(hilbert_paths(poly, width * 100.0 / density, cancelled))
     if not hilbert:
         return None
 
     before, after = moves[0].before, moves[-1].after
     filament_area = math.pi * (printer["filament_diameter"] / 2) ** 2
     travel = cfg["travel_speed_mm_s"] * 60
-    hilbert_feed = max(60.0, strokes[0][0].before.feed)
-    out = ["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n"]
+    hilbert_feed = feed * 60 if feed else max(60.0, strokes[0][0].before.feed)
+    out = ["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n", *pre]
+    retract, retract_feed = cfg["retract_length_mm"], cfg["retract_speed_mm_s"] * 60
+    def jump(x, y):
+        if retract:
+            out.append(f"G1 E{-retract:.5f} F{retract_feed:.1f}\n")
+        out.append(f"G0 X{x:.5f} Y{y:.5f} F{travel:.1f}\n")
+        if retract:
+            out.append(f"G1 E{retract:.5f} F{retract_feed:.1f}\n")
     # Preserve the sliced infill outside the replacement zone, clipping only
     # the material footprint that the Hilbert paths will cover.
     cut_zone = unary_union(fill_polys).buffer(0.01)
@@ -845,9 +1471,9 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
         parts = [outside] if outside.geom_type == "LineString" else [g for g in getattr(outside, "geoms", ()) if g.geom_type == "LineString"]
         for part in parts:
             coords = list(part.coords)
-            if len(coords) < 2 or part.length <= 1e-5:
+            if len(coords) < 2 or part.length < width:  # slivers left by the cut are not worth a retract and travel
                 continue
-            out.append(f"G0 X{coords[0][0]:.5f} Y{coords[0][1]:.5f} F{travel:.1f}\n")
+            jump(*coords[0])
             out.append(f"G1 F{max(60.0, move.before.feed):.1f}\n")
             e_per_mm = move.delta_e / line.length
             for a, b in zip(coords, coords[1:]):
@@ -858,14 +1484,15 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled)
         coords = list(path.coords)
         if len(coords) < 2:
             continue
-        out.append(f"G0 X{coords[0][0]:.5f} Y{coords[0][1]:.5f} F{travel:.1f}\n")
+        jump(*coords[0])
         out.append(f"G1 F{hilbert_feed:.1f}\n")
         e_per_mm = (path_spacing * printer["layer_height"] / filament_area) * printer["filament_flow_ratio"]
         for a, b in zip(coords, coords[1:]):
             distance = math.dist(a, b)
             if distance > 1e-8:
                 out.append(f"G1 X{b[0]:.5f} Y{b[1]:.5f} E{distance * e_per_mm:.7f}\n")
-    out.append(f"G0 X{after.x:.5f} Y{after.y:.5f} F{travel:.1f}\n")
+    jump(after.x, after.y)
+    out.extend(post)
     out.append(f"G92 E{after.e:.7f}\nG1 F{after.feed:.2f}\n")
     return out
 
@@ -885,9 +1512,13 @@ def relocate_travel(target, cfg):
     return out
 
 def schedule_arc_tails(lines, cfg, cancelled):
-    """Within each layer/tool run: normal material, then Arcs, then overhang walls.
+    """Keep the slicer's order, except print overhang walls after the Arcs they rest on.
 
-    Tool-selection boundaries stay in place, including their purge macros.
+    Arcs stay exactly where the Bridge they replace was. Normal walls and infill
+    are never moved, so Orca's wall/infill order setting ("infill first" etc.)
+    still decides how Arcs and walls interleave. Only overhang walls that the
+    slicer printed before the Arcs of the same layer/tool run are moved, to just
+    after the last Arc block. Tool-selection boundaries stay in place.
     Every moved block retains its original start coordinates, feed and E state.
     """
     features = parse(lines, cancelled)
@@ -907,15 +1538,23 @@ def schedule_arc_tails(lines, cfg, cancelled):
         if line.strip() == MARKER + "BEGIN":
             start = index
         elif line.strip() == MARKER + "END" and start is not None:
-            block_moves = [m for i, m in moves.items() if start <= i <= index]
+            block_moves = sorted((m for i, m in moves.items() if start <= i <= index), key=lambda m: m.index)
             if not block_moves:
                 raise UnsupportedGCode("Arc block has no movement state.")
-            block_moves.sort(key=lambda m: m.index)
             key = window(start)
             if index >= key[1]:
                 raise UnsupportedGCode("Arc block crosses a tool or layer boundary.")
+            # The block ends with G92 E / G1 F that restore the pre-bridge extruder
+            # counter and feed; the last move's own state still holds Arc extrusion.
+            restored = replace(block_moves[-1].after)
+            for text in lines[start:index]:
+                cmd, words = command(text)
+                if cmd == "G92" and "E" in words:
+                    restored.e = words["E"]
+                elif cmd == "G1" and "F" in words and "X" not in words and "E" not in words:
+                    restored.feed = words["F"]
             groups.setdefault(key, {"arcs": [], "walls": []})["arcs"].append(
-                (start, index + 1, list(lines[start:index + 1]), block_moves[0].before, block_moves[-1].after))
+                (start, index + 1, restored))
             start = None
     for feature in features:
         if feature.role not in ("overhang wall", "overhang perimeter"):
@@ -929,41 +1568,123 @@ def schedule_arc_tails(lines, cfg, cancelled):
             continue
         if last.index >= key[1]:
             raise UnsupportedGCode("Overhang wall crosses a tool or layer boundary.")
-        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73")
-               for i in range(first.index, last.index + 1)):
-            raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
         raw = [lines[feature.start]] + list(lines[first.index:last.index + 1])
         groups[key]["walls"].append((first.index, last.index + 1, raw, first.before, last.after))
     edits = []
-    for (lo, hi), group in groups.items():
-        blocks = group["arcs"] + group["walls"]
-        for start, end, raw, before, after in blocks:
-            if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
-                raise UnsupportedGCode("Cannot move an Arc/overhang block across an active retraction or tool change.")
-            edits.append((start, end, relocate_travel(after, cfg)))
-        remaining = [m for i, m in moves.items() if lo <= i < hi and segment(m) is not None
-                     and not any(a <= i < b for a, b, *_ in blocks)]
-        if remaining:
-            anchor = max(remaining, key=lambda m: m.index)
-            insertion, restore = anchor.index + 1, anchor.after
-        else:
-            first_block = min(blocks, key=lambda b: b[0])
-            insertion, restore = first_block[0], first_block[3]
+    for group in groups.values():
+        arc_end, restore = max(group["arcs"], key=lambda arc: arc[1])[1:]
+        early = [wall for wall in group["walls"] if wall[0] < arc_end]
+        if not early:
+            continue
         tail = []
-        for start, end, raw, before, after in blocks:
-            if before.tool != restore.tool:
-                raise UnsupportedGCode("Arc tail would require an additional material change.")
+        for start, end, raw, before, after in early:
+            if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
+                raise UnsupportedGCode("Cannot move an overhang wall across an active retraction or tool change.")
+            if before.tool != restore.tool or is_retracted(restore):
+                raise UnsupportedGCode("Overhang wall move would require an additional material change.")
+            if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(start, end)):
+                raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
+            edits.append((start, end, relocate_travel(after, cfg)))
             tail.extend(relocate_travel(before, cfg))
             tail.extend(raw)
         tail.extend(relocate_travel(restore, cfg))
-        edits.append((insertion, insertion, tail))
+        edits.append((arc_end, arc_end, tail))
     for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
         lines[start:end] = replacement
     return lines
 
+def floor_speed(cfg, k, override, original):
+    """Speed (mm/s) for floor layer k >= 1, ramping linearly back to `original`; None = unchanged."""
+    if not override:
+        return None
+    m = min(cfg["wave_floor_speed_ramp"], cfg["wave_floor_layers"])
+    t = min(1.0, (k - 1) / (m - 1)) if m > 1 else 0.0
+    return min(original, override + (original - override) * t)
+
+def move_time(move):
+    line = segment(move)
+    a, b = move.before, move.after
+    if line is not None:
+        length = line.length
+    elif None not in (a.x, a.y, b.x, b.y):
+        length = math.dist((a.x, a.y), (b.x, b.y))
+    else:
+        return 0.0
+    return length / max(b.feed / 60, 1e-6)
+
+RE_M73_REMAINING = re.compile(r"^(M73\s+P(\d+)\s+R)(\d+)")
+RE_TIME_HEADER = re.compile(r"^(;\s*model printing time:\s*)([0-9hms ]+?)(;\s*total estimated time:\s*)([0-9hms ]+?)\s*$")
+
+def move_seconds(lines):
+    """Seconds per line from length / modal feed, plus G4 dwells. Only differences are used."""
+    out, x, y, feed = [], 0.0, 0.0, 6000.0
+    for line in lines:
+        seconds = 0.0
+        code = line.split(";")[0]
+        if re.match(r"G[0-3]\b", code):
+            words = {k: float(v) for k, v in re.findall(r"([XYF])(-?[0-9.]+)", code)}
+            feed = words.get("F", feed)
+            nx, ny = words.get("X", x), words.get("Y", y)
+            # shortcut: G2/G3 count as their chord, close enough for a time difference
+            seconds = math.hypot(nx - x, ny - y) / (feed / 60.0) if feed > 0 else 0.0
+            x, y = nx, ny
+        elif re.match(r"G4\b", code):
+            dwell = re.search(r"P([0-9.]+)", code)
+            seconds = float(dwell.group(1)) / 1000.0 if dwell else 0.0
+        out.append(seconds)
+    return out
+
+def format_duration(seconds):
+    seconds = max(0, int(round(seconds)))
+    h, rest = divmod(seconds, 3600)
+    m, sec = divmod(rest, 60)
+    return (f"{h}h " if h else "") + (f"{m}m " if h or m else "") + f"{sec}s"
+
+def parse_duration(text):
+    return float(sum(int(n) * {"h": 3600, "m": 60, "s": 1}[u] for n, u in re.findall(r"(\d+)([hms])", text)))
+
+def update_time_estimates(old_lines, new_lines):
+    """Shift M73 remaining-time lines and the header estimate by the time the edit adds or removes.
+
+    Orca estimated the time before post-processing and the plugin docs do not say it is redone.
+    Edits new_lines in place and returns the change in seconds. The k-th M73 of the new text is
+    matched to the k-th M73 of the old text and shifted by how much more (or less) time follows it.
+    """
+    old_time, new_time = move_seconds(old_lines), move_seconds(new_lines)
+    total = sum(new_time) - sum(old_time)
+    if abs(total) < 0.5:
+        return 0.0
+    # Pair M73 lines by progress percent (a replaced block may swallow one), in order.
+    old_by_percent = {}
+    for j, line in enumerate(old_lines):
+        match = RE_M73_REMAINING.match(line)
+        if match:
+            old_by_percent.setdefault(match.group(2), []).append(j)
+    old_after = [0.0] * (len(old_time) + 1)
+    new_after = [0.0] * (len(new_time) + 1)
+    for k in range(len(old_time) - 1, -1, -1):
+        old_after[k] = old_after[k + 1] + old_time[k]
+    for k in range(len(new_time) - 1, -1, -1):
+        new_after[k] = new_after[k + 1] + new_time[k]
+    for i, line in enumerate(new_lines):
+        match = RE_M73_REMAINING.match(line)
+        if match and old_by_percent.get(match.group(2)):
+            j = old_by_percent[match.group(2)].pop(0)
+            minutes = max(0, round(int(match.group(3)) + (new_after[i] - old_after[j]) / 60.0))
+            new_lines[i] = f"{match.group(1)}{minutes}" + line[match.end():]
+    for i, line in enumerate(new_lines[:300]):
+        body = line.rstrip("\r\n")
+        match = RE_TIME_HEADER.match(body)
+        if match:
+            model = format_duration(parse_duration(match.group(2)) + total)
+            whole = format_duration(parse_duration(match.group(4)) + total)
+            new_lines[i] = f"{match.group(1)}{model}{match.group(3)}{whole}" + line[len(body):]
+            break
+    return total
+
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
-    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "skip_reasons": {}}
+    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "skip_reasons": {}}
     if not cfg["enabled"] or MARKER in text:
         return text, report
     lines = text.splitlines(keepends=True)
@@ -982,6 +1703,12 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     shapes = {}
     replacements = []
     hilbert_targets = {}
+    wave_mode = cfg["overhang_mode"] == "wave"
+    wave_regions = {}
+    layer_delta = {}
+    hilbert_layers = cfg["wave_floor_hilbert_layers"] or cfg["wave_floor_layers"] if wave_mode and cfg["wave_floor_use_hilbert"] else 0
+    if cfg["next_layer_pattern"] == "hilbert":
+        hilbert_layers = max(hilbert_layers, 1)
     for feature in bridges:
         if cancelled():
             raise Cancelled("Cancelled.")
@@ -1006,7 +1733,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if is_retracted(first.before) or is_retracted(last.after):
             skipped("Bridge starts or ends during firmware retraction")
             continue
-        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73") for i in range(first.index, last.index + 1)):
+        if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
             skipped("State command inside bridge region")
             continue
         for layer in (feature.layer - 1, feature.layer):
@@ -1033,7 +1760,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             if poly.area < cfg["minimum_area_mm2"] or not geometric_overhang:
                 valid = False
                 break
-            generated = fill_polygon(poly, support, cfg, printer, cancelled)
+            fill = fill_polygon_wave if cfg["overhang_mode"] == "wave" else fill_polygon
+            generated = fill(poly, support, cfg, printer, cancelled)
             if generated is None:
                 valid = False
                 break
@@ -1043,33 +1771,91 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if not valid or not arcs:
             skipped("Insufficient area, anchoring or coverage")
             continue
-        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer)
+        pre, post = wave_wrappers(lines, first.index, arcs, cfg) if cfg["overhang_mode"] == "wave" else ((), ())
+        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
-                           if command(lines[i])[0] == "M73")
+                           if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
-        if cfg["next_layer_pattern"] == "hilbert":
-            hilbert_targets.setdefault((feature.layer + 1, tool_index), []).append(region)
+        for k in range(1, hilbert_layers + 1):
+            hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
+        if wave_mode:
+            wave_regions.setdefault((feature.layer, tool_index), []).append(region)
+            speed = cfg["wave_speed_mm_s"]
+            layer_delta[feature.layer] = layer_delta.get(feature.layer, 0.0) + sum(a.length for a in arcs) / speed \
+                - sum(move_time(m) for m in feature.moves)
         report["replaced_features"] += 1
         report["generated_arcs"] += len(arcs)
         previous = report["minimum_coverage_percent"]
         report["minimum_coverage_percent"] = min(coverages + ([previous] if previous is not None else []))
-    if cfg["next_layer_pattern"] == "hilbert" and hilbert_targets:
+    floor_done = set()
+    if hilbert_targets:
         for feature in features:
+            if feature.layer < 0:  # start G-code (purge line) uses absolute E
+                continue
             feature_tools = {m.before.tool for m in feature.moves if segment(m) is not None}
             if len(feature_tools) != 1:
                 continue
             tool_index = feature_tools.pop()
-            matching = [geom for (layer, tool), geoms in hilbert_targets.items()
-                        if layer == feature.layer and tool == tool_index for geom in geoms]
+            matching = hilbert_targets.get((feature.layer, tool_index), [])
             if not matching:
                 continue
             if tool_index not in printer_by_tool:
                 printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
+            k = min(k for k, _ in matching)
+            feed, pre, post, density = None, (), (), 100.0
+            if wave_mode:
+                original = feature.moves[0].before.feed / 60 if feature.moves else 0
+                feed = floor_speed(cfg, k, cfg["wave_floor_print_speed_mm_s"], original)
+                pre, post = fan_wrappers(lines, feature.start, cfg)
+                density = cfg["wave_floor_hilbert_density_percent"]
             replacement = hilbert_feature_replacement(
-                feature, lines, unary_union(matching), cfg, printer_by_tool[tool_index], cancelled)
+                feature, lines, unary_union([geom for _, geom in matching]), cfg, printer_by_tool[tool_index],
+                cancelled, feed, density, pre, post)
             if replacement is not None:
                 replacements.append((feature.start, feature.end, replacement))
+                floor_done.add(id(feature))
                 report["hilbert_features"] += 1
+    if wave_regions and (cfg["wave_perimeter_speed_mm_s"] or cfg["wave_floor_print_speed_mm_s"] or cfg["wave_floor_perimeter_speed_mm_s"]):
+        bridge_ids = {id(f) for f in bridges}
+        for feature in features:
+            wall, solid = feature.role in WALL_ROLES, feature.role in SOLID_ROLES
+            if not (wall or solid) or id(feature) in floor_done or id(feature) in bridge_ids:
+                continue
+            feature_tools = {m.before.tool for m in feature.moves}
+            if len(feature_tools) != 1:
+                continue
+            tool_index = feature_tools.pop()
+            zones = [(k, unary_union(wave_regions[(feature.layer - k, tool_index)]))
+                     for k in range(cfg["wave_floor_layers"] + 1) if (feature.layer - k, tool_index) in wave_regions]
+            if not zones:
+                continue
+            if tool_index not in printer_by_tool:
+                printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
+            width = printer_by_tool[tool_index]["outer_wall_line_width"]
+            zones = [(k, zone.buffer(2 * width if k == 0 else width / 2)) for k, zone in zones]
+            def speed_for(move, zones=zones, wall=wall):
+                line = segment(move)
+                if line is None:
+                    return None
+                original = move.after.feed / 60
+                for k, zone in zones:
+                    if zone.intersects(line):
+                        if k == 0:
+                            override = cfg["wave_perimeter_speed_mm_s"] if wall else 0
+                            return min(original, override) if override else None
+                        return floor_speed(cfg, k, cfg["wave_floor_perimeter_speed_mm_s" if wall else "wave_floor_print_speed_mm_s"], original)
+                return None
+            replacement = retime_feature(feature, lines, speed_for)
+            if replacement is not None:
+                replacements.append((feature.start, feature.end, replacement))
+                report["retimed_features"] += 1
+    if wave_mode and cfg["wave_min_layer_time_s"]:
+        for layer, delta in layer_delta.items():
+            layer_features = by_layer[layer]
+            short = cfg["wave_min_layer_time_s"] - delta - sum(move_time(m) for f in layer_features for m in f.moves)
+            last = layer_features[-1]
+            if short > 0 and last.moves and not is_retracted(last.moves[-1].after):
+                replacements.append((last.end, last.end, [f"G4 P{round(short * 1000)}\n"]))
     if not replacements:
         return text, report
     # Zero-width arc insertions can be earlier or later than the Bridge
@@ -1091,6 +1877,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         report["skipped_features"] += report["replaced_features"]
         report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = 0
         return text, report
+    lines = "".join(lines).splitlines(keepends=True)  # replacement blocks hold several lines per item
+    report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     return MARKER + VERSION + "\n" + "".join(lines), report
 
 def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
@@ -1124,19 +1912,183 @@ def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
             temp_path.unlink()
     return report
 
+# WaveOverhangs (Orca fork) setting -> (plugin setting(s), kind). Keys are wave_overhang_<name>.
+WAVE_IMPORT = {
+    "pattern": ("wave_pattern", "text"),
+    "line_spacing": ("wave_line_spacing_mm", "num"),
+    "flow_mm3_per_mm": ("wave_flow_mm3_per_mm", "num"),
+    "print_speed": ("wave_speed_mm_s", "num"),
+    "travel_speed": ("wave_travel_speed_mm_s", "num"),
+    "perimeter_speed": ("wave_perimeter_speed_mm_s", "num"),
+    "perimeter_overlap": ("wave_perimeter_overlap_mm", "num"),
+    "minimum_width": ("wave_min_width_mm", "num"),
+    "min_new_area": ("wave_min_new_area_mm2", "num"),
+    "min_length": ("wave_min_length_mm", "num"),
+    "max_iterations": ("wave_max_iterations", "num"),
+    "corner_taper_enable": ("wave_corner_taper", "bool"),
+    "line_spacing_corner": ("wave_corner_spacing_mm", "num"),
+    "corner_taper_distance": ("wave_corner_distance_mm", "num"),
+    "corner_angle_threshold": ("wave_corner_angle_deg", "num"),
+    "fan_speed": (("wave_fan_override", "wave_fan_percent"), "fan"),
+    "aux_fan_speed": (("wave_aux_fan_override", "wave_aux_fan_percent"), "fan"),
+    "nozzle_temp": ("wave_temperature_c", "num"),
+    "min_wave_time": ("wave_min_time_s", "num"),
+    "min_layer_time": ("wave_min_layer_time_s", "num"),
+    "end_retract_length": ("wave_end_retract_mm", "num"),
+    "instead_of_bridges": ("wave_instead_of_bridges", "bool"),
+    "floor_layers": ("wave_floor_layers", "num"),
+    "floor_print_speed": ("wave_floor_print_speed_mm_s", "num"),
+    "floor_perimeter_speed": ("wave_floor_perimeter_speed_mm_s", "num"),
+    "floor_speed_ramp": ("wave_floor_speed_ramp", "num"),
+    "floor_use_hilbert": ("wave_floor_use_hilbert", "bool"),
+    "floor_hilbert_layers": ("wave_floor_hilbert_layers", "num"),
+    "floor_hilbert_density": ("wave_floor_hilbert_density_percent", "num"),
+    "floor_fan_speed": (("wave_floor_fan_override", "wave_floor_fan_percent"), "fan"),
+    "floor_aux_fan_speed": (("wave_floor_aux_fan_override", "wave_floor_aux_fan_percent"), "fan"),
+}
+# WaveOverhangs settings that need no plugin option: min_angle, spacing_mode and seam_mode do nothing in the fork
+# (kept for old profiles), debug_gcode only adds comments, and the plugin keeps whatever walls Orca printed.
+WAVE_NO_EFFECT = ("min_angle", "spacing_mode", "seam_mode", "debug_gcode", "outer_perimeters")
+# Names used by the one-line "WAVE_OVERHANG_CONFIG key=value ..." comment in WaveOverhangs G-code.
+WAVE_MARKER_ALIASES = {
+    "spacing": "line_spacing", "flow_mm3_per_mm": "flow_mm3_per_mm", "speed": "print_speed", "travel": "travel_speed",
+    "fan": "fan_speed", "minimum_wave_width": "minimum_width", "corner_enable": "corner_taper_enable",
+    "corner_spacing": "line_spacing_corner", "corner_taper": "corner_taper_distance",
+    "corner_angle": "corner_angle_threshold", "end_retract": "end_retract_length", "nozzle_temp_override": "nozzle_temp",
+}
+
+def import_wave_profile(text):
+    """Read WaveOverhangs settings from G-code comments, a profile/JSON or a gallery config line.
+
+    Returns (plugin settings, names that have no plugin equivalent)."""
+    marker, found = {}, {}
+    prefixed = set()
+    for line in text.splitlines():
+        if "WAVE_OVERHANG_CONFIG" in line:
+            for key, value in re.findall(r"(\w+)=(\S+)", line):
+                marker[WAVE_MARKER_ALIASES.get(key, key)] = value
+        for key, value in re.findall(r"wave_overhang_(\w+?)[\"']?\s*[:=]\s*[\"']?([^\s\"',;]+)", line):
+            found[key] = value
+            prefixed.add(key)
+    found = {**marker, **found}  # explicit wave_overhang_ lines beat the one-line summary
+    values, ignored = {"overhang_mode": "wave"}, []
+    for key, raw in found.items():
+        if key not in WAVE_IMPORT:
+            if key in prefixed and key not in WAVE_NO_EFFECT:
+                ignored.append("wave_overhang_" + key)
+            continue
+        target, kind = WAVE_IMPORT[key]
+        try:
+            if kind == "text":
+                if raw.lower() not in CHOICES[target]:
+                    ignored.append("wave_overhang_" + key)
+                    continue
+                values[target] = raw.lower()
+            elif kind == "bool":
+                values[target] = raw.lower() in ("1", "true")
+            elif kind == "fan":
+                number = float(raw)
+                values[target[0]], values[target[1]] = number >= 0, max(0.0, number)
+            else:
+                values[target] = float(raw)
+        except ValueError:
+            ignored.append("wave_overhang_" + key)
+    return values, ignored
+
+HELP = {
+    "wave_pattern": "Order of the wave lines. Smart follows the wavefront, Zigzag joins neighbouring lines into one path (helps against curling at line ends), Monotonic prints every line separately.",
+    "wave_line_spacing_mm": "Distance between neighbouring wave lines. 0.35 mm is the usual value for a 0.4 mm nozzle.",
+    "wave_flow_mm3_per_mm": "Plastic pushed out per mm of wave line (an absolute volume, not a multiplier).",
+    "wave_speed_mm_s": "Print speed of the wave lines. Very slow on purpose so each line cools in the air.",
+    "wave_travel_speed_mm_s": "Speed of moves between wave lines.",
+    "wave_perimeter_speed_mm_s": "Speed of the walls on the layer that has waves. 0 keeps the slicer's wall speed.",
+    "wave_perimeter_overlap_mm": "How far the waves reach under the wall so the wall bonds to them. Raise it if the wall comes loose from the waves.",
+    "wave_min_width_mm": "Necks narrower than this split the wave region so the wavefront does not pinch shut.",
+    "wave_min_new_area_mm2": "Stop adding wave lines once a new line would cover less than this area.",
+    "wave_min_length_mm": "Overhangs with a shorter outline stay normal bridges. 0 = off.",
+    "wave_max_iterations": "Most wave lines grown per overhang region. 0 = no limit.",
+    "wave_corner_taper": "Add denser lines near sharp overhang corners, which curl first.",
+    "wave_corner_spacing_mm": "Line spacing used near corners (smaller than the normal wave line spacing).",
+    "wave_corner_distance_mm": "How far from a corner the denser lines reach.",
+    "wave_corner_angle_deg": "Corners sharper than this angle get the reinforcement.",
+    "wave_fan_override": "Force the part fan to the speed below while printing waves; the previous fan speed is restored afterwards.",
+    "wave_fan_percent": "Part fan speed while printing waves.",
+    "minimum_area_mm2": "Smallest bridge area to replace, and also the smallest part of it that hangs in the air. Lower it (for example to 1-5) to get waves or arcs on small overhangs; the default 50 skips them.",
+    "minimum_overhang_length_mm": "Smallest length of the unsupported edge. Lower it together with the minimum area for small overhangs.",
+    "wave_aux_fan_override": "Force the auxiliary fan (M106 P2) while printing waves; the previous speed is restored afterwards.",
+    "wave_aux_fan_percent": "Auxiliary fan speed while printing waves.",
+    "wave_temperature_c": "Nozzle temperature while printing waves, restored afterwards. 0 = leave unchanged.",
+    "wave_min_time_s": "Pause after the waves so they get at least this much cooling time. 0 = off.",
+    "wave_min_layer_time_s": "Pause at the end of a layer with waves so the whole layer takes at least this long. 0 = off.",
+    "wave_instead_of_bridges": "On: every overhang found gets waves. Off: spans a normal bridge can handle (anchored on both sides, mostly convex) keep Orca's bridge.",
+    "wave_end_retract_mm": "Retraction before each jump between wave lines. 0 = use the general Retraction setting.",
+    "wave_floor_layers": "Number of layers above the waves that get the floor settings below. Orca decides how many of them are solid; this only changes how they print.",
+    "wave_floor_print_speed_mm_s": "Speed of solid infill on the floor layers. 0 = unchanged.",
+    "wave_floor_perimeter_speed_mm_s": "Speed of walls on the floor layers. 0 = unchanged.",
+    "wave_floor_speed_ramp": "Floor layers over which the two floor speeds ramp back up to normal. 0 = no ramp.",
+    "wave_floor_use_hilbert": "Print the solid floor above waves as a Hilbert curve, which warps less.",
+    "wave_floor_hilbert_layers": "How many of the floor layers use Hilbert. 0 = all of them.",
+    "wave_floor_hilbert_density_percent": "Fill density of the Hilbert floor. 100 = solid.",
+    "wave_floor_fan_override": "Force the part fan on the Hilbert floor layers (a low fan keeps them warm and reduces curl).",
+    "wave_floor_fan_percent": "Part fan speed on the Hilbert floor layers.",
+    "wave_floor_aux_fan_override": "Force the auxiliary fan (M106 P2) on the Hilbert floor layers.",
+    "wave_floor_aux_fan_percent": "Auxiliary fan speed on the Hilbert floor layers.",
+    "z_hop_mm": "Lift the nozzle by this much for jumps between arcs or waves. 0 = off.",
+}
+
 def config_page(as_tab=False):
     fields = [
+        (None, "Arc mode", ""),
         ("arc_speed_mm_s", "Arc speed", "mm/s"),
         ("minimum_arc_speed_mm_s", "Minimum arc speed", "mm/s"),
         ("arc_spacing_nozzle_ratio", "Arc spacing / nozzle diameter", "Factor"),
         ("wall_overlap_mm", "Inner wall overlap", "mm"),
         ("arc_center_offset_mm", "Arc center offset", "mm"),
         ("max_radius_mm", "Maximum radius", "mm"),
-        ("minimum_area_mm2", "Minimum area", "mm2"),
-        ("minimum_overhang_length_mm", "Minimum overhang length", "mm"),
         ("flow_multiplier", "Arc flow", "Factor"),
         ("minimum_arc_time_s", "Minimum time per arc", "s"),
+        (None, "Wave mode", ""),
+        ("wave_pattern", "Wave pattern", "select"),
+        ("wave_line_spacing_mm", "Wave line spacing", "mm"),
+        ("wave_flow_mm3_per_mm", "Wave flow", "mm3/mm"),
+        ("wave_speed_mm_s", "Wave print speed", "mm/s"),
+        ("wave_travel_speed_mm_s", "Wave travel speed", "mm/s"),
+        ("wave_perimeter_speed_mm_s", "Wave perimeter speed", "mm/s"),
+        ("wave_perimeter_overlap_mm", "Wave perimeter overlap", "mm"),
+        ("wave_min_width_mm", "Minimum wave width", "mm"),
+        ("wave_min_new_area_mm2", "Minimum new area", "mm2"),
+        ("wave_min_length_mm", "Minimum overhang length for waves", "mm"),
+        ("wave_max_iterations", "Maximum wave lines per region", "Count"),
+        ("wave_instead_of_bridges", "Use waves instead of bridges", "bool"),
+        ("wave_corner_taper", "Corner reinforcement", "bool"),
+        ("wave_corner_spacing_mm", "Corner line spacing", "mm"),
+        ("wave_corner_distance_mm", "Corner reinforcement radius", "mm"),
+        ("wave_corner_angle_deg", "Corner angle threshold", "deg"),
+        ("wave_fan_override", "Wave fan speed override", "bool"),
+        ("wave_fan_percent", "Wave fan speed", "%"),
+        ("wave_aux_fan_override", "Wave aux fan speed override", "bool"),
+        ("wave_aux_fan_percent", "Wave aux fan speed", "%"),
+        ("wave_temperature_c", "Wave nozzle temperature (0 = unchanged)", "C"),
+        ("wave_min_time_s", "Minimum wave time", "s"),
+        ("wave_min_layer_time_s", "Minimum layer time", "s"),
+        ("wave_end_retract_mm", "End-of-line retract length", "mm"),
+        (None, "Wave floor (layers above the waves)", ""),
+        ("wave_floor_layers", "Floor layers", "Layers"),
+        ("wave_floor_print_speed_mm_s", "Floor print speed", "mm/s"),
+        ("wave_floor_perimeter_speed_mm_s", "Floor perimeter speed", "mm/s"),
+        ("wave_floor_speed_ramp", "Floor speed ramp", "Layers"),
+        ("wave_floor_use_hilbert", "Floor: Hilbert curve", "bool"),
+        ("wave_floor_hilbert_layers", "Floor: Hilbert layers", "Layers"),
+        ("wave_floor_hilbert_density_percent", "Floor: Hilbert density", "%"),
+        ("wave_floor_fan_override", "Floor: fan speed override", "bool"),
+        ("wave_floor_fan_percent", "Floor: fan speed", "%"),
+        ("wave_floor_aux_fan_override", "Floor: aux fan speed override", "bool"),
+        ("wave_floor_aux_fan_percent", "Floor: aux fan speed", "%"),
+        (None, "Both modes", ""),
+        ("z_hop_mm", "Z hop between arcs/waves (0 = off)", "mm"),
         ("max_edge_gap_mm", "Maximum edge gap", "mm"),
+        ("minimum_area_mm2", "Minimum overhang area", "mm2"),
+        ("minimum_overhang_length_mm", "Minimum overhang length", "mm"),
         ("minimum_coverage_percent", "Required area coverage", "%"),
         ("travel_speed_mm_s", "Travel speed", "mm/s"),
         ("retract_length_mm", "Retraction", "mm"),
@@ -1146,7 +2098,22 @@ def config_page(as_tab=False):
         ("z_min_mm", "Minimum Z", "mm"),
         ("z_max_mm", "Maximum Z", "mm"),
     ]
-    rows = "".join(f'<label>{label}<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span></label>' for key, label, unit in fields)
+    names = {target if isinstance(target, str) else target[1]: "wave_overhang_" + orca for orca, (target, _) in WAVE_IMPORT.items()}
+    def row(key, label, unit):
+        if key is None:
+            return f"<h3>{label}</h3>"
+        if unit == "bool":
+            control = f'<input id="{key}" type="checkbox">'
+        elif unit == "select":
+            options = "".join(f'<option value="{c}">{c.capitalize()}</option>' for c in CHOICES[key])
+            control = f'<span><select id="{key}">{options}</select></span>'
+        else:
+            control = f'<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span>'
+        hint = HELP.get(key, "")
+        if key in names:
+            hint = (hint + " " if hint else "") + f"(WaveOverhangs: {names[key]})"
+        return f'<label>{label}{control}</label>' + (f'<div class="hint">{hint}</div>' if hint else "")
+    rows = "".join(row(*field) for field in fields)
     page = r"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arc Overhang</title>
@@ -1155,36 +2122,74 @@ def config_page(as_tab=False):
 h1{font-size:26px;margin-bottom:8px}p{line-height:1.5;color:light-dark(#555,#aaa)}
 label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #8884}
 input[type=number],select{min-width:180px;padding:7px;border:1px solid #8886;border-radius:5px;font:inherit}
-button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:white;cursor:pointer;font:inherit;margin-top:18px}
+button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:white;cursor:pointer;font:inherit;margin:18px 12px 0 0}
 #status{margin-left:12px}summary{cursor:pointer;margin-top:20px;font-weight:600}.notice{padding:12px;background:#8881;border-radius:6px}
 small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
+.hint{font-size:12px;color:light-dark(#555,#aaa);padding:2px 0 8px}textarea{width:100%;min-height:90px;box-sizing:border-box;font:12px monospace}
 </style><h1>Arc Overhang</h1>
-<p>Concentric arc toolpaths for flat overhangs. Applied during G-code export.</p>
+<p>Concentric arc toolpaths (Arc mode) or wavefront lines (Wave mode) for flat overhangs. Applied during G-code export.</p>
+<p class="notice"><b>Applies to both modes:</b> the plugin only replaces extrusions that Orca labels <b>Bridge</b> or <b>Internal Bridge</b>. In Orca's Quality tab, Overhangs section, turn <b>off "Extra perimeters on overhangs"</b>; otherwise Orca fills overhangs with extra walls ("Overhang wall") and the plugin finds no bridge to replace. Also set <b>"Bridge counterbore holes"</b> to <b>None</b>: "Partially bridged" makes Orca print supported straight strips that are left as they are. Slice, check the Preview for light-blue Bridge lines, then export.</p>
 <p id="last-report" role="status"></p><p class="notice">Inner wall overlap is the distance the Arc region can extend into printed walls. Larger values can reach inner wall lines. Arc spacing is independent: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
 <div id="settings"><label>Enable Arc Overhang<input id="enabled" type="checkbox"></label>
+<label>Overhang mode<span><select id="overhang_mode"><option value="arc">Arc (concentric arcs)</option><option value="wave">Wave (offset wavefronts)</option></select></span></label>
 <label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
+<details><summary>Import a WaveOverhangs profile</summary>
+<p>Take the values from a <b>waveoverhangs.com/gallery</b> entry (open a model, then copy from the page) or from the G-code you sliced with WaveOverhangs.</p>
+<ul>
+<li><b>Usable:</b> the "View Orca config block" text (lines like <code>; wave_overhang_line_spacing = 0.35</code>), the "View WaveOverhangs debug header" text (the <code>WAVE_OVERHANG_CONFIG</code> line), or a profile JSON containing <code>wave_overhang_*</code> keys. Paste the whole block; only the wave settings are picked up.</li>
+<li><b>Ignored:</b> everything else (printer, filament, speeds of normal features, walls, infill). Set those in Orca as usual. Wave settings with no plugin equivalent are listed after importing.</li>
+</ul>
+<p>Import fills in the fields below and switches the mode to Wave. Press Save settings to keep them.</p>
+<textarea id="import_text" placeholder="; wave_overhang_line_spacing = 0.35"></textarea><br><button id="import" type="button">Import pasted values</button></details>
 __ROWS__
-<button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>
-</div><small>Version 0.2.4  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
+<button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status" style="margin-left:6px"></span>
+</div><small>Version 0.3.0  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
 <script>
 const defaults = __DEFAULTS__;
+const IMPORT = __IMPORT__;
+const ALIASES = __ALIASES__;
 const fields = Object.keys(defaults);
 const status = document.getElementById('status');
-async function initialize(){
+// Unsaved edits survive tab switches: keep a draft and never overwrite it on refocus.
+const DRAFT='arc_overhang_draft';
+let draft=null;
+try{draft=JSON.parse(localStorage.getItem(DRAFT)||'null');}catch(e){}
+function collect(){
+  const values={};
+  for(const key of fields){
+    const el=document.getElementById(key);
+    if(!el) continue;
+    values[key]=typeof defaults[key]==='boolean'?el.checked:(typeof defaults[key]==='string'?el.value:Number(el.value));
+  }
+  return values;
+}
+function remember(){
+  draft=collect();
+  try{localStorage.setItem(DRAFT,JSON.stringify(draft));}catch(e){}
+  status.textContent='Unsaved changes.';
+}
+function forget(){draft=null;try{localStorage.removeItem(DRAFT);}catch(e){}}
+async function initialize(discard){
+  if(discard===true) forget();
+  else if(draft && document.getElementById(fields[0]).dataset.ready) return;
   try {
     let saved = await settingsBridge.getConfig();
     if(typeof saved === 'string') saved = JSON.parse(saved);
-    const values = {...defaults,...(saved||{})};
+    const values = {...defaults,...(saved||{}),...(draft||{})};
     for(const key of fields){
       const el=document.getElementById(key);
+      if(!el) continue;
       if(typeof defaults[key]==='boolean') el.checked=values[key]; else el.value=values[key];
+      el.dataset.ready='1';
     }
+    if(draft) status.textContent='Unsaved changes.';
   }catch(error){status.textContent='Could not load settings: '+error.message;}
 }
 document.getElementById('save').onclick=async()=>{
   const values={};
   for(const key of fields){
     const el=document.getElementById(key);
+    if(!el) continue;
     values[key]=typeof defaults[key]==='boolean'?el.checked:(typeof defaults[key]==='string'?el.value:Number(el.value));
     if(typeof values[key]==='number'&&!Number.isFinite(values[key])){status.textContent='Please enter valid numbers.';return;}
   }
@@ -1192,11 +2197,46 @@ document.getElementById('save').onclick=async()=>{
   if(values.z_min_mm>values.z_max_mm){status.textContent='Invalid Z range.';return;}
   try{
     const ok=await settingsBridge.saveConfig(values);
+    if(ok!==false) forget();
     status.textContent=ok===false?'Save failed.':
       (ok && ok.preset_override_active ? 'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.' : 'Saved.');
   }catch(error){status.textContent='Save failed: '+error.message;}
 };
-document.getElementById('refresh').onclick=initialize;
+function importProfile(text){
+  const marker={}, explicit={}, prefixed=new Set(), ignored=[];
+  for(const line of text.split(/\r?\n/)){
+    if(line.includes('WAVE_OVERHANG_CONFIG')) for(const m of line.matchAll(/(\w+)=(\S+)/g)) marker[ALIASES[m[1]]||m[1]]=m[2];
+    for(const m of line.matchAll(/wave_overhang_(\w+?)["']?\s*[:=]\s*["']?([^\s"',;]+)/g)){explicit[m[1]]=m[2];prefixed.add(m[1]);}
+  }
+  const found={...marker,...explicit}, values={overhang_mode:'wave'};
+  for(const [key,raw] of Object.entries(found)){
+    const spec=IMPORT[key];
+    if(!spec){ if(prefixed.has(key) && !['min_angle','spacing_mode','seam_mode','debug_gcode','outer_perimeters'].includes(key)) ignored.push('wave_overhang_'+key); continue; }
+    const [target,kind]=spec, number=Number(raw);
+    if(kind==='text'){ if(['smart','zigzag','monotonic'].includes(raw.toLowerCase())) values[target]=raw.toLowerCase(); else ignored.push('wave_overhang_'+key); }
+    else if(kind==='bool') values[target]=['1','true'].includes(raw.toLowerCase());
+    else if(!Number.isFinite(number)) ignored.push('wave_overhang_'+key);
+    else if(kind==='fan'){ values[target[0]]=number>=0; values[target[1]]=Math.max(0,number); }
+    else values[target]=number;
+  }
+  return {values,ignored};
+}
+document.getElementById('import').onclick=()=>{
+  const {values,ignored}=importProfile(document.getElementById('import_text').value||'');
+  const count=Object.keys(values).length-1;
+  if(!count){status.textContent='No wave_overhang_ settings found in the pasted text.';return;}
+  for(const [key,value] of Object.entries(values)){
+    const el=document.getElementById(key);
+    if(!el) continue;
+    if(typeof value==='boolean') el.checked=value; else el.value=value;
+  }
+  remember();
+  document.getElementById('import_text').value='';
+  status.textContent='Imported '+count+' settings; press Save to keep them.'+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
+};
+document.getElementById('refresh').onclick=()=>initialize(true);
+document.getElementById('settings').addEventListener('input',remember);
+document.getElementById('settings').addEventListener('change',remember);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden) initialize();});
 initialize();
 </script></html>"""
@@ -1262,7 +2302,7 @@ const settingsBridge = {
 };
 """
         page = page.replace('<div id="settings">', '<p>This page shows settings for the active preset. Saving updates global defaults; existing preset overrides still take precedence.</p><div id="settings">')
-    return page.replace("__ROWS__", rows).replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("<script>", "<script>" + bridge, 1)
+    return page.replace("__ROWS__", rows).replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT)).replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("<script>", "<script>" + bridge, 1)
 
 
 # The engine can be tested from a normal Python interpreter; Orca registers it here.

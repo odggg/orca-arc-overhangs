@@ -7,7 +7,7 @@ assert(/id="save" type="button"/.test(html));
 const source=html.match(/<script>([\s\S]*)<\/script>/)[1];
 const defaults=JSON.parse(source.match(/const defaults = (.*);/)[1]);
 async function check(scope){
- const elements=Object.fromEntries([...Object.keys(defaults),'settings','status','refresh','save','last-report','orca-host-theme-vars'].map(k=>[k,{value:'',checked:false,textContent:''}]));
+ const elements=Object.fromEntries([...Object.keys(defaults),'settings','status','refresh','save','last-report','import','import_text','orca-host-theme-vars'].map(k=>[k,{value:'',checked:false,textContent:''}]));
  const events={};let nativeSave=null,timerID=0;
  const timers=new Map();
  const doc={hidden:false,getElementById:k=>elements[k],addEventListener(){},
