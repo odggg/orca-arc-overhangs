@@ -1233,7 +1233,7 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
         parts = [outside] if outside.geom_type == "LineString" else [g for g in getattr(outside, "geoms", ()) if g.geom_type == "LineString"]
         for part in parts:
             coords = list(part.coords)
-            if len(coords) < 2 or part.length <= 1e-5:
+            if len(coords) < 2 or part.length < width:  # slivers left by the cut are not worth a retract and travel
                 continue
             jump(*coords[0])
             out.append(f"G1 F{max(60.0, move.before.feed):.1f}\n")

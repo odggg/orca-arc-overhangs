@@ -15,6 +15,7 @@
 - Wave settings use the WaveOverhangs names and units ("Wave line spacing" in mm, default 0.35), each with a plain-language hint and its `wave_overhang_*` name.
 - The page and README say that "Extra perimeters on overhangs" must be off for both modes; the G90/M83 error now reports the G-code line.
 - Fixed "Requires G90 and relative extrusion (M83)" when the Hilbert floor was on: the floor scan read the start G-code purge line (absolute E). Start G-code is now skipped.
+- Hilbert floor: leftover infill pieces shorter than one line width are dropped instead of getting their own retract and travel.
 - "Import a WaveOverhangs profile" box: paste the `; wave_overhang_*` lines (or the `WAVE_OVERHANG_CONFIG` line) from a waveoverhangs.com gallery entry; the fields fill in and stay unsaved until Save.
 - Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (52 total).
 
