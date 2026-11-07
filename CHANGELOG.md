@@ -18,7 +18,10 @@
 - Hilbert floor: leftover infill pieces shorter than one line width are dropped instead of getting their own retract and travel.
 - Print time: after editing, the plugin shifts the M73 remaining-time lines and the "model printing time / total estimated time" header by the time the new toolpaths add or remove (estimate from length and feed rate; arcs count as chords).
 - "Import a WaveOverhangs profile" box: paste the `; wave_overhang_*` lines (or the `WAVE_OVERHANG_CONFIG` line) from a waveoverhangs.com gallery entry; the fields fill in and stay unsaved until Save.
-- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (53 total).
+- Bridges that contain Orca's acceleration changes (`M204`) were skipped as "State command inside bridge region", so some models (for example a counterbore) got no waves or arcs at all. `M204` lines are now kept and the bridge is replaced.
+- New `wave_aux_fan_override` / `wave_aux_fan_percent`: auxiliary fan (M106 P2) while printing waves, restored afterwards. Imported from `wave_overhang_aux_fan_speed`.
+- The profile import no longer reports `wave_overhang_min_angle`, `spacing_mode`, `seam_mode`, `debug_gcode` and `outer_perimeters` as missing. In WaveOverhangs the first three do nothing, `debug_gcode` only adds comments, and `outer_perimeters` is covered by the walls Orca already printed.
+- Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan and `M204` inside a bridge (54 total).
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.

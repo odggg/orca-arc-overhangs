@@ -414,6 +414,12 @@ class Tests(unittest.TestCase):
 ; wave_overhang_floor_print_speed = 20
 ; wave_overhang_floor_fan_speed = 0
 ; wave_overhang_mystery = 1
+; wave_overhang_aux_fan_speed = 40
+; wave_overhang_min_angle = 0
+; wave_overhang_outer_perimeters = 1
+; wave_overhang_spacing_mode = uniform
+; wave_overhang_seam_mode = alternating
+; wave_overhang_debug_gcode = 1
 ; WAVE_OVERHANG_CONFIG spacing=0.4 speed=3
 """
         values, ignored = a.import_wave_profile(text)
@@ -425,8 +431,18 @@ class Tests(unittest.TestCase):
         self.assertTrue(values["wave_floor_use_hilbert"])
         self.assertEqual(values["wave_floor_hilbert_density_percent"], 50.0)
         self.assertEqual((values["wave_floor_fan_override"], values["wave_floor_fan_percent"]), (True, 0.0))
-        self.assertEqual(ignored, ["wave_overhang_mystery"])
+        self.assertEqual((values["wave_aux_fan_override"], values["wave_aux_fan_percent"]), (True, 40.0))
+        self.assertEqual(ignored, ["wave_overhang_mystery"])  # the other new keys do nothing in WaveOverhangs
         a.configuration(values)
+
+    def test_wave_aux_fan_and_acceleration_inside_bridge(self):
+        source = fixture().replace("G1 X19 Y10.5 F1800\n", "G1 X19 Y10.5 F1800\nM204 S2500\n", 1)
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80,
+                                                 "wave_aux_fan_override": True, "wave_aux_fan_percent": 50})
+        self.assertEqual(report["replaced_features"], 1, report)  # M204 no longer blocks the replacement
+        self.assertIn("M204 S2500", output)
+        self.assertIn("M106 P2 S127", output)
+        self.assertIn("M106 P2 S0", output)
 
     def test_hilbert_floor_ignores_start_gcode_purge_line(self):
         text = fixture().replace("G90\nM83\nG92 E0\n", "G90\nM82\nG92 E0\n; FEATURE: Custom\nG1 X5 Y5 F3000\nG1 E50 F200\nM83\n", 1)

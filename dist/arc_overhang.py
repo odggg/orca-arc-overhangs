@@ -250,6 +250,8 @@ DEFAULTS = {
     "wave_corner_angle_deg": 90.0,
     "wave_fan_override": False,
     "wave_fan_percent": 100.0,
+    "wave_aux_fan_override": False,
+    "wave_aux_fan_percent": 0.0,
     "wave_temperature_c": 0.0,
     "wave_min_time_s": 0.0,
     "wave_min_layer_time_s": 0.0,
@@ -354,7 +356,7 @@ def configuration(overrides=None):
     for key in ("wave_perimeter_speed_mm_s", "wave_floor_print_speed_mm_s", "wave_floor_perimeter_speed_mm_s"):
         if result[key] > 1000:
             raise ValueError(key + " must not exceed 1000.")
-    for key in ("wave_floor_fan_percent", "wave_floor_aux_fan_percent"):
+    for key in ("wave_floor_fan_percent", "wave_floor_aux_fan_percent", "wave_aux_fan_percent"):
         if result[key] > 100:
             raise ValueError(key + " must be between 0 and 100.")
     if not 1 <= result["wave_floor_hilbert_density_percent"] <= 100:
@@ -1219,6 +1221,10 @@ def wave_wrappers(lines, index, arcs, cfg):
         old = previous_setting(lines, index, ("M106", "M107"), "S", part_fan) or 0.0
         pre.append(f"M106 S{round(cfg['wave_fan_percent'] * 2.55)}{chr(10)}")
         post.append(f"M106 S{round(old)}{chr(10)}" if old else f"M107{chr(10)}")
+    if cfg["wave_aux_fan_override"]:
+        old = previous_setting(lines, index, ("M106",), "S", lambda w: w.get("P") != 2) or 0.0
+        pre.append(f"M106 P2 S{round(cfg['wave_aux_fan_percent'] * 2.55)}{chr(10)}")
+        post.append(f"M106 P2 S{round(old)}{chr(10)}")
     if cfg["wave_temperature_c"]:
         old = previous_setting(lines, index, ("M104", "M109"), "S")
         if old:
@@ -1725,7 +1731,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if is_retracted(first.before) or is_retracted(last.after):
             skipped("Bridge starts or ends during firmware retraction")
             continue
-        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73") for i in range(first.index, last.index + 1)):
+        if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73", "M204") for i in range(first.index, last.index + 1)):  # M204 is Orca's acceleration changes
             skipped("State command inside bridge region")
             continue
         for layer in (feature.layer - 1, feature.layer):
@@ -1766,7 +1772,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         pre, post = wave_wrappers(lines, first.index, arcs, cfg) if cfg["overhang_mode"] == "wave" else ((), ())
         replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
-                           if command(lines[i])[0] == "M73")
+                           if command(lines[i])[0] in ("M73", "M204"))
         replacements.append((first.index, last.index + 1, replacement))
         for k in range(1, hilbert_layers + 1):
             hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
@@ -1922,6 +1928,7 @@ WAVE_IMPORT = {
     "corner_taper_distance": ("wave_corner_distance_mm", "num"),
     "corner_angle_threshold": ("wave_corner_angle_deg", "num"),
     "fan_speed": (("wave_fan_override", "wave_fan_percent"), "fan"),
+    "aux_fan_speed": (("wave_aux_fan_override", "wave_aux_fan_percent"), "fan"),
     "nozzle_temp": ("wave_temperature_c", "num"),
     "min_wave_time": ("wave_min_time_s", "num"),
     "min_layer_time": ("wave_min_layer_time_s", "num"),
@@ -1937,6 +1944,9 @@ WAVE_IMPORT = {
     "floor_fan_speed": (("wave_floor_fan_override", "wave_floor_fan_percent"), "fan"),
     "floor_aux_fan_speed": (("wave_floor_aux_fan_override", "wave_floor_aux_fan_percent"), "fan"),
 }
+# WaveOverhangs settings that need no plugin option: min_angle, spacing_mode and seam_mode do nothing in the fork
+# (kept for old profiles), debug_gcode only adds comments, and the plugin keeps whatever walls Orca printed.
+WAVE_NO_EFFECT = ("min_angle", "spacing_mode", "seam_mode", "debug_gcode", "outer_perimeters")
 # Names used by the one-line "WAVE_OVERHANG_CONFIG key=value ..." comment in WaveOverhangs G-code.
 WAVE_MARKER_ALIASES = {
     "spacing": "line_spacing", "flow_mm3_per_mm": "flow_mm3_per_mm", "speed": "print_speed", "travel": "travel_speed",
@@ -1962,7 +1972,7 @@ def import_wave_profile(text):
     values, ignored = {"overhang_mode": "wave"}, []
     for key, raw in found.items():
         if key not in WAVE_IMPORT:
-            if key in prefixed:
+            if key in prefixed and key not in WAVE_NO_EFFECT:
                 ignored.append("wave_overhang_" + key)
             continue
         target, kind = WAVE_IMPORT[key]
@@ -2001,6 +2011,8 @@ HELP = {
     "wave_corner_angle_deg": "Corners sharper than this angle get the reinforcement.",
     "wave_fan_override": "Force the part fan to the speed below while printing waves; the previous fan speed is restored afterwards.",
     "wave_fan_percent": "Part fan speed while printing waves.",
+    "wave_aux_fan_override": "Force the auxiliary fan (M106 P2) while printing waves; the previous speed is restored afterwards.",
+    "wave_aux_fan_percent": "Auxiliary fan speed while printing waves.",
     "wave_temperature_c": "Nozzle temperature while printing waves, restored afterwards. 0 = leave unchanged.",
     "wave_min_time_s": "Pause after the waves so they get at least this much cooling time. 0 = off.",
     "wave_min_layer_time_s": "Pause at the end of a layer with waves so the whole layer takes at least this long. 0 = off.",
@@ -2052,6 +2064,8 @@ def config_page(as_tab=False):
         ("wave_corner_angle_deg", "Corner angle threshold", "deg"),
         ("wave_fan_override", "Wave fan speed override", "bool"),
         ("wave_fan_percent", "Wave fan speed", "%"),
+        ("wave_aux_fan_override", "Wave aux fan speed override", "bool"),
+        ("wave_aux_fan_percent", "Wave aux fan speed", "%"),
         ("wave_temperature_c", "Wave nozzle temperature (0 = unchanged)", "C"),
         ("wave_min_time_s", "Minimum wave time", "s"),
         ("wave_min_layer_time_s", "Minimum layer time", "s"),
@@ -2193,7 +2207,7 @@ function importProfile(text){
   const found={...marker,...explicit}, values={overhang_mode:'wave'};
   for(const [key,raw] of Object.entries(found)){
     const spec=IMPORT[key];
-    if(!spec){ if(prefixed.has(key)) ignored.push('wave_overhang_'+key); continue; }
+    if(!spec){ if(prefixed.has(key) && !['min_angle','spacing_mode','seam_mode','debug_gcode','outer_perimeters'].includes(key)) ignored.push('wave_overhang_'+key); continue; }
     const [target,kind]=spec, number=Number(raw);
     if(kind==='text'){ if(['smart','zigzag','monotonic'].includes(raw.toLowerCase())) values[target]=raw.toLowerCase(); else ignored.push('wave_overhang_'+key); }
     else if(kind==='bool') values[target]=['1','true'].includes(raw.toLowerCase());
