@@ -2030,7 +2030,7 @@ def config_page(as_tab=False):
 h1{font-size:26px;margin-bottom:8px}p{line-height:1.5;color:light-dark(#555,#aaa)}
 label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #8884}
 input[type=number],select{min-width:180px;padding:7px;border:1px solid #8886;border-radius:5px;font:inherit}
-button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:white;cursor:pointer;font:inherit;margin-top:18px}
+button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:white;cursor:pointer;font:inherit;margin:18px 12px 0 0}
 #status{margin-left:12px}summary{cursor:pointer;margin-top:20px;font-weight:600}.notice{padding:12px;background:#8881;border-radius:6px}
 small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 .hint{font-size:12px;color:light-dark(#555,#aaa);padding:2px 0 8px}textarea{width:100%;min-height:90px;box-sizing:border-box;font:12px monospace}
@@ -2041,10 +2041,15 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <label>Overhang mode<span><select id="overhang_mode"><option value="arc">Arc (concentric arcs)</option><option value="wave">Wave (offset wavefronts)</option></select></span></label>
 <label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
 <details><summary>Import a WaveOverhangs profile</summary>
-<p>Paste the "; wave_overhang_..." lines from a gallery G-code or profile, the WAVE_OVERHANG_CONFIG line, or a profile JSON. Matching settings are filled in below; press Save to keep them.</p>
-<textarea id="import_text" placeholder="; wave_overhang_line_spacing = 0.35"></textarea><br><button id="import" type="button">Import</button></details>
+<p>Take the values from a <b>waveoverhangs.com/gallery</b> entry (open a model, then copy from the page) or from the G-code you sliced with WaveOverhangs.</p>
+<ul>
+<li><b>Usable:</b> the "View Orca config block" text (lines like <code>; wave_overhang_line_spacing = 0.35</code>), the "View WaveOverhangs debug header" text (the <code>WAVE_OVERHANG_CONFIG</code> line), or a profile JSON containing <code>wave_overhang_*</code> keys. Paste the whole block; only the wave settings are picked up.</li>
+<li><b>Ignored:</b> everything else (printer, filament, speeds of normal features, walls, infill). Set those in Orca as usual. Wave settings with no plugin equivalent are listed after importing.</li>
+</ul>
+<p>Import fills in the fields below and switches the mode to Wave. Press Save settings to keep them.</p>
+<textarea id="import_text" placeholder="; wave_overhang_line_spacing = 0.35"></textarea><br><button id="import" type="button">Import pasted values</button></details>
 __ROWS__
-<button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status"></span>
+<button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status" style="margin-left:6px"></span>
 </div><small>Version 0.3.0  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
 <script>
 const defaults = __DEFAULTS__;
