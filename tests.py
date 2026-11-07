@@ -444,6 +444,17 @@ class Tests(unittest.TestCase):
         self.assertIn("M106 P2 S127", output)
         self.assertIn("M106 P2 S0", output)
 
+    def test_wave_output_has_gallery_header(self):
+        output, report = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(report["replaced_features"], 1, report)
+        head = output.splitlines()[:3]
+        self.assertTrue(head[1].startswith("; WAVE_OVERHANG_BUILD"), head)
+        self.assertTrue(head[2].startswith("; WAVE_OVERHANG_CONFIG region=0 spacing=0.35 "), head)
+        values, ignored = a.import_wave_profile(output)  # the plugin can read its own header back
+        self.assertEqual(values["wave_line_spacing_mm"], 0.35)
+        arc_output, _ = a.process_text(fixture(), {"overhang_mode": "arc", "minimum_coverage_percent": 80})
+        self.assertNotIn("WAVE_OVERHANG", arc_output)
+
     def test_bridge_with_spiral_z_lift_is_replaced(self):
         # Orca's z-hop between bridge lines: G17, a helical G3 with Z, a travel at the lifted Z, then the drop.
         lift = "G1 E-0.8 F1800\nG17\nG3 Z0.6 I-.3 J-1 P1 F60000\nG1 X19 Y11.3 Z0.6\nG1 Z0.4\nG1 E0.8 F1800\n"
@@ -691,7 +702,7 @@ class Tests(unittest.TestCase):
         source = "; model printing time: 1m 0s; total estimated time: 2m 0s\nM73 P0 R2\nG90\nM83\n" + fixture().split("G90\nM83\n", 1)[1]
         output, report = a.process_text(source, {"overhang_mode": "wave", "wave_speed_mm_s": 1, "minimum_coverage_percent": 80})
         self.assertGreater(report["time_change_s"], 10)
-        header = output.splitlines()[1]
+        header = next(l for l in output.splitlines() if "estimated time:" in l)
         self.assertAlmostEqual(a.parse_duration(header.split("estimated time:")[1]), 120 + report["time_change_s"], delta=1)
 
     def test_scarf_projection_has_correct_hole_topology(self):

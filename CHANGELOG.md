@@ -14,6 +14,7 @@
 - Settings page keeps unsaved edits when switching tabs or windows (draft kept until Save or Refresh).
 - Wave settings use the WaveOverhangs names and units ("Wave line spacing" in mm, default 0.35), each with a plain-language hint and its `wave_overhang_*` name.
 - The page and README say that "Extra perimeters on overhangs" must be off for both modes; the G90/M83 error now reports the G-code line.
+- Wave mode writes `; WAVE_OVERHANG_BUILD` and `; WAVE_OVERHANG_CONFIG` comments at the top of the G-code, the lines the waveoverhangs.com upload page reads, so the exported file can be uploaded to the gallery with its settings (55 -> 56 tests).
 - README and settings page recommend "Bridge counterbore holes" = None: with "Partially bridged" Orca prints supported strips that the plugin skips (a counterbore test sliced that way produced no waves).
 - Fixed "Requires G90 and relative extrusion (M83)" when the Hilbert floor was on: the floor scan read the start G-code purge line (absolute E). Start G-code is now skipped.
 - Hilbert floor: leftover infill pieces shorter than one line width are dropped instead of getting their own retract and travel.
@@ -24,7 +25,7 @@
 - The profile import no longer reports `wave_overhang_min_angle`, `spacing_mode`, `seam_mode`, `debug_gcode` and `outer_perimeters` as missing. In WaveOverhangs the first three do nothing, `debug_gcode` only adds comments, and `outer_perimeters` is covered by the walls Orca already printed.
 - "Minimum overhang area" and "Minimum overhang length" moved from the Arc section to "Both modes" with help text: they gate Wave mode too, and lowering them (for example to 1-5 mm2) turns small overhangs into waves.
 - Orca's Z hop (a printer setting) writes `G17` and a helical `G3 ... Z` lift between bridge lines. Those bridges, and walls or infill containing the same lift, were rejected as "State command inside bridge region", so no arcs or waves appeared on printers with Z hop (reported on the H2D profile). `G17` is now accepted. Reproduced by slicing the reported project with Z hop 0.4 mm: 0 of 2 bridges replaced before, 1 of 2 after (the other has full support).
-- Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan, `M204` inside a bridge and the spiral Z lift (55 total).
+- Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan, `M204` inside a bridge and the spiral Z lift (56 total).
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.

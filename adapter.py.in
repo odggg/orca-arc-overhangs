@@ -1453,6 +1453,27 @@ def update_time_estimates(old_lines, new_lines):
             break
     return total
 
+def gallery_header(cfg):
+    """Header comments the waveoverhangs.com upload page reads (first 128 KB, lines starting "; WAVE_OVERHANG_")."""
+    if cfg["overhang_mode"] != "wave":
+        return ""
+    fan = cfg["wave_fan_percent"] if cfg["wave_fan_override"] else -1
+    fields = [("spacing", cfg["wave_line_spacing_mm"]), ("flow_mm3_per_mm", cfg["wave_flow_mm3_per_mm"]),
+              ("speed", cfg["wave_speed_mm_s"]), ("travel", cfg["wave_travel_speed_mm_s"]), ("fan", fan),
+              ("floor_layers", cfg["wave_floor_layers"]), ("min_length", cfg["wave_min_length_mm"]),
+              ("max_iterations", cfg["wave_max_iterations"]), ("pattern", cfg["wave_pattern"]),
+              ("perimeter_overlap", cfg["wave_perimeter_overlap_mm"]), ("minimum_wave_width", cfg["wave_min_width_mm"]),
+              ("min_new_area", cfg["wave_min_new_area_mm2"]), ("corner_enable", int(cfg["wave_corner_taper"])),
+              ("corner_spacing", cfg["wave_corner_spacing_mm"]), ("corner_taper", cfg["wave_corner_distance_mm"]),
+              ("corner_angle", cfg["wave_corner_angle_deg"]), ("end_retract", cfg["wave_end_retract_mm"]),
+              ("nozzle_temp_override", int(cfg["wave_temperature_c"])), ("min_wave_time", cfg["wave_min_time_s"]),
+              ("min_layer_time", cfg["wave_min_layer_time_s"]),
+              ("instead_of_bridges", int(cfg["wave_instead_of_bridges"]))]
+    # No wave_overhangs_version on purpose: the site compares it with the fork's releases.
+    return ("; WAVE_OVERHANG_BUILD plugin=orca_arc_overhang-" + VERSION + "\n; WAVE_OVERHANG_CONFIG region=0 "
+            + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
+                       for key, value in fields) + "\n")
+
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
     report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "skip_reasons": {}}
@@ -1650,7 +1671,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         return text, report
     lines = "".join(lines).splitlines(keepends=True)  # replacement blocks hold several lines per item
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
-    return MARKER + VERSION + "\n" + "".join(lines), report
+    return MARKER + VERSION + "\n" + gallery_header(cfg) + "".join(lines), report
 
 def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
     target = Path(path)
