@@ -428,6 +428,11 @@ class Tests(unittest.TestCase):
         self.assertEqual(ignored, ["wave_overhang_mystery"])
         a.configuration(values)
 
+    def test_hilbert_floor_ignores_start_gcode_purge_line(self):
+        text = fixture().replace("G90\nM83\nG92 E0\n", "G90\nM82\nG92 E0\n; FEATURE: Custom\nG1 X5 Y5 F3000\nG1 E50 F200\nM83\n", 1)
+        _, report = a.process_text(text, {"overhang_mode": "wave", "wave_floor_use_hilbert": True, "minimum_area_mm2": 1})
+        self.assertEqual(report["replaced_features"], 1)
+
     def test_wave_line_spacing_in_mm(self):
         coarse, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_line_spacing_mm": 0.35})
         default, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80})

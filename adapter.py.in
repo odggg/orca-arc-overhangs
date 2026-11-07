@@ -1483,6 +1483,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     floor_done = set()
     if hilbert_targets:
         for feature in features:
+            if feature.layer < 0:  # start G-code (purge line) uses absolute E
+                continue
             feature_tools = {m.before.tool for m in feature.moves if segment(m) is not None}
             if len(feature_tools) != 1:
                 continue

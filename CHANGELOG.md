@@ -14,8 +14,9 @@
 - Settings page keeps unsaved edits when switching tabs or windows (draft kept until Save or Refresh).
 - Wave settings use the WaveOverhangs names and units ("Wave line spacing" in mm, default 0.35), each with a plain-language hint and its `wave_overhang_*` name.
 - The page and README say that "Extra perimeters on overhangs" must be off for both modes; the G90/M83 error now reports the G-code line.
+- Fixed "Requires G90 and relative extrusion (M83)" when the Hilbert floor was on: the floor scan read the start G-code purge line (absolute E). Start G-code is now skipped.
 - "Import a WaveOverhangs profile" box: paste the `; wave_overhang_*` lines (or the `WAVE_OVERHANG_CONFIG` line) from a waveoverhangs.com gallery entry; the fields fill in and stay unsaved until Save.
-- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (51 total).
+- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (52 total).
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.
