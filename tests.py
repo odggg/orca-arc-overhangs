@@ -452,6 +452,11 @@ class Tests(unittest.TestCase):
         self.assertTrue(head[2].startswith("; WAVE_OVERHANG_CONFIG region=0 spacing=0.35 "), head)
         values, ignored = a.import_wave_profile(output)  # the plugin can read its own header back
         self.assertEqual(values["wave_line_spacing_mm"], 0.35)
+        config = "; printer_model = Bambu Lab P1S\n; filament_type = PLA\n; layer_height = 0.2\n; nozzle_diameter = 0.4\n; nozzle_temperature = 230,230\n; curr_bed_type = Textured PEI Plate\n; textured_plate_temp = 60\n; hot_plate_temp = 55\n; enable_support = 0\n"
+        output, _ = a.process_text(fixture() + config, {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        build = output.splitlines()[1]
+        for part in ('printer="Bambu Lab P1S"', "filament_type=PLA", "layer_height=0.2", "nozzle_temp=230", "bed_temp=60", "support_enabled=false"):
+            self.assertIn(part, build)
         arc_output, _ = a.process_text(fixture(), {"overhang_mode": "arc", "minimum_coverage_percent": 80})
         self.assertNotIn("WAVE_OVERHANG", arc_output)
 

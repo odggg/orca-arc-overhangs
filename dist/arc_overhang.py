@@ -1682,7 +1682,24 @@ def update_time_estimates(old_lines, new_lines):
             break
     return total
 
-def gallery_header(cfg):
+BED_TEMP_KEYS = {"cool plate": "cool_plate_temp", "engineering plate": "eng_plate_temp", "textured pei plate": "textured_plate_temp"}
+
+def gallery_build_info(text):
+    """Printer, filament and temperatures from Orca's trailing "; key = value" config block, in the site's key names."""
+    block = dict(re.findall(r"^; (\w+) = (.*)$", text, re.M))
+    def first(key):
+        return block.get(key, "").split(",")[0].strip().strip('"')
+    bed = first(BED_TEMP_KEYS.get(first("curr_bed_type").lower(), "hot_plate_temp"))
+    support = first("enable_support")
+    info = [("printer", first("printer_model")), ("filament_type", first("filament_type")),
+            ("layer_height", first("layer_height")), ("nozzle_diameter", first("nozzle_diameter")),
+            ("nozzle_temp", first("nozzle_temperature")), ("bed_temp", bed),
+            ("filament_flow_ratio", first("filament_flow_ratio")),
+            ("support_enabled", "true" if support in ("1", "true") else "false" if support else ""),
+            ("support_type", first("support_type") if support in ("1", "true") else "")]
+    return "".join(f" {key}=\"{value}\"" if " " in value else f" {key}={value}" for key, value in info if value)
+
+def gallery_header(cfg, text=""):
     """Header comments the waveoverhangs.com upload page reads (first 128 KB, lines starting "; WAVE_OVERHANG_")."""
     if cfg["overhang_mode"] != "wave":
         return ""
@@ -1699,7 +1716,8 @@ def gallery_header(cfg):
               ("min_layer_time", cfg["wave_min_layer_time_s"]),
               ("instead_of_bridges", int(cfg["wave_instead_of_bridges"]))]
     # No wave_overhangs_version on purpose: the site compares it with the fork's releases.
-    return ("; WAVE_OVERHANG_BUILD plugin=orca_arc_overhang-" + VERSION + "\n; WAVE_OVERHANG_CONFIG region=0 "
+    return ("; WAVE_OVERHANG_BUILD plugin=orca_arc_overhang-" + VERSION + gallery_build_info(text)
+            + "\n; WAVE_OVERHANG_CONFIG region=0 "
             + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
                        for key, value in fields) + "\n")
 
@@ -1900,7 +1918,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         return text, report
     lines = "".join(lines).splitlines(keepends=True)  # replacement blocks hold several lines per item
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
-    return MARKER + VERSION + "\n" + gallery_header(cfg) + "".join(lines), report
+    return MARKER + VERSION + "\n" + gallery_header(cfg, text) + "".join(lines), report
 
 def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
     target = Path(path)
