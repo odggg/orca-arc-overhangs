@@ -1684,11 +1684,22 @@ def update_time_estimates(old_lines, new_lines):
 
 BED_TEMP_KEYS = {"cool plate": "cool_plate_temp", "engineering plate": "eng_plate_temp", "textured pei plate": "textured_plate_temp"}
 
+def config_value_reader(text):
+    block = dict(re.findall(r"^; (\w+) = (.*)$", text, re.M))
+    return lambda key: block.get(key, "").split(",")[0].strip().strip('"')
+
+def gallery_print_profile(text):
+    """Wall, shell and infill settings the site shows under "Print profile"."""
+    first = config_value_reader(text)
+    density = first("sparse_infill_density").rstrip("%")
+    fields = [("wall_loops", first("wall_loops")), ("top_shell_layers", first("top_shell_layers")),
+              ("bottom_shell_layers", first("bottom_shell_layers")), ("infill_density", density),
+              ("infill_pattern", first("sparse_infill_pattern"))]
+    return "".join(f" {key}={value}" for key, value in fields if value)
+
 def gallery_build_info(text):
     """Printer, filament and temperatures from Orca's trailing "; key = value" config block, in the site's key names."""
-    block = dict(re.findall(r"^; (\w+) = (.*)$", text, re.M))
-    def first(key):
-        return block.get(key, "").split(",")[0].strip().strip('"')
+    first = config_value_reader(text)
     bed = first(BED_TEMP_KEYS.get(first("curr_bed_type").lower(), "hot_plate_temp"))
     support = first("enable_support")
     info = [("printer", first("printer_model")), ("filament_type", first("filament_type")),
@@ -1719,7 +1730,7 @@ def gallery_header(cfg, text=""):
     return ("; WAVE_OVERHANG_BUILD plugin=orca_arc_overhang-" + VERSION + gallery_build_info(text)
             + "\n; WAVE_OVERHANG_CONFIG region=0 "
             + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
-                       for key, value in fields) + "\n")
+                       for key, value in fields) + gallery_print_profile(text) + "\n")
 
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)

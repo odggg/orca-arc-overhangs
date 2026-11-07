@@ -14,6 +14,7 @@
 - Settings page keeps unsaved edits when switching tabs or windows (draft kept until Save or Refresh).
 - Wave settings use the WaveOverhangs names and units ("Wave line spacing" in mm, default 0.35), each with a plain-language hint and its `wave_overhang_*` name.
 - The page and README say that "Extra perimeters on overhangs" must be off for both modes; the G90/M83 error now reports the G-code line.
+- The gallery header also carries wall loops, top and bottom shell layers, infill density and pattern, so the site fills its "Print profile" fields.
 - The `WAVE_OVERHANG_BUILD` line also carries printer, filament, layer height, nozzle, temperatures, flow ratio and support, read from Orca's config block at the end of the file, because the gallery only reads the first 128 KB.
 - Wave mode writes `; WAVE_OVERHANG_BUILD` and `; WAVE_OVERHANG_CONFIG` comments at the top of the G-code, the lines the waveoverhangs.com upload page reads, so the exported file can be uploaded to the gallery with its settings (55 -> 56 tests).
 - README and settings page recommend "Bridge counterbore holes" = None: with "Partially bridged" Orca prints supported strips that the plugin skips (a counterbore test sliced that way produced no waves).
