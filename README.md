@@ -44,3 +44,7 @@ Private conversation exports, screenshots, local installation logs and printer f
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Orca setting required for both modes
+
+The plugin only replaces extrusions Orca labels Bridge or Internal Bridge. Turn off **Extra perimeters on overhangs** (Quality tab, Overhangs section), otherwise Orca fills overhangs with extra walls and there is nothing to replace.
