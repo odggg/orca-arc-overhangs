@@ -345,6 +345,72 @@ class Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 a.configuration(bad)
 
+    def test_wave_bridge_heuristic(self):
+        from shapely.geometry import box
+        anchors = a.unary_union([box(0, 0, 10, 10), box(0, 20, 10, 30)])
+        span, cantilever = box(0, 10, 10, 20), box(10, 0, 20, 10)
+        args = (anchors, anchors, span.buffer(0.1), 0.35)
+        self.assertFalse(a.should_generate_waves(span, span, *args, False))
+        self.assertTrue(a.should_generate_waves(span, span, *args, True))
+        self.assertEqual(a.bridging_unsupported_distance(span, anchors), 0.0)
+        anchor = box(0, 0, 10, 10)
+        free = box(0, 10, 10, 20)
+        self.assertAlmostEqual(a.bridging_unsupported_distance(free, anchor), 10.0, places=2)
+        self.assertTrue(a.should_generate_waves(free, free, anchor, anchor, free.buffer(0.1), 0.35, False))
+        output, report = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80,
+                                                    "wave_instead_of_bridges": False})
+        self.assertEqual(report["replaced_features"], 1, report)
+
+    def test_wave_floor_speeds_ramp_and_end_retract(self):
+        cfg = a.configuration({"wave_floor_layers": 3, "wave_floor_speed_ramp": 3})
+        self.assertEqual([a.floor_speed(cfg, k, 10, 50) for k in (1, 2, 3)], [10, 30, 50])
+        self.assertIsNone(a.floor_speed(cfg, 1, 0, 50))
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n" + ring(10, 10, 30, 30) + "; FEATURE: Internal solid infill\nG1 X21 Y12 F9000\nG1 X28 Y12 E0.3\n"
+        source = source.replace("; FEATURE: Overhang wall", ring(11, 11, 29, 29, "Inner wall") + "; FEATURE: Overhang wall")
+        cfg = {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_perimeter_speed_mm_s": 10,
+               "wave_floor_perimeter_speed_mm_s": 15, "wave_floor_print_speed_mm_s": 12, "wave_floor_layers": 2,
+               "wave_end_retract_mm": 0.3}
+        output, report = a.process_text(source, cfg)
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertGreaterEqual(report["retimed_features"], 3, report)
+        for feed in ("F600.0", "F900.0", "F720.0"):
+            self.assertIn(feed, output)
+        self.assertIn("G1 E-0.30000", output)
+        self.assertEqual(a.process_text(output, cfg)[0], output)
+        # Feed state after every retimed feature matches the source, so later moves are untouched.
+        ends = lambda t: [f.moves[-1].after.feed for f in a.parse(t.splitlines(True)) if f.moves and f.role != "bridge"]
+        self.assertEqual(ends(source)[-1], ends(output)[-1])
+
+    def test_wave_hilbert_floor_density_and_fans(self):
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\nG1 X20 Y12 F9000\n"
+        for i in range(36):
+            y = 12 + i * 0.45
+            xa, xb = (20, 28) if i % 2 == 0 else (28, 20)
+            source += f"G1 X{xa} Y{y} F9000\nG1 X{xb} Y{y} E0.3 F2400\n"
+        source += "; FEATURE: Outer wall\nG1 X10 Y10 F9000\nG1 X30 Y10 E0.5\n"
+        cfg = {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_floor_use_hilbert": True,
+               "wave_floor_print_speed_mm_s": 20, "wave_floor_fan_override": True, "wave_floor_fan_percent": 30,
+               "wave_floor_aux_fan_override": True, "wave_floor_aux_fan_percent": 50}
+        output, report = a.process_text(source, cfg)
+        self.assertEqual(report["hilbert_features"], 1, report)
+        self.assertIn("M106 S76", output)
+        self.assertIn("M106 P2 S127", output)
+        self.assertIn("M106 P2 S120", output)
+        self.assertIn("F1200.0", output)
+        sparse, _ = a.process_text(source, {**cfg, "wave_floor_hilbert_density_percent": 25})
+        self.assertLess(sparse.count("\nG1 X"), output.count("\nG1 X"))
+        for bad in ({"wave_floor_layers": 21}, {"wave_floor_hilbert_density_percent": 0}, {"wave_floor_fan_percent": 101},
+                    {"wave_floor_speed_ramp": 1.5}, {"wave_perimeter_speed_mm_s": 1001}):
+            with self.assertRaises(ValueError):
+                a.configuration(bad)
+
+    def test_wave_min_layer_time_adds_dwell(self):
+        source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n" + ring(10, 10, 30, 30)
+        output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80,
+                                                 "wave_min_layer_time_s": 500})
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertRegex(output, r"G4 P\d{5,}\n; CHANGE_LAYER\nG1 Z0.6")
+
     def test_split_outer_overhang_wall_ring(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"
         source += "; FEATURE: Outer wall\nG1 X0 Y0\nG1 X20 Y0 E1\nG1 X20 Y20 E1\n"
