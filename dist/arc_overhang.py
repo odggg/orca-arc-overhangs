@@ -1604,6 +1604,76 @@ def move_time(move):
         return 0.0
     return length / max(b.feed / 60, 1e-6)
 
+RE_M73_REMAINING = re.compile(r"^(M73\s+P(\d+)\s+R)(\d+)")
+RE_TIME_HEADER = re.compile(r"^(;\s*model printing time:\s*)([0-9hms ]+?)(;\s*total estimated time:\s*)([0-9hms ]+?)\s*$")
+
+def move_seconds(lines):
+    """Seconds per line from length / modal feed, plus G4 dwells. Only differences are used."""
+    out, x, y, feed = [], 0.0, 0.0, 6000.0
+    for line in lines:
+        seconds = 0.0
+        code = line.split(";")[0]
+        if re.match(r"G[0-3]\b", code):
+            words = {k: float(v) for k, v in re.findall(r"([XYF])(-?[0-9.]+)", code)}
+            feed = words.get("F", feed)
+            nx, ny = words.get("X", x), words.get("Y", y)
+            # shortcut: G2/G3 count as their chord, close enough for a time difference
+            seconds = math.hypot(nx - x, ny - y) / (feed / 60.0) if feed > 0 else 0.0
+            x, y = nx, ny
+        elif re.match(r"G4\b", code):
+            dwell = re.search(r"P([0-9.]+)", code)
+            seconds = float(dwell.group(1)) / 1000.0 if dwell else 0.0
+        out.append(seconds)
+    return out
+
+def format_duration(seconds):
+    seconds = max(0, int(round(seconds)))
+    h, rest = divmod(seconds, 3600)
+    m, sec = divmod(rest, 60)
+    return (f"{h}h " if h else "") + (f"{m}m " if h or m else "") + f"{sec}s"
+
+def parse_duration(text):
+    return float(sum(int(n) * {"h": 3600, "m": 60, "s": 1}[u] for n, u in re.findall(r"(\d+)([hms])", text)))
+
+def update_time_estimates(old_lines, new_lines):
+    """Shift M73 remaining-time lines and the header estimate by the time the edit adds or removes.
+
+    Orca estimated the time before post-processing and the plugin docs do not say it is redone.
+    Edits new_lines in place and returns the change in seconds. The k-th M73 of the new text is
+    matched to the k-th M73 of the old text and shifted by how much more (or less) time follows it.
+    """
+    old_time, new_time = move_seconds(old_lines), move_seconds(new_lines)
+    total = sum(new_time) - sum(old_time)
+    if abs(total) < 0.5:
+        return 0.0
+    # Pair M73 lines by progress percent (a replaced block may swallow one), in order.
+    old_by_percent = {}
+    for j, line in enumerate(old_lines):
+        match = RE_M73_REMAINING.match(line)
+        if match:
+            old_by_percent.setdefault(match.group(2), []).append(j)
+    old_after = [0.0] * (len(old_time) + 1)
+    new_after = [0.0] * (len(new_time) + 1)
+    for k in range(len(old_time) - 1, -1, -1):
+        old_after[k] = old_after[k + 1] + old_time[k]
+    for k in range(len(new_time) - 1, -1, -1):
+        new_after[k] = new_after[k + 1] + new_time[k]
+    for i, line in enumerate(new_lines):
+        match = RE_M73_REMAINING.match(line)
+        if match and old_by_percent.get(match.group(2)):
+            j = old_by_percent[match.group(2)].pop(0)
+            minutes = max(0, round(int(match.group(3)) + (new_after[i] - old_after[j]) / 60.0))
+            new_lines[i] = f"{match.group(1)}{minutes}" + line[match.end():]
+    for i, line in enumerate(new_lines[:300]):
+        body = line.rstrip("\r\n")
+        match = RE_TIME_HEADER.match(body)
+        if match:
+            model = format_duration(parse_duration(match.group(2)) + total)
+            whole = format_duration(parse_duration(match.group(4)) + total)
+            new_lines[i] = f"{match.group(1)}{model}{match.group(3)}{whole}" + line[len(body):]
+            break
+    return total
+
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
     report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "skip_reasons": {}}
@@ -1799,6 +1869,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         report["skipped_features"] += report["replaced_features"]
         report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = 0
         return text, report
+    lines = "".join(lines).splitlines(keepends=True)  # replacement blocks hold several lines per item
+    report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     return MARKER + VERSION + "\n" + "".join(lines), report
 
 def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):

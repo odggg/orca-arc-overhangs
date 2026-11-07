@@ -661,7 +661,14 @@ class Tests(unittest.TestCase):
         self.assertIn("M73 P10 R10",source)
         output,report = a.process_text(source)
         self.assertEqual(report["replaced_features"],1)
-        self.assertEqual(output.count("M73 P10 R10"),1)
+        self.assertEqual(output.count("M73 P10 R"),1)  # the remaining minutes may be shifted by the time estimate
+
+    def test_time_estimate_follows_slower_waves(self):
+        source = "; model printing time: 1m 0s; total estimated time: 2m 0s\nM73 P0 R2\nG90\nM83\n" + fixture().split("G90\nM83\n", 1)[1]
+        output, report = a.process_text(source, {"overhang_mode": "wave", "wave_speed_mm_s": 1, "minimum_coverage_percent": 80})
+        self.assertGreater(report["time_change_s"], 10)
+        header = output.splitlines()[1]
+        self.assertAlmostEqual(a.parse_duration(header.split("estimated time:")[1]), 120 + report["time_change_s"], delta=1)
 
     def test_scarf_projection_has_correct_hole_topology(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 Z0.2\n"
