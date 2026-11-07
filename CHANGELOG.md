@@ -12,7 +12,8 @@
 - Not ported: wave-aware support generation and forcing solid shell layers (both need the slicer; the plugin only edits finished G-code, so floor settings change speed/pattern of the layers Orca already made solid, not how many exist).
 - New `z_hop_mm` (default 0 = off, behavior unchanged): lift Z for the travel between Arcs/Waves so the nozzle does not drag across freshly printed lines. Idea from jforbestyr/bambu-arc-overhang.
 - Settings page keeps unsaved edits when switching tabs or windows (draft kept until Save or Refresh).
-- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (49 total).
+- New `wave_line_spacing_mm` (0 = use the ratio) so wave spacing can be entered in mm like the WaveOverhangs presets.
+- Tests: infill-first order, default order, and Hilbert on a feature that opens with a retraction and Wave mode (50 total).
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.

@@ -235,6 +235,7 @@ DEFAULTS = {
     "overhang_mode": "arc",
     "wave_pattern": "smart",
     "wave_spacing_nozzle_ratio": 0.875,
+    "wave_line_spacing_mm": 0.0,
     "wave_speed_mm_s": 2.0,
     "wave_travel_speed_mm_s": 40.0,
     "wave_flow_mm3_per_mm": 0.15,
@@ -332,6 +333,8 @@ def configuration(overrides=None):
     for key in ("arc_spacing_nozzle_ratio", "wave_spacing_nozzle_ratio"):
         if not 0.1 <= result[key] <= 1.5:
             raise ValueError(key + " must be between 0.1 and 1.5.")
+    if result["wave_line_spacing_mm"] and not 0.05 <= result["wave_line_spacing_mm"] <= 1.5:
+        raise ValueError("wave_line_spacing_mm must be 0 (use the ratio) or between 0.05 and 1.5.")
     if not 0 <= result["wave_fan_percent"] <= 100:
         raise ValueError("wave_fan_percent must be between 0 and 100.")
     if result["wave_temperature_c"] and not 100 <= result["wave_temperature_c"] <= 400:
@@ -1068,7 +1071,7 @@ def should_generate_waves(region, real_overhang, anchors, inset_anchors, cover_a
 def wave_generate(poly, support, cfg, printer, cancelled):
     """Port of WaveOverhangs::generate (Andersons / Klappe). Returns (paths as point lists, covered geometry) or None."""
     nozzle = printer["nozzle_diameter"]
-    spacing = max(1e-6, nozzle * cfg["wave_spacing_nozzle_ratio"])
+    spacing = max(1e-6, cfg["wave_line_spacing_mm"] or nozzle * cfg["wave_spacing_nozzle_ratio"])
     width = nozzle
     base = spacing
     overlap = cfg["wave_perimeter_overlap_mm"]
@@ -1842,6 +1845,7 @@ def config_page(as_tab=False):
         ("minimum_arc_time_s", "Minimum time per arc", "s"),
         (None, "Wave mode", ""),
         ("wave_pattern", "Wave pattern", "select"),
+        ("wave_line_spacing_mm", "Wave line spacing in mm (0 = use the ratio below)", "mm"),
         ("wave_spacing_nozzle_ratio", "Wave line spacing / nozzle diameter", "Factor"),
         ("wave_speed_mm_s", "Wave speed", "mm/s"),
         ("wave_travel_speed_mm_s", "Wave travel speed", "mm/s"),

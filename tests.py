@@ -404,6 +404,15 @@ class Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 a.configuration(bad)
 
+    def test_wave_line_spacing_in_mm(self):
+        coarse, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_line_spacing_mm": 0.35})
+        default, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80})
+        self.assertEqual(coarse, default)  # 0.35 mm == 0.875 * 0.4 mm nozzle
+        wide, _ = a.process_text(fixture(), {"overhang_mode": "wave", "minimum_coverage_percent": 80, "wave_line_spacing_mm": 0.5})
+        self.assertNotEqual(wide, default)
+        with self.assertRaises(ValueError):
+            a.configuration({"wave_line_spacing_mm": 2})
+
     def test_wave_min_layer_time_adds_dwell(self):
         source = fixture() + "; CHANGE_LAYER\nG1 Z0.6\n" + ring(10, 10, 30, 30)
         output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80,
