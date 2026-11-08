@@ -27,6 +27,7 @@
 - The profile import no longer reports `wave_overhang_min_angle`, `spacing_mode`, `seam_mode`, `debug_gcode` and `outer_perimeters` as missing. In WaveOverhangs the first three do nothing, `debug_gcode` only adds comments, and `outer_perimeters` is covered by the walls Orca already printed.
 - "Minimum overhang area" and "Minimum overhang length" moved from the Arc section to "Both modes" with help text: they gate Wave mode too, and lowering them (for example to 1-5 mm2) turns small overhangs into waves.
 - Orca's Z hop (a printer setting) writes `G17` and a helical `G3 ... Z` lift between bridge lines. Those bridges, and walls or infill containing the same lift, were rejected as "State command inside bridge region", so no arcs or waves appeared on printers with Z hop (reported on the H2D profile). `G17` is now accepted. Reproduced by slicing the reported project with Z hop 0.4 mm: 0 of 2 bridges replaced before, 1 of 2 after (the other has full support).
+- Platform-tagged wheels for OrcaCloud next to the universal one: `orca_arc_overhang_win_x86_64.whl`, `_win_arm64`, `_linux_x86_64`, `_linux_arm64`, `_macosx_arm64`, `_macosx_x86_64` (same bytes, filename only), so OrcaCloud's download gate can match every platform instead of only whatever a `py3-none-any` name resolves to.
 - Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan, `M204` inside a bridge and the spiral Z lift (56 total).
 
 ## 0.2.4 — 2026-10-30

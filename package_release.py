@@ -36,6 +36,16 @@ with zipfile.ZipFile(wheel) as archive:
     assert info + "/RECORD" in archive.namelist()
     assert len([n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]) == 1
 
+# OrcaCloud's download gate matches wheel filenames against the requested
+# os/arch tokens (win|linux|macosx x86_64|arm64); same bytes as the
+# universal wheel, only the filename differs.
+platform_wheels = []
+for os_token in ("win", "linux", "macosx"):
+    for arch_token in ("x86_64", "arm64"):
+        platform_wheel = DIST / f"{name}_{os_token}_{arch_token}.whl"
+        platform_wheel.write_bytes(wheel.read_bytes())
+        platform_wheels.append(platform_wheel)
+
 (ROOT / "LICENSE").write_bytes((ROOT / "upstream" / "LICENSE").read_bytes())
 
 files = {
