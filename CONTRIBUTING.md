@@ -7,3 +7,11 @@ Include a synthetic regression fixture for parser or geometry fixes.
 
 For bugs, provide Orca version, OS, plugin version, error text, relevant settings and a minimal reproduction.
 Remove account data, printer access codes and private paths from logs.
+
+## Project files
+
+- `adapter.py.in`, `upstream/`: canonical adapter and upstream geometry.
+- `dist/`, build scripts: generated plugin and distributable packages.
+- `tests.py`, `test_audit.py`, `test_tab.js`, `test_ui.js`: regression and UI checks.
+- `examples/`: synthetic G-code examples.
+- `CHANGELOG.md`, `COMMUNITY_ISSUE_AUDIT.md`, `VALIDATION.md`: changes, reviewed reports and verification.

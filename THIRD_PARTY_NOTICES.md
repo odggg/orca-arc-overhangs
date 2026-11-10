@@ -2,14 +2,14 @@
 This adaptation is distributed under GNU GPL version 3; see LICENSE.
 
 Original concept and implementation:
-Steven McCulloch â€” https://github.com/stmcculloch/arc-overhang
+Steven McCulloch — https://github.com/stmcculloch/arc-overhang
 
 PrusaSlicer integration:
-Nicolai Wachenschwan â€”
+Nicolai Wachenschwan —
 https://github.com/nicolai-wachenschwan/arc-overhang-prusaslicer-integration
 
 OrcaSlicer / SoftFever integration:
-Kelsch â€” https://github.com/Kelsch/arc-overhang-orcaslicer-integration
+Kelsch — https://github.com/Kelsch/arc-overhang-orcaslicer-integration
 Reference commit: 0693ef29a0eb3e96fdc336841cd714e071f3ed9a
 
 The original softfever_slicer_post_processing_script.py and its LICENSE

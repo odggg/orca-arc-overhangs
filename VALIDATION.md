@@ -1,5 +1,6 @@
-# Validation - Arc Overhang 0.2.4
-Date: 2026-10-24
+# Validation - Arc Overhang (0.2.4 era)
+
+Last updated: 2026-10-30. Version 0.3.0 changes are not covered here; see CHANGELOG.md.
 
 ## Retraction regression retained from 0.2.2
 The current G-code reproduced the previous exception with an apparent
@@ -79,9 +80,5 @@ All plugin UI and runtime messages translated to English. Configuration keys and
   its comments endpoint returned `missing_authorization` outside an authenticated
   browser session. The user then supplied a screenshot; visible comments and
   their dispositions are recorded in COMMUNITY_ISSUE_AUDIT.md.
-
-
 - Firmware retraction: parameterless G10/G11 are tracked as a balanced firmware-retract state. The 39-test suite covers a balanced pair, preservation of a Bridge feature containing retract commands, and rejection of parameterized G10.
-
-
 - Corrected layer-tail scheduling: 39 regressions pass, including modern/legacy ordering of normal walls/infill, Arcs and Overhang walls, preserved Overhang extrusion geometry and layer/end-code boundaries. Tool-selection boundaries remain fixed.
