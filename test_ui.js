@@ -7,7 +7,7 @@ assert(/id="save" type="button"/.test(html));
 const source=html.match(/<script>([\s\S]*)<\/script>/)[1];
 const defaults=JSON.parse(source.match(/const defaults = (.*);/)[1]);
 async function check(scope){
- const elements=Object.fromEntries([...Object.keys(defaults),'settings','status','refresh','save','last-report','orca-host-theme-vars'].map(k=>[k,{value:'',checked:false,textContent:''}]));
+ const elements=Object.fromEntries([...Object.keys(defaults),'settings','status','refresh','save','last-report','import','import_text','orca-host-theme-vars'].map(k=>[k,{value:'',checked:false,textContent:'',dataset:{},addEventListener(){}}]));
  const events={};let nativeSave=null,timerID=0;
  const timers=new Map();
  const doc={hidden:false,getElementById:k=>elements[k],addEventListener(){},
@@ -22,11 +22,14 @@ async function check(scope){
  for(const match of combined.matchAll(/<script>([\s\S]*?)<\/script>/g)) vm.runInContext(match[1],context);
  await new Promise(setImmediate);
  assert.equal(elements.arc_speed_mm_s.value,10);
+ assert.equal(elements.print_order.value,'layer_tail');
+ elements.print_order.value='slicer';
  elements.arc_speed_mm_s.value=10.5;
  const saving=elements.save.onclick();
  await new Promise(setImmediate);
  assert.equal(nativeSave.__orca,'save');
  assert.equal(nativeSave.config.arc_speed_mm_s,10.5);
+ assert.equal(nativeSave.config.print_order,'slicer');
  assert.notEqual(elements.status.textContent,'Saved.','Must wait for real host acknowledgement');
  events.message({data:{__orca:'config',config:nativeSave.config}});
  await saving;

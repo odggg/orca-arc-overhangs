@@ -1,44 +1,24 @@
-# Arc Overhang
+# Arc Overhang 0.3.0
 
-Print suitable overhang regions with concentric arc toolpaths using OrcaSlicer's native slicing pipeline.
+Cumulative update from 0.2.4, integrating PR #1 with review corrections.
 
-## Features
-- Arc Overhang tab in the main window.
-- Adjustable speed, spacing, flow, wall anchoring and retraction.
-- Process preset configuration and global defaults.
-- G2/G3 input support: Arc Fitting can remain enabled.
-- Unsuitable bridge regions stay unchanged.
+- Choose the print order: keep the previous layer-tail order (default), or respect
+  the slicer wall/infill order while placing early Overhang walls after the support.
+- Fix Hilbert being skipped on features that begin with retract/travel/unretract.
+  Keep approach/departure Z hops, progress markers, and balanced retraction.
+- Correct Hilbert density so lower density reduces the deposited material.
+- Accept G17/helical Z-hop travel and M204 in otherwise eligible Bridge blocks.
+- Add optional experimental Wave support with pattern, floor, flow, fan and
+  temperature controls and a pasted-profile importer.
+- Preserve active-tool settings, motion state, fan channels and acceleration when
+  relocating blocks. Check actual Wave coverage and anchored starts.
+- Update remaining-time estimates approximately after editing toolpaths.
+- Build valid wheels for the supported platform tags and verify package contents.
 
-## Setup
-Enable both Pages and Slicing Pipeline capabilities. In advanced mode, select Arc Overhang under Process > Others > Slicing Pipeline Plugin and save the process preset. Disable support for the intended arc overhang area.
+The slicing preview precedes post-processing: reopen the exported G-code to inspect
+changes. Hilbert applies to eligible internal solid infill above generated support;
+top surfaces, sparse infill and ordinary Bridge infill are retained.
 
-The plugin modifies G-code during export. Reopen exported G-code to inspect the result; the original slicing preview does not show these changes.
-
-## Compatibility and status
-Experimental version 0.2.4. Requires OrcaSlicer 2.5.0 or later with native Python plugin support.
-Initial release target: Windows x86-64. API checked against v2.5.0-alpha; later API changes may need adjustments.
-
-Requires absolute XYZ (G90), relative extrusion (M83), single-tool text G-code and reconstructable contours.
-NumPy and Shapely are installed by Orca. No physical print has been validated.
-
-## Credits
-Based on Kelsch's Orca integration and work by Nicolai Wachenschwan and Steven McCulloch.
-Independent adaptation; not an official OrcaSlicer project. GNU GPL version 3.
-
-Original integration: https://github.com/Kelsch/arc-overhang-orcaslicer-integration
-
-## Changes in 0.2.4
-
-Release identifier and package filenames updated for Orca Cloud. Plugin behavior is unchanged from the current GitHub source.
-
-## Changes in 0.2.3
-
-All plugin UI labels, help text, status messages, errors and skip reasons are now English. Configuration keys, saved settings and printing behavior remain unchanged.
-
-## Retraction fixes retained from 0.2.2
-
-Fix retraction tracking during XY extrusion and tiny wipe rounding residue. Genuine unrecovered retraction remains protected.
-
-## Assets
-
-Install dist/arc_overhang.py from the source ZIP or install through the catalog. Install one variant only.
+Physical print quality, cross-platform host installation, and Orca Cloud downloads
+have not been validated here. The reported scale-factor and stock timelapse issues
+remain unconfirmed. See VALIDATION.md for the checks performed.

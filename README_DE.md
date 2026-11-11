@@ -1,5 +1,7 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.2.4  -  30.10.2026  -  experimentell
+Version 0.3.0  -  11.11.2026  -  experimentell
+
+Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 
 Portierung von https://github.com/Kelsch/arc-overhang-orcaslicer-integration
 auf Orcas natives Python-Pluginsystem. Grundlage ist der konzentrische
@@ -85,7 +87,7 @@ In anderen Pipeline-Schritten tut das Plugin nichts.
 
 **Die normale Slicing-Vorschau zeigt diesen Export-Schritt nicht.**
 Zur Kontrolle die exportierte G-Code-Datei neu im G-Code-Viewer oeffnen.
-Die Slicer-Zeit- und Materialangaben werden durch das Plugin nicht neu berechnet.
+Das Plugin verschiebt die M73-Verbleibzeitmeldungen und die geschaetzte Druckzeit im Dateikopf um die Zeit neuer oder entfernter Bahnen; eine Neuberechnung der Schaetzung erfolgt nicht.
 Bei Bambu-Druckern wird der vom Host gelieferte G-Code-Text verarbeitet;
 das Plugin bearbeitet keine selbst eingelesenen 3MF-Archive.
 
@@ -108,16 +110,16 @@ Geschlossene Aussenkonturen werden benoetigt; Scarf-Ueberlappungen der Waende
 werden projiziert. Nicht-planare Bridge-Bahnen bleiben ausgeschlossen.
 Mehrmaterial mit regulären Werkzeugwechseln wird unterstuetzt. Vase-/Spiral-Modus,
 IDEX, Werkzeugwechsel innerhalb eines Bridge-Abschnitts, volumetrische Extrusion
-und Firmware-Retraktion werden nicht unterstuetzt.
+werden nicht unterstuetzt. Parameterlose Firmware-Retraktion (G10/G11) wird unterstuetzt.
 
-Temperatur, Bauteilluefter, Aux-Luefter und Gehaeuseluefter werden nicht geaendert.
-Die am ersetzten Bridge-Abschnitt aktiven Werte gelten weiter.
+Standardmaessig gelten Temperatur und Luefterwerte des ersetzten Bridge-Abschnitts weiter. Im Wave-Modus sind optionale Temperatur-, Bauteil- und Aux-Luefter-Ueberschreibungen moeglich; die vorherigen Werte werden danach wiederhergestellt. Die Temperatur gehoert zum aktiven Werkzeug. Der Gehaeuseluefter bleibt unberuehrt.
 Die eingestellte Plugin-Retraktion muss zu deinem Drucker passen.
-Z-Hop waehrend der erzeugten Arc-Fahrten ist in dieser Version nicht enthalten.
+Z-Hop waehrend der erzeugten Arc- und Wave-Fahrten ist mit der Einstellung z_hop_mm moeglich (Standard 0 = aus).
 
 ## Wichtige Einstellungen
 | Einstellung in der Maske | JSON-Schluessel | Standard | Wirkung |
 |---|---|---:|---|
+| Druckreihenfolge (Print order) | print_order | layer_tail | Bisherige Reihenfolge; alternativ slicer fuer Orcas Reihenfolge |
 | Arc-Geschwindigkeit | arc_speed_mm_s | 1.5 mm/s | Obergrenze der Geschwindigkeit auf Arc-Bahnen |
 | Minimale Arc-Geschwindigkeit | minimum_arc_speed_mm_s | 0.5 mm/s | Untergrenze fuer kurze Arcs |
 | Arc-Abstand / Duesendurchmesser | arc_spacing_nozzle_ratio | 0.95 | Bahnabstand als Faktor des Duesendurchmessers |
@@ -166,7 +168,6 @@ getrennt behandelt. Bei einem Fehler wird die Exportdatei nicht ersetzt.
 - adapter.py.in und build_plugin.py: reproduzierbare Portierung
 - upstream/: originale SoftFever-Datei und GPL-Lizenz
 - test_audit.py: Ausfuehrung mit gesperrten externen Dateizugriffen
-- REAL_FILE_VALIDATION.json: Pruefergebnis am aktuellen Orca-G-Code (ohne Modelldaten)
 - tests.py: automatisierte Engine-, Parser-, Dateischreib- und Schnittstellentests
 - test_ui.js, test_tab.js und die beiden preview.html-Dateien: isolierter Test der Einstellungsmaske
 - examples/: synthetische Vorher-/Nachher-Dateien fuer die G-Code-Analyse
@@ -211,8 +212,9 @@ Quellen:
 - https://github.com/OrcaSlicer/OrcaSlicer/wiki/pages
 - https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.5.0-alpha/src/slic3r/plugin/pluginTypes/slicingPipeline/SlicingPipelinePluginCapability.cpp
 
+Die Auswahl **Print order** bietet zwei Reihenfolgen:
 
-Das Füllmuster der Folgeschicht ist auswählbar: Standardmäßig bleibt Orças Muster erhalten. Optional kann in geeigneten Bereichen mit massiver Innenfüllung über ersetzten Arc-Bereichen eine Hilbert-Kurve verwendet werden. Das kann die Druckzeit erhöhen; andere Füllbereiche bleiben unverändert.
+- **Normal walls/infill → Arcs/Waves → Overhang walls (0.2.4)**: bisherige Reihenfolge und Standard.
+- **Keep slicer order; Overhang walls after Arcs/Waves**: normale Waende und Infill behalten ihre Orca-Position. Nur Overhang-Waende, die vor der erzeugten Unterstuetzung lagen, werden dahinter verschoben. Damit wirkt auch Orcas "Print infill first" wieder.
 
-
-Druckreihenfolge auf betroffenen Schichten: normale Wände und Infill, danach Arcs, zuletzt Overhang-Walls. Vorhandene Werkzeugwechsel bleiben erhalten; die Reihenfolge wird innerhalb des jeweiligen Werkzeugabschnitts angewendet.
+Beide Varianten bleiben innerhalb derselben Schicht und desselben Werkzeugabschnitts. Exportierten G-Code neu oeffnen, um die Auswahl zu kontrollieren.

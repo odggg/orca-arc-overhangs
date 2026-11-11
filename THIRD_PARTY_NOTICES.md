@@ -2,14 +2,14 @@
 This adaptation is distributed under GNU GPL version 3; see LICENSE.
 
 Original concept and implementation:
-Steven McCulloch â€” https://github.com/stmcculloch/arc-overhang
+Steven McCulloch — https://github.com/stmcculloch/arc-overhang
 
 PrusaSlicer integration:
-Nicolai Wachenschwan â€”
+Nicolai Wachenschwan —
 https://github.com/nicolai-wachenschwan/arc-overhang-prusaslicer-integration
 
 OrcaSlicer / SoftFever integration:
-Kelsch â€” https://github.com/Kelsch/arc-overhang-orcaslicer-integration
+Kelsch — https://github.com/Kelsch/arc-overhang-orcaslicer-integration
 Reference commit: 0693ef29a0eb3e96fdc336841cd714e071f3ed9a
 
 The original softfever_slicer_post_processing_script.py and its LICENSE
@@ -46,3 +46,12 @@ file is not copied into this distribution.
 Version 0.2.2 fixes retraction bookkeeping during XY extrusion and wipe rounding.
 
 Version 0.2.3 translates the plugin UI and runtime messages to English.
+
+Wave overhang mode (added in 0.3.0):
+The wavefront propagation (offset the printed region outward by one line
+spacing, keep the boundary inside the walls as one path) follows the algorithm
+of Janis A. Andersons as implemented in OrcaSlicer-WaveOverhangs by Dennis
+Klappe (AGPL-3.0) https://github.com/dennisklappe/OrcaSlicer-WaveOverhangs.
+PR #1 by persano contributes the Python/Shapely implementation. Ported: narrow-neck
+slit splitting, corner taper, reconnection and the Smart/ZigZag/Monotonic patterns.
+Not ported: wave-aware supports and forced solid shell layers (they need the slicer, not a G-code post-processor).

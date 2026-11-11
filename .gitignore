@@ -16,3 +16,6 @@ docs/test-record.md
 REAL_FILE_VALIDATION.json
 docs/REAL_FILE_VALIDATION.json
 publish-filter.log
+
+# Generated slicer/installation diagnostics stay local.
+*.log
