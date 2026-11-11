@@ -1,5 +1,6 @@
 from pathlib import Path
 import ast
+import runpy
 ROOT = Path(__file__).parent
 src = (ROOT / 'upstream/softfever_slicer_post_processing_script.py').read_text(encoding='utf-8')
 names = {'Arc', 'midpoint', 'getStartPtOnLS', 'create_circle', 'get_farthest_point', 'move_toward_point', 'redistribute_vertices', 'generateMultipleConcentricArcs', 'getArcBoundarys'}
@@ -55,5 +56,14 @@ from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 '''
 out = ROOT / 'dist'
 out.mkdir(exist_ok=True)
-(out / 'arc_overhang.py').write_text(header + geometry + '\n\n' + (ROOT / 'adapter.py.in').read_text(encoding='utf-8'), encoding='utf-8')
+adapter = (ROOT / 'adapter.py.in').read_text(encoding='utf-8')
+source = header + geometry + '\n\n' + adapter
+(out / 'arc_overhang.py').write_text(source, encoding='utf-8', newline='\n')
+mirrors = ROOT / 'src'
+mirrors.mkdir(exist_ok=True)
+(mirrors / 'arc_overhang.py').write_text(source, encoding='utf-8', newline='\n')
+(mirrors / 'adapter.py.in').write_text(adapter, encoding='utf-8', newline='\n')
+namespace = runpy.run_path(str(out / 'arc_overhang.py'), run_name='_arc_overhang_build')
+for tab, file in ((False, 'config-preview.html'), (True, 'tab-preview.html')):
+    (ROOT / file).write_text(namespace['config_page'](as_tab=tab), encoding='utf-8', newline='\n')
 print(out / 'arc_overhang.py')

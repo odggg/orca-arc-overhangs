@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.3.0 — 2026-11-06
-- Respect the slicer's wall/infill order again, including Orca's "Print infill first": Arcs stay where the Bridge they replace was and normal walls/infill are never moved. This reverts the 0.2.4 behavior that forced every wall to print before the Arcs and degraded quality.
-- Only Overhang walls that the slicer printed before the Arcs of the same layer and tool run are moved, to just after the last Arc block, so they rest on the Arcs.
+## 0.3.0 — 2026-11-11
+- Add a **Print order** dropdown. Default `layer_tail` retains the 0.2.4 sequence: normal walls/infill → Arcs/Waves → Overhang walls. Optional `slicer` retains Orca's normal wall/infill order, including "Print infill first".
+- In `slicer` order only early Overhang walls move after the last generated support block of that layer/tool run. Layer and tool-selection boundaries stay fixed.
 - Fix the extruder counter and feed restored after relocated blocks (previously taken before the block's final reset).
 - Fix the next-layer Hilbert option doing nothing: Orca opens a feature with retract, travel and unretract, and the retraction/unretract guards rejected every such feature. Hilbert jumps now retract and unretract around travel.
 - New optional **Wave** overhang mode (`overhang_mode`, default `arc`), a Python/Shapely port of the algorithm in OrcaSlicer-WaveOverhangs (current main, including its PRs #114-#121): wavefront propagation with min-new-area, max-iterations and minimum-length limits, narrow-neck slit splitting (`wave_min_width_mm`), anchor fallbacks for thin supports, corner taper (`wave_corner_*`), deterministic polyline reconnection, and the Smart, ZigZag and Monotonic patterns (`wave_pattern`). Arc mode is unchanged.
@@ -27,8 +27,12 @@
 - The profile import no longer reports `wave_overhang_min_angle`, `spacing_mode`, `seam_mode`, `debug_gcode` and `outer_perimeters` as missing. In WaveOverhangs the first three do nothing, `debug_gcode` only adds comments, and `outer_perimeters` is covered by the walls Orca already printed.
 - "Minimum overhang area" and "Minimum overhang length" moved from the Arc section to "Both modes" with help text: they gate Wave mode too, and lowering them (for example to 1-5 mm2) turns small overhangs into waves.
 - Orca's Z hop (a printer setting) writes `G17` and a helical `G3 ... Z` lift between bridge lines. Those bridges, and walls or infill containing the same lift, were rejected as "State command inside bridge region", so no arcs or waves appeared on printers with Z hop (reported on the H2D profile). `G17` is now accepted. Reproduced by slicing the reported project with Z hop 0.4 mm: 0 of 2 bridges replaced before, 1 of 2 after (the other has full support).
-- Platform-tagged wheels for OrcaCloud next to the universal one: `orca_arc_overhang_win_x86_64.whl`, `_win_arm64`, `_linux_x86_64`, `_linux_arm64`, `_macosx_arm64`, `_macosx_x86_64` (same bytes, filename only), so OrcaCloud's download gate can match every platform instead of only whatever a `py3-none-any` name resolves to.
-- Tests: infill-first order, default order, Hilbert on a feature that opens with a retraction, Wave mode, time estimate, wave aux fan, `M204` inside a bridge and the spiral Z lift (56 total).
+- Replace invalid renamed wheel aliases with seven standard wheels (universal plus six OS/architecture variants), correct internal tags and RECORD hashes. Include all variants in the release ZIP; no cross-platform host/download-gate claim is made.
+- Review corrections: preserve Hilbert approach/departure Z moves, firmware retracts and progress markers; reduced Hilbert density now reduces deposited volume.
+- Restore fan channels, per-tool temperatures, acceleration and E/feed state around relocated blocks; volumetric caps include the filament flow ratio.
+- Check Wave anchoring and actual printed coverage, not only the generator's swept region.
+- Synchronize generated source mirrors and UI previews during builds; repair the native-bridge test harness and add package checks.
+- Validation: 56 original PR tests plus additional review regressions; see VALIDATION.md for final results and remaining limitations.
 
 ## 0.2.4 — 2026-10-30
 - Update plugin metadata, displayed version, package filenames and documentation to 0.2.4 for Orca Cloud.

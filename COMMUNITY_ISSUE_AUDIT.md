@@ -50,3 +50,17 @@ the expansion can reach an inner wall.
 This audit covers the open reports visible during review, not every historical
 report, every OrcaSlicer defect, or physical print quality. Automated tests do
 not substitute for a physical print.
+
+## PR #1 follow-up review — 2026-11-11
+
+The later screenshot reported walls before Arcs regardless of "Print infill first"
+and a Hilbert selection that appeared to do nothing. Both have reproducible code
+causes: 0.2.4 always scheduled support at the layer tail; its Hilbert guard rejected
+Orca-style retract/travel/unretract feature prefixes. Version 0.3.0 adds a print-order
+choice while retaining the previous default, and processes eligible Hilbert infill
+without discarding the original approach/departure. A further review fixed Hilbert
+Z-state and density errors and checked both orders against existing real exports.
+
+The H2D Z-hop report is covered by the G17/helical-travel regression. The reported
+stock timelapse failure and a supposed one-wall-only restriction remain unconfirmed;
+they are not claimed fixed. See docs/PR1_REVIEW.md and VALIDATION.md.

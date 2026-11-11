@@ -1,3 +1,54 @@
+# Validation — Arc Overhang 0.3.0
+
+Last updated: 2026-11-11.
+
+## PR #1 integration checks
+
+- Reviewed all 23 commits and the complete diff at PR head
+  `79c5d71c96512687ff48ac7fdaebef15b504ba27`, including source, UI, tests,
+  build/package scripts, generated files and documentation.
+- All 56 original Python tests passed before integration. After review corrections,
+  **66 Python regression tests passed**. They cover both print orders, modern/legacy
+  feature tags, tool-selection boundaries, E/feed and modal restoration, Hilbert
+  retraction/Z/density, Wave coverage/anchoring, fan channels and flow-aware caps.
+- Both settings views passed their save tests, including the dropdown. The native
+  configuration test uses the installed Orca JavaScript bridge in a VM; it is not
+  a claim of interactive end-to-end WebView testing.
+- Arc, Wave and next-layer Hilbert passed the audit-hook test with every file open
+  outside the G-code working directory denied.
+- Two existing real Orca exports (8.5 MB and 5.3 MB) were tested in Arc/Wave mode
+  with both `layer_tail` and `slicer`: **eight successful processing cases**.
+  Each case replaced one eligible Bridge, retained one unsuitable Bridge, produced
+  one Hilbert infill replacement, preserved the final machine state within G-code
+  rounding, and was unchanged when processed a second time.
+- The two files produced 88/92 Arc paths or 196/194 Wave paths respectively.
+  Actual Wave coverage was about 99.68%/100%; disconnected or insufficiently
+  covered generated paths are rejected by regression tests.
+- Release checks validate seven standard wheels, filename/internal-tag agreement,
+  source bytes, metadata, RECORD hashes, generated mirrors/previews and the ZIP's
+  SHA-256 manifest. A local universal-wheel install/import is also checked.
+
+Detailed source files and per-run data remain in the ignored local evidence folder.
+The public review record is [docs/PR1_REVIEW.md](docs/PR1_REVIEW.md).
+
+## Remaining limits
+
+- No physical print was performed during this review; Wave and Hilbert remain
+  experimental. Automated coverage does not prove adhesion or absence of curling.
+- The reported "Scale factor must be non-zero" failure and stock H2D timelapse
+  failure have not been reproduced or confirmed resolved.
+- A supposed one-wall-only restriction was not established. The PR author's
+  H2D Z-hop fix is covered by a regression, not a physical printer session here.
+- Time adjustments are estimates from length/feed; input G2/G3 are counted as
+  chords and acceleration is not simulated.
+- No cross-platform Orca host installation or Orca Cloud upload/download test.
+- Only suitable Bridge regions are replaced. Hilbert does not alter top surfaces,
+  sparse infill or ordinary Bridge infill on the following layer.
+
+## Historical verification before 0.3.0
+
+The following notes describe earlier releases and their then-current limits.
+
 # Validation - Arc Overhang (0.2.4 era)
 
 Last updated: 2026-10-30. Version 0.3.0 changes are not covered here; see CHANGELOG.md.

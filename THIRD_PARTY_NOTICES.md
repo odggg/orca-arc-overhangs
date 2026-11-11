@@ -52,6 +52,6 @@ The wavefront propagation (offset the printed region outward by one line
 spacing, keep the boundary inside the walls as one path) follows the algorithm
 of Janis A. Andersons as implemented in OrcaSlicer-WaveOverhangs by Dennis
 Klappe (AGPL-3.0) https://github.com/dennisklappe/OrcaSlicer-WaveOverhangs.
-It is re-implemented in Python with Shapely, not copied. Ported: narrow-neck
+PR #1 by persano contributes the Python/Shapely implementation. Ported: narrow-neck
 slit splitting, corner taper, reconnection and the Smart/ZigZag/Monotonic patterns.
 Not ported: wave-aware supports and forced solid shell layers (they need the slicer, not a G-code post-processor).

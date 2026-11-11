@@ -19,6 +19,7 @@ jobs:
       - run: python test_audit.py
       - run: node test_tab.js
       - run: python package_release.py
+      - run: python test_package.py
       - uses: actions/upload-artifact@v4
         with:
           name: arc-overhang-v0.3.0

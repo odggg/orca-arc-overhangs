@@ -232,6 +232,7 @@ MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
     "next_layer_pattern": "slicer",
+    "print_order": "layer_tail",
     "overhang_mode": "arc",
     "wave_pattern": "smart",
     "wave_spacing_nozzle_ratio": 0.875,
@@ -290,7 +291,7 @@ DEFAULTS = {
     "z_min_mm": 0.0,
     "z_max_mm": 10000.0,
 }
-CHOICES = {"next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
+CHOICES = {"print_order": ("layer_tail", "slicer"), "next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
            "wave_pattern": ("smart", "zigzag", "monotonic")}
 CONFIG_KEYS = ("nozzle_diameter", "filament_diameter", "outer_wall_line_width",
                "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e",
@@ -446,6 +447,7 @@ class State:
     retracted: float = 0.0
     firmware_retracted: bool = False
     tool: int = 0
+    modal: tuple = ()
 
 @dataclass
 class Move:
@@ -549,6 +551,20 @@ def parse(lines, cancelled=lambda: False):
             if tool in (255, 1000) or (has_bambu_virtual_markers and not has_nonzero_physical_tool and tool == 0):
                 continue
             state.tool = tool
+        elif cmd in ("M204", "M104", "M109", "M106", "M107"):
+            # Immutable snapshots let relocated blocks restore the fan, active
+            # tool's temperature and acceleration expected at each location.
+            modal = dict(state.modal)
+            if cmd == "M204" and words:
+                modal["acceleration"] = "M204 " + " ".join(f"{k}{v:g}" for k, v in sorted(words.items())) + "\n"
+            elif cmd in ("M104", "M109") and "S" in words:
+                tool = int(words.get("T", state.tool))
+                modal[f"temperature:{tool}"] = f"M104 T{tool} S{words['S']:g}\n"
+            elif cmd in ("M106", "M107"):
+                channel = int(words.get("P", 0))
+                speed = words.get("S", 255) if cmd == "M106" else 0
+                modal[f"fan:{channel}"] = f"M106 P{channel} S{speed:g}\n"
+            state.modal = tuple(sorted(modal.items()))
         elif cmd == "M200" and words.get("D", 0) > 0:
             raise UnsupportedGCode("M200/volumetric extrusion is not supported.")
     if feature:
@@ -1195,44 +1211,53 @@ def fill_polygon_wave(poly, support, cfg, printer, cancelled):
     result = wave_generate(poly, support, cfg, printer, cancelled)
     if result is None:
         return None
-    paths, filled = result
-    covered = unary_union((printed, filled.intersection(poly)))
+    paths, _ = result
+    lines = [LineString(p).intersection(poly) for p in paths if len(p) >= 2 and _path_length(p) > 1e-5]
+    lines = [part for line in lines for part in _parts(line, "LineString")]
+    anchored = anchor_arc_paths(lines, support, printer["nozzle_diameter"], printer["outer_wall_line_width"])
+    if anchored is None:
+        return None
+    covered = unary_union([printed] + [line.buffer(printer["nozzle_diameter"] / 2) for line in anchored]).intersection(poly)
     coverage = 100 * covered.area / poly.area
     if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
         return None
-    lines = [LineString(p) for p in paths if len(p) >= 2 and _path_length(p) > 1e-5]
-    return (lines, coverage) if lines else None
+    return anchored, coverage
 
-def previous_setting(lines, index, commands, key, skip=None):
-    """Last value of `key` set by one of `commands` before lines[index], or None."""
+
+def fan_override(lines, index, percent, auxiliary=False):
+    """Override exactly the fan channel used by the original G-code."""
     for text in reversed(lines[:index]):
         cmd, words = command(text)
-        if cmd in commands and key in words and not (skip and skip(words)):
-            return words[key]
-        if cmd == "M107" and "M107" in commands:
-            return 0.0
-    return None
+        channel = int(words.get("P", 0))
+        if cmd not in ("M106", "M107") or (channel != 2 if auxiliary else channel not in (0, 1)):
+            continue
+        prefix = f"M106 P{channel}" if "P" in words else "M106"
+        old = words.get("S", 255) if cmd == "M106" else 0
+        return [f"{prefix} S{round(percent * 2.55)}\n"], [f"{prefix} S{old:g}\n"]
+    prefix = "M106 P2" if auxiliary else "M106"
+    return [f"{prefix} S{round(percent * 2.55)}\n"], [prefix + " S0\n"]
 
-def wave_wrappers(lines, index, arcs, cfg):
-    """G-code run before and after a wave block: fan, nozzle temperature, minimum time."""
+
+def wave_wrappers(lines, index, arcs, cfg, state=None, printer=None):
+    """G-code run before and after waves; never borrow another tool's temperature."""
     pre, post = [], []
-    if cfg["wave_fan_override"]:
-        part_fan = lambda words: "P" in words and words["P"] not in (0, 1)
-        old = previous_setting(lines, index, ("M106", "M107"), "S", part_fan) or 0.0
-        pre.append(f"M106 S{round(cfg['wave_fan_percent'] * 2.55)}{chr(10)}")
-        post.append(f"M106 S{round(old)}{chr(10)}" if old else f"M107{chr(10)}")
-    if cfg["wave_aux_fan_override"]:
-        old = previous_setting(lines, index, ("M106",), "S", lambda w: w.get("P") != 2) or 0.0
-        pre.append(f"M106 P2 S{round(cfg['wave_aux_fan_percent'] * 2.55)}{chr(10)}")
-        post.append(f"M106 P2 S{round(old)}{chr(10)}")
-    if cfg["wave_temperature_c"]:
-        old = previous_setting(lines, index, ("M104", "M109"), "S")
+    for auxiliary in (False, True):
+        if cfg["wave_aux_fan_override" if auxiliary else "wave_fan_override"]:
+            begin, end = fan_override(lines, index, cfg["wave_aux_fan_percent" if auxiliary else "wave_fan_percent"], auxiliary)
+            pre.extend(begin)
+            post.extend(end)
+    if cfg["wave_temperature_c"] and state is not None:
+        old = dict(state.modal).get(f"temperature:{state.tool}")
         if old:
-            pre.append(f"M104 S{cfg['wave_temperature_c']:g}{chr(10)}")
-            post.append(f"M104 S{old:g}{chr(10)}")
-    spent = sum(arc.length for arc in arcs) / cfg["wave_speed_mm_s"]
+            pre.append(f"M104 T{state.tool} S{cfg['wave_temperature_c']:g}\n")
+            post.append(old)
+    speed = cfg["wave_speed_mm_s"]
+    if printer and printer.get("max_volumetric_speed"):
+        speed = min(speed, printer["max_volumetric_speed"] /
+                    (cfg["wave_flow_mm3_per_mm"] * printer["filament_flow_ratio"]))
+    spent = sum(arc.length for arc in arcs) / speed
     if spent < cfg["wave_min_time_s"]:
-        post.insert(0, f"G4 P{round((cfg['wave_min_time_s'] - spent) * 1000)}{chr(10)}")
+        post.insert(0, f"G4 P{round((cfg['wave_min_time_s'] - spent) * 1000)}\n")
     return pre, post
 
 # Commands that may sit inside a block the plugin edits. M204 is Orca's acceleration change; G17 selects the
@@ -1243,21 +1268,15 @@ WALL_ROLES = ("outer wall", "inner wall", "overhang wall")
 SOLID_ROLES = ("solid infill", "internal solid infill", "bottom surface")
 
 def fan_wrappers(lines, index, cfg):
-    """Floor-layer fan overrides: lines to run before and after a feature."""
+    """Floor-layer fan overrides with the original fan channels restored."""
     pre, post = [], []
-    for aux in (False, True):
-        if not cfg["wave_floor_aux_fan_override" if aux else "wave_floor_fan_override"]:
-            continue
-        percent = cfg["wave_floor_aux_fan_percent" if aux else "wave_floor_fan_percent"]
-        if aux:
-            old = previous_setting(lines, index, ("M106",), "S", lambda w: w.get("P") != 2) or 0.0
-            pre.append(f"M106 P2 S{round(percent * 2.55)}\n")
-            post.append(f"M106 P2 S{round(old)}\n")
-        else:
-            old = previous_setting(lines, index, ("M106", "M107"), "S", lambda w: "P" in w and w["P"] not in (0, 1)) or 0.0
-            pre.append(f"M106 S{round(percent * 2.55)}\n")
-            post.append(f"M106 S{round(old)}\n" if old else "M107\n")
+    for auxiliary in (False, True):
+        if cfg["wave_floor_aux_fan_override" if auxiliary else "wave_floor_fan_override"]:
+            begin, end = fan_override(lines, index, cfg["wave_floor_aux_fan_percent" if auxiliary else "wave_floor_fan_percent"], auxiliary)
+            pre.extend(begin)
+            post.extend(end)
     return pre, post
+
 
 def retime_feature(feature, lines, speed_for):
     """Rewrite feed rates of extruding moves. speed_for(move) -> mm/s or None (unchanged). Returns lines or None."""
@@ -1322,7 +1341,7 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), pos
             # Respect the filament's volumetric limit, as WaveOverhangs does (PR 115).
             speed = cfg["wave_speed_mm_s"]
             if printer.get("max_volumetric_speed"):
-                speed = min(speed, printer["max_volumetric_speed"] / cfg["wave_flow_mm3_per_mm"])
+                speed = min(speed, printer["max_volumetric_speed"] / (cfg["wave_flow_mm3_per_mm"] * printer["filament_flow_ratio"]))
             speed *= 60
         else:
             speed = max(cfg["minimum_arc_speed_mm_s"], min(cfg["arc_speed_mm_s"], arc.length / cfg["minimum_arc_time_s"])) * 60
@@ -1430,13 +1449,13 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
         return None
     if len({move.before.tool for move in moves}) != 1:
         return None
-    if any(command(lines[i])[0] not in ("", "G0", "G1", "G2", "G3", "M73", "G17") for i in range(feature.start, feature.end)):
+    first, last = strokes[0][0], strokes[-1][0]
+    if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
         return None
     # Orca writes ;TYPE before the retract/travel/unretract that opens a feature, so
-    # moves inside it are legitimately retracted. Only the boundaries and the
-    # extruding strokes must be unretracted for the replacement to be balanced.
-    if is_retracted(moves[0].before) or is_retracted(moves[-1].after) \
-            or any(is_retracted(move.before) or is_retracted(move.after) for move, _ in strokes):
+    # moves inside it are legitimately retracted. Only the replaced extrusion
+    # span must be unretracted; its approach and departure remain unchanged.
+    if any(is_retracted(move.before) or is_retracted(move.after) for move, _ in strokes):
         return None
     width = printer["outer_wall_line_width"]
     footprints = [line.buffer(width * 0.5) for _, line in strokes]
@@ -1451,11 +1470,16 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
     if not hilbert:
         return None
 
-    before, after = moves[0].before, moves[-1].after
+    before, after = first.before, last.after
     filament_area = math.pi * (printer["filament_diameter"] / 2) ** 2
     travel = cfg["travel_speed_mm_s"] * 60
-    hilbert_feed = feed * 60 if feed else max(60.0, strokes[0][0].before.feed)
-    out = ["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n", *pre]
+    hilbert_feed = feed * 60 if feed else max(60.0, first.after.feed)
+    # Keep the original approach and departure, including Z hops, firmware
+    # retracts and state commands outside the replaced extrusion span.
+    out = list(lines[feature.start:first.index])
+    out.extend(["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n", *pre])
+    out.extend(lines[i] for i in range(first.index, last.index + 1)
+               if command(lines[i])[0] in ("M204", "G17"))
     retract, retract_feed = cfg["retract_length_mm"], cfg["retract_speed_mm_s"] * 60
     def jump(x, y):
         if retract:
@@ -1486,15 +1510,18 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
             continue
         jump(*coords[0])
         out.append(f"G1 F{hilbert_feed:.1f}\n")
-        e_per_mm = (path_spacing * printer["layer_height"] / filament_area) * printer["filament_flow_ratio"]
+        e_per_mm = (path_spacing * density / 100.0 * printer["layer_height"] / filament_area) * printer["filament_flow_ratio"]
         for a, b in zip(coords, coords[1:]):
             distance = math.dist(a, b)
             if distance > 1e-8:
                 out.append(f"G1 X{b[0]:.5f} Y{b[1]:.5f} E{distance * e_per_mm:.7f}\n")
     jump(after.x, after.y)
     out.extend(post)
+    out.extend(lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M73")
     out.append(f"G92 E{after.e:.7f}\nG1 F{after.feed:.2f}\n")
+    out.extend(lines[last.index + 1:feature.end])
     return out
+
 
 def relocate_travel(target, cfg):
     """Restore the state needed by an unchanged block without extruding a path."""
@@ -1502,7 +1529,7 @@ def relocate_travel(target, cfg):
         raise UnsupportedGCode("Cannot safely relocate a retracted or unknown-position block.")
     retract = cfg["retract_length_mm"]
     feed = cfg["retract_speed_mm_s"] * 60
-    out = []
+    out = [text for _, text in target.modal]
     if retract:
         out.append(f"G1 E{-retract:.7f} F{feed:.2f}\n")
     out.append(f"G0 X{target.x:.5f} Y{target.y:.5f} Z{target.z:.5f} F{cfg['travel_speed_mm_s'] * 60:.2f}\n")
@@ -1512,15 +1539,14 @@ def relocate_travel(target, cfg):
     return out
 
 def schedule_arc_tails(lines, cfg, cancelled):
-    """Keep the slicer's order, except print overhang walls after the Arcs they rest on.
+    """Schedule support with either the compatible layer tail or the slicer order.
 
-    Arcs stay exactly where the Bridge they replace was. Normal walls and infill
-    are never moved, so Orca's wall/infill order setting ("infill first" etc.)
-    still decides how Arcs and walls interleave. Only overhang walls that the
-    slicer printed before the Arcs of the same layer/tool run are moved, to just
-    after the last Arc block. Tool-selection boundaries stay in place.
+    Tool-selection boundaries stay in place, including their purge macros.
     Every moved block retains its original start coordinates, feed and E state.
     """
+    # Emitters may return multiple physical lines per item. Parse G92 and
+    # its following feed restore separately before capturing any modal state.
+    lines = "".join(lines).splitlines(keepends=True)
     features = parse(lines, cancelled)
     moves = {m.index: m for f in features for m in f.moves}
     boundaries = [0]
@@ -1538,23 +1564,15 @@ def schedule_arc_tails(lines, cfg, cancelled):
         if line.strip() == MARKER + "BEGIN":
             start = index
         elif line.strip() == MARKER + "END" and start is not None:
-            block_moves = sorted((m for i, m in moves.items() if start <= i <= index), key=lambda m: m.index)
+            block_moves = [m for i, m in moves.items() if start <= i <= index]
             if not block_moves:
                 raise UnsupportedGCode("Arc block has no movement state.")
+            block_moves.sort(key=lambda m: m.index)
             key = window(start)
             if index >= key[1]:
                 raise UnsupportedGCode("Arc block crosses a tool or layer boundary.")
-            # The block ends with G92 E / G1 F that restore the pre-bridge extruder
-            # counter and feed; the last move's own state still holds Arc extrusion.
-            restored = replace(block_moves[-1].after)
-            for text in lines[start:index]:
-                cmd, words = command(text)
-                if cmd == "G92" and "E" in words:
-                    restored.e = words["E"]
-                elif cmd == "G1" and "F" in words and "X" not in words and "E" not in words:
-                    restored.feed = words["F"]
             groups.setdefault(key, {"arcs": [], "walls": []})["arcs"].append(
-                (start, index + 1, restored))
+                (start, index + 1, list(lines[start:index + 1]), block_moves[0].before, block_moves[-1].after))
             start = None
     for feature in features:
         if feature.role not in ("overhang wall", "overhang perimeter"):
@@ -1568,30 +1586,48 @@ def schedule_arc_tails(lines, cfg, cancelled):
             continue
         if last.index >= key[1]:
             raise UnsupportedGCode("Overhang wall crosses a tool or layer boundary.")
+        if any(command(lines[i])[0] not in KEPT_COMMANDS
+               for i in range(first.index, last.index + 1)):
+            raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
         raw = [lines[feature.start]] + list(lines[first.index:last.index + 1])
         groups[key]["walls"].append((first.index, last.index + 1, raw, first.before, last.after))
     edits = []
-    for group in groups.values():
-        arc_end, restore = max(group["arcs"], key=lambda arc: arc[1])[1:]
-        early = [wall for wall in group["walls"] if wall[0] < arc_end]
-        if not early:
-            continue
+    for (lo, hi), group in groups.items():
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        if cfg["print_order"] == "slicer":
+            last_arc = max(group["arcs"], key=lambda block: block[1])
+            insertion, restore = last_arc[1], last_arc[4]
+            blocks = [wall for wall in group["walls"] if wall[0] < insertion]
+            if not blocks:
+                continue
+        else:
+            blocks = group["arcs"] + group["walls"]
+            remaining = [m for i, m in moves.items() if lo <= i < hi and segment(m) is not None
+                         and not any(a <= i < b for a, b, *_ in blocks)]
+            if remaining:
+                anchor = max(remaining, key=lambda m: m.index)
+                insertion, restore = anchor.index + 1, anchor.after
+            else:
+                first_block = min(blocks, key=lambda b: b[0])
+                insertion, restore = first_block[0], first_block[3]
         tail = []
-        for start, end, raw, before, after in early:
+        for start, end, raw, before, after in blocks:
             if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
-                raise UnsupportedGCode("Cannot move an overhang wall across an active retraction or tool change.")
-            if before.tool != restore.tool or is_retracted(restore):
-                raise UnsupportedGCode("Overhang wall move would require an additional material change.")
-            if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(start, end)):
-                raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
-            edits.append((start, end, relocate_travel(after, cfg)))
+                raise UnsupportedGCode("Cannot move an Arc/overhang block across an active retraction or tool change.")
+            if before.tool != restore.tool:
+                raise UnsupportedGCode("Arc tail would require an additional material change.")
+            # Keep progress and acceleration state at the original location too.
+            kept = [line for line in raw if command(line)[0] in ("M73", "M204", "G17")]
+            edits.append((start, end, kept + relocate_travel(after, cfg)))
             tail.extend(relocate_travel(before, cfg))
-            tail.extend(raw)
+            tail.extend(line for line in raw if command(line)[0] != "M73")
         tail.extend(relocate_travel(restore, cfg))
-        edits.append((arc_end, arc_end, tail))
+        edits.append((insertion, insertion, tail))
     for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
         lines[start:end] = replacement
     return lines
+
 
 def floor_speed(cfg, k, override, original):
     """Speed (mm/s) for floor layer k >= 1, ramping linearly back to `original`; None = unchanged."""
@@ -1734,7 +1770,7 @@ def gallery_header(cfg, text=""):
 
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
-    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "skip_reasons": {}}
+    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "print_order": cfg["print_order"], "skip_reasons": {}}
     if not cfg["enabled"] or MARKER in text:
         return text, report
     lines = text.splitlines(keepends=True)
@@ -1821,7 +1857,9 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if not valid or not arcs:
             skipped("Insufficient area, anchoring or coverage")
             continue
-        pre, post = wave_wrappers(lines, first.index, arcs, cfg) if cfg["overhang_mode"] == "wave" else ((), ())
+        pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
+        accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M204"]
+        pre = [*pre, *accel]
         replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
                            if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
@@ -1925,9 +1963,10 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     except UnsupportedGCode as error:
         report["skip_reasons"]["Unsafe Arc tail scheduling: " + str(error)] = report["replaced_features"]
         report["skipped_features"] += report["replaced_features"]
-        report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = 0
+        report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = report["retimed_features"] = 0
+        report["minimum_coverage_percent"] = None
         return text, report
-    lines = "".join(lines).splitlines(keepends=True)  # replacement blocks hold several lines per item
+    lines = "".join(lines).splitlines(keepends=True)
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     return MARKER + VERSION + "\n" + gallery_header(cfg, text) + "".join(lines), report
 
@@ -2076,7 +2115,7 @@ HELP = {
     "wave_floor_print_speed_mm_s": "Speed of solid infill on the floor layers. 0 = unchanged.",
     "wave_floor_perimeter_speed_mm_s": "Speed of walls on the floor layers. 0 = unchanged.",
     "wave_floor_speed_ramp": "Floor layers over which the two floor speeds ramp back up to normal. 0 = no ramp.",
-    "wave_floor_use_hilbert": "Print the solid floor above waves as a Hilbert curve, which warps less.",
+    "wave_floor_use_hilbert": "Use an experimental Hilbert pattern for eligible solid floor infill above waves; print quality depends on the material and cooling.",
     "wave_floor_hilbert_layers": "How many of the floor layers use Hilbert. 0 = all of them.",
     "wave_floor_hilbert_density_percent": "Fill density of the Hilbert floor. 100 = solid.",
     "wave_floor_fan_override": "Force the part fan on the Hilbert floor layers (a low fan keeps them warm and reduces curl).",
@@ -2182,7 +2221,10 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <p id="last-report" role="status"></p><p class="notice">Inner wall overlap is the distance the Arc region can extend into printed walls. Larger values can reach inner wall lines. Arc spacing is independent: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
 <div id="settings"><label>Enable Arc Overhang<input id="enabled" type="checkbox"></label>
 <label>Overhang mode<span><select id="overhang_mode"><option value="arc">Arc (concentric arcs)</option><option value="wave">Wave (offset wavefronts)</option></select></span></label>
+<label>Print order<span><select id="print_order"><option value="layer_tail">Normal walls/infill → Arcs/Waves → Overhang walls (0.2.4)</option><option value="slicer">Keep slicer order; Overhang walls after Arcs/Waves</option></select></span></label>
+<p class="hint">The default keeps our previous order. The slicer option keeps normal walls and infill in their original places, including Print infill first. Both options stay within each layer and tool section.</p>
 <label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
+<p class="hint">Hilbert changes only eligible internal solid infill directly above replaced support. Top surfaces, sparse infill and bridges are kept. Reopen the exported G-code to see the result.</p>
 <details><summary>Import a WaveOverhangs profile</summary>
 <p>Take the values from a <b>waveoverhangs.com/gallery</b> entry (open a model, then copy from the page) or from the G-code you sliced with WaveOverhangs.</p>
 <ul>

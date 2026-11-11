@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.3.0  -  06.11.2026  -  experimentell
+Version 0.3.0  -  11.11.2026  -  experimentell
 
 Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 
@@ -112,14 +112,14 @@ Mehrmaterial mit regulären Werkzeugwechseln wird unterstuetzt. Vase-/Spiral-Mod
 IDEX, Werkzeugwechsel innerhalb eines Bridge-Abschnitts, volumetrische Extrusion
 werden nicht unterstuetzt. Parameterlose Firmware-Retraktion (G10/G11) wird unterstuetzt.
 
-Temperatur, Bauteilluefter, Aux-Luefter und Gehaeuseluefter werden nicht geaendert.
-Die am ersetzten Bridge-Abschnitt aktiven Werte gelten weiter.
+Standardmaessig gelten Temperatur und Luefterwerte des ersetzten Bridge-Abschnitts weiter. Im Wave-Modus sind optionale Temperatur-, Bauteil- und Aux-Luefter-Ueberschreibungen moeglich; die vorherigen Werte werden danach wiederhergestellt. Die Temperatur gehoert zum aktiven Werkzeug. Der Gehaeuseluefter bleibt unberuehrt.
 Die eingestellte Plugin-Retraktion muss zu deinem Drucker passen.
 Z-Hop waehrend der erzeugten Arc- und Wave-Fahrten ist mit der Einstellung z_hop_mm moeglich (Standard 0 = aus).
 
 ## Wichtige Einstellungen
 | Einstellung in der Maske | JSON-Schluessel | Standard | Wirkung |
 |---|---|---:|---|
+| Druckreihenfolge (Print order) | print_order | layer_tail | Bisherige Reihenfolge; alternativ slicer fuer Orcas Reihenfolge |
 | Arc-Geschwindigkeit | arc_speed_mm_s | 1.5 mm/s | Obergrenze der Geschwindigkeit auf Arc-Bahnen |
 | Minimale Arc-Geschwindigkeit | minimum_arc_speed_mm_s | 0.5 mm/s | Untergrenze fuer kurze Arcs |
 | Arc-Abstand / Duesendurchmesser | arc_spacing_nozzle_ratio | 0.95 | Bahnabstand als Faktor des Duesendurchmessers |
@@ -212,4 +212,9 @@ Quellen:
 - https://github.com/OrcaSlicer/OrcaSlicer/wiki/pages
 - https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.5.0-alpha/src/slic3r/plugin/pluginTypes/slicingPipeline/SlicingPipelinePluginCapability.cpp
 
-Druckreihenfolge auf betroffenen Schichten: normale Wände und Infill, danach Arcs, zuletzt Overhang-Walls. Vorhandene Werkzeugwechsel bleiben erhalten; die Reihenfolge wird innerhalb des jeweiligen Werkzeugabschnitts angewendet.
+Die Auswahl **Print order** bietet zwei Reihenfolgen:
+
+- **Normal walls/infill → Arcs/Waves → Overhang walls (0.2.4)**: bisherige Reihenfolge und Standard.
+- **Keep slicer order; Overhang walls after Arcs/Waves**: normale Waende und Infill behalten ihre Orca-Position. Nur Overhang-Waende, die vor der erzeugten Unterstuetzung lagen, werden dahinter verschoben. Damit wirkt auch Orcas "Print infill first" wieder.
+
+Beide Varianten bleiben innerhalb derselben Schicht und desselben Werkzeugabschnitts. Exportierten G-Code neu oeffnen, um die Auswahl zu kontrollieren.

@@ -115,14 +115,14 @@ class Tests(unittest.TestCase):
             source = source.replace(role + "Sparse infill", ring(11, 11, 18, 28, "Inner wall") + role + "Sparse infill")
             change = "; CHANGE_LAYER" if style == "modern" else ";LAYER_CHANGE"
             source += change + "\nG1 Z0.6\n" + ring(10, 10, 30, 30) + "M104 S0\n"
-            output, report = a.process_text(source)
+            output, report = a.process_text(source, {"print_order": "slicer"})
             self.assertEqual(report["replaced_features"], 1, report)
             self.assertLess(output.index(a.MARKER + "BEGIN"), output.rindex(change))
             self.assertTrue(output.endswith("M104 S0\n"))
             printed = [f for f in a.parse(output.splitlines(True)) if f.layer == 1
                        and any(a.segment(m) is not None for m in f.moves)]
             roles = [f.role for f in printed]
-            self.assertEqual(roles, ["outer wall", "bridge", "overhang wall", "inner wall", "sparse infill"][:0] or roles)
+            self.assertEqual(roles, ["outer wall", "bridge", "overhang wall", "inner wall", "sparse infill"])
             self.assertLess(roles.index("bridge"), roles.index("overhang wall"))
             # Normal features keep the slicer's relative order.
             self.assertEqual([r for r in roles if r not in ("bridge", "overhang wall")],
@@ -144,7 +144,7 @@ class Tests(unittest.TestCase):
         reordered = (layer2 + source[bridge_start:sparse]
                      + ring(11, 11, 18, 28, "Inner wall")
                      + source[walls_start:bridge_start] + source[sparse:])
-        output, report = a.process_text(reordered, {"minimum_coverage_percent": 80})
+        output, report = a.process_text(reordered, {"minimum_coverage_percent": 80, "print_order": "slicer"})
         self.assertEqual(report["replaced_features"], 1, report)
         printed = [f.role for f in a.parse(output.splitlines(True)) if f.layer == 1
                    and any(a.segment(m) is not None for m in f.moves)]
@@ -152,6 +152,154 @@ class Tests(unittest.TestCase):
         self.assertLess(printed.index("bridge"), printed.index("overhang wall"))
         # No relocation happened: the output carries no extra travel-only restore blocks.
         self.assertEqual(output.count("G92 E"), reordered.count("G92 E") + 1)
+
+    def test_normal_features_then_arcs_then_overhang_walls(self):
+        for style in ("modern", "legacy"):
+            source = fixture(style)
+            role = "; FEATURE: " if style == "modern" else ";TYPE:"
+            source = source.replace(role + "Sparse infill", ring(11, 11, 18, 28, "Inner wall") + role + "Sparse infill")
+            change = "; CHANGE_LAYER" if style == "modern" else ";LAYER_CHANGE"
+            source += change + "\nG1 Z0.6\n" + ring(10, 10, 30, 30) + "M104 S0\n"
+            output, report = a.process_text(source)
+            self.assertEqual(report["replaced_features"], 1, report)
+            self.assertLess(output.index(a.MARKER + "BEGIN"), output.rindex(change))
+            self.assertTrue(output.endswith("M104 S0\n"))
+            printed = [f for f in a.parse(output.splitlines(True)) if f.layer == 1
+                       and any(a.segment(m) is not None for m in f.moves)]
+            roles = [f.role for f in printed]
+            self.assertEqual(roles[-2:], ["bridge", "overhang wall"], roles)
+            self.assertIn("outer wall", roles[:-2])
+            self.assertIn("inner wall", roles[:-2])
+            self.assertIn("sparse infill", roles[:-2])
+            original_wall = [m for f in a.parse(source.splitlines(True)) if f.role == "overhang wall"
+                             for m in f.moves if a.segment(m) is not None]
+            moved_wall = [m for f in printed if f.role == "overhang wall"
+                          for m in f.moves if a.segment(m) is not None]
+            self.assertEqual([(list(a.segment(m).coords), m.delta_e) for m in original_wall],
+                             [(list(a.segment(m).coords), m.delta_e) for m in moved_wall])
+
+    def test_print_order_configuration_and_modes_with_infill_first(self):
+        self.assertEqual(a.DEFAULTS["print_order"], "layer_tail")
+        with self.assertRaises(ValueError):
+            a.configuration({"print_order": "unknown"})
+        self.assertIn('id="print_order"', a.config_page())
+        source = fixture()
+        bridge_start = source.index("; FEATURE: Bridge")
+        walls_start = source.index("; FEATURE: Overhang wall")
+        sparse = source.index("; FEATURE: Sparse infill")
+        source = (source[:walls_start] + source[bridge_start:sparse]
+                  + ring(11, 11, 18, 28, "Inner wall")
+                  + source[walls_start:bridge_start] + source[sparse:])
+        for mode, expected in (("layer_tail", ["outer wall", "inner wall", "sparse infill", "bridge", "overhang wall"]),
+                               ("slicer", ["outer wall", "bridge", "inner wall", "overhang wall", "sparse infill"])):
+            with self.subTest(mode=mode):
+                output, report = a.process_text(source, {"print_order": mode})
+                self.assertEqual(report["replaced_features"], 1, report)
+                roles = [f.role for f in a.parse(output.splitlines(True)) if f.layer == 1
+                         and any(a.segment(m) is not None for m in f.moves)]
+                self.assertEqual(roles, expected)
+
+    def test_both_print_orders_preserve_tool_runs_and_motion_state(self):
+        source = fixture().replace("; FEATURE: Sparse infill", "T1\n; FEATURE: Sparse infill")
+        source += "T0\n; FEATURE: Inner wall\nG1 X12 Y12 E.2 F1700\nM104 S0\n"
+        for mode in a.CHOICES["print_order"]:
+            with self.subTest(mode=mode):
+                output, report = a.process_text(source, {"print_order": mode})
+                self.assertEqual(report["replaced_features"], 1, report)
+                self.assertEqual([line for line in output.splitlines() if line.startswith("T")], ["T1", "T0"])
+                source_end = a.parse(source.splitlines(True))[-1].moves[-1].after
+                output_end = a.parse(output.splitlines(True))[-1].moves[-1].after
+                self.assertAlmostEqual(source_end.e, output_end.e, places=6)
+                self.assertEqual(a.replace(source_end, e=0), a.replace(output_end, e=0))
+                self.assertTrue(output.endswith("M104 S0\n"))
+
+    def test_hilbert_preserves_approach_departure_and_progress(self):
+        for prefix, suffix in (("G1 E-.8\nG1 Z.8\nG1 X20 Y12\nG1 Z.6\nG1 E.8\n", "G1 Z.8 F1500\n"),
+                               ("G10\nG1 Z.8\nG1 X20 Y12\nG1 Z.6\nG11\n", "G10\nG1 Z.8 F1500\n")):
+            source = ("G90\nM83\n; CHANGE_LAYER\nG1 Z.6\n; FEATURE: Internal solid infill\n"
+                      + prefix + "G1 X28 Y12 E.3 F2400\nM73 P25 R2\nG1 X28 Y18 E.3\n" + suffix)
+            lines = source.splitlines(True)
+            feature = a.parse(lines)[0]
+            replacement = a.hilbert_feature_replacement(feature, lines, a.Polygon([(19,10),(30,10),(30,20),(19,20)]),
+                         a.configuration(), a.printer_settings(fixture().splitlines()), lambda: False)
+            self.assertIsNotNone(replacement)
+            output = "".join(lines[:feature.start] + replacement)
+            actual = a.parse(output.splitlines(True))[-1].moves[-1].after
+            self.assertAlmostEqual(actual.e, feature.moves[-1].after.e, places=6)
+            self.assertEqual(a.replace(actual, e=0), a.replace(feature.moves[-1].after, e=0))
+            self.assertTrue(output.endswith(suffix))
+            self.assertEqual(output.count("M73 P25 R2"), 1)
+
+    def test_hilbert_lower_density_reduces_deposited_volume(self):
+        source = ("G90\nM83\n; CHANGE_LAYER\nG1 Z.6\n; FEATURE: Internal solid infill\n"
+                  "G1 X20 Y12 F1800\nG1 X28 Y12 E.3 F2400\nG1 X28 Y18 E.3\n")
+        lines = source.splitlines(True)
+        feature = a.parse(lines)[0]
+        printer = a.printer_settings(fixture().splitlines())
+        volumes = []
+        for density in (100, 25):
+            replacement = a.hilbert_feature_replacement(feature, lines, a.Polygon([(19,10),(30,10),(30,20),(19,20)]),
+                          a.configuration(), printer, lambda: False, density=density)
+            self.assertIsNotNone(replacement)
+            out = a.parse(("G90\nM83\n; CHANGE_LAYER\nG1 Z.6\n" + "".join(replacement)).splitlines(True))
+            volumes.append(sum(m.delta_e for f in out for m in f.moves if a.segment(m) is not None))
+        self.assertLess(volumes[1], volumes[0] * .5)
+
+    def test_relocation_restores_fans_temperature_acceleration_and_feed(self):
+        source = "M104 T0 S210\nM106 P1 S80\nM204 S1200\n" + fixture()
+        source = source.replace("; FEATURE: Sparse infill", "M104 T0 S220\nM106 P1 S160\nM204 S3000\n; FEATURE: Sparse infill")
+        source += "; FEATURE: Custom\nG1 F1300\n"
+        for mode in a.CHOICES["print_order"]:
+            with self.subTest(mode=mode):
+                output, report = a.process_text(source, {"print_order": mode})
+                self.assertEqual(report["replaced_features"], 1, report)
+                parsed = a.parse(output.splitlines(True))
+                actual, expected = parsed[-1].moves[-1].after, a.parse(source.splitlines(True))[-1].moves[-1].after
+                self.assertAlmostEqual(actual.e, expected.e, places=6)
+                self.assertEqual(a.replace(actual, e=0), a.replace(expected, e=0))
+                arc_move = next(m for f in parsed if f.role == "bridge" for m in f.moves if a.segment(m) is not None)
+                self.assertIn(("fan:1", "M106 P1 S80\n"), arc_move.before.modal)
+                self.assertIn(("temperature:0", "M104 T0 S210\n"), arc_move.before.modal)
+
+    def test_wave_override_uses_active_tool_and_original_fan_channel(self):
+        source = "T0\nM104 T0 S205\nM104 T1 S245\nM106 P1 S128\nM107 P2\n" + fixture()
+        output, report = a.process_text(source, {"overhang_mode": "wave", "print_order": "slicer",
+                         "wave_fan_override": True, "wave_fan_percent": 50, "wave_temperature_c": 220})
+        self.assertEqual(report["replaced_features"], 1, report)
+        block = output.split(a.MARKER + "BEGIN")[1].split(a.MARKER + "END")[0]
+        self.assertIn("M104 T0 S220", block)
+        self.assertIn("M104 T0 S205", block)
+        self.assertNotIn("M104 T0 S245", block)
+        self.assertIn("M106 P1 S127", block)
+        self.assertIn("M106 P1 S128", block)
+
+    def test_wave_volumetric_limit_includes_flow_ratio(self):
+        printer = a.printer_settings(fixture().splitlines())
+        printer.update(max_volumetric_speed=.3, filament_flow_ratio=2)
+        state = a.State(x=20, y=20, z=.4, relative_e=True)
+        out = "".join(a.emit_arcs([a.LineString([(20,20),(22,20)])], state, state,
+                       a.configuration({"overhang_mode":"wave", "wave_speed_mm_s":5}), printer))
+        self.assertIn("G1 F60.00", out)
+
+    def test_wave_guard_rejects_disconnected_or_uncovered_output(self):
+        poly = a.Polygon([(0,0),(10,0),(10,10),(0,10)])
+        support = a.Polygon([(0,0),(2,0),(2,10),(0,10)])
+        printer = a.printer_settings(fixture().splitlines())
+        cfg = a.configuration({"overhang_mode": "wave"})
+        for path in ([(8,5),(9,5)], [(2,5),(3,5)]):
+            # The generator's claimed swept area is not proof of printed coverage.
+            with self.subTest(path=path), patch.object(a, "wave_generate", return_value=([path], poly)):
+                self.assertIsNone(a.fill_polygon_wave(poly, support, cfg, printer, lambda:False))
+
+    def test_scheduler_normalizes_combined_feed_restore_lines(self):
+        output, report = a.process_text(fixture(), {"print_order":"slicer"})
+        self.assertEqual(report["replaced_features"], 1, report)
+        # The first sparse-infill travel omits F: it must inherit the original feed,
+        # not the plugin's retract or travel speed from before a combined G92/G1 item.
+        original = a.parse(fixture().splitlines(True))
+        printed = a.parse(output.splitlines(True))
+        get = lambda features: next(m.before.feed for f in features if f.role == "sparse infill" for m in f.moves)
+        self.assertEqual(get(original), get(printed))
 
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"
@@ -332,8 +480,8 @@ class Tests(unittest.TestCase):
         block = output[output.index(a.MARKER + "BEGIN"):output.index(a.MARKER + "END")]
         self.assertIn("M106 S255", block)
         self.assertIn("M106 S128", block)
-        self.assertIn("M104 S230", block)
-        self.assertIn("M104 S210", block)
+        self.assertIn("M104 T0 S230", block)
+        self.assertIn("M104 T0 S210", block)
         self.assertIn("G4 P", block)
         printer = a.printer_settings(fixture().splitlines())
         printer["max_volumetric_speed"] = 0.15
