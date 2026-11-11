@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.3.1)'
+        required: true
+        default: 'v0.3.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Artifacts & Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Build and run regression suite
+        run: |
+          python build_plugin.py
+          python tests.py
+          python test_audit.py
+          node test_tab.js
+          python package_release.py
+          python test_package.py
+
+      - name: Generate checksums
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Only the wheels package_release.py just built: dist/ also holds
+          # universal wheels from older versions committed on main.
+          sha256sum \
+            "dist/orca_arc_overhang-${version}-py3-none-any.whl" \
+            dist/orca_arc_overhang_*.whl \
+            "Arc_Overhang_OrcaSlicer_2.5_v${version}.zip" \
+            > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          # Stage this version's assets only: dist/ also holds universal
+          # wheels from older versions committed on main, and the tag has a
+          # "v" the wheel filename does not.
+          mkdir release-assets
+          cp \
+            "dist/orca_arc_overhang-${version}-py3-none-any.whl" \
+            dist/orca_arc_overhang_*.whl \
+            "Arc_Overhang_OrcaSlicer_2.5_v${version}.zip" \
+            SHA256SUMS.txt \
+            release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          draft: false
+          prerelease: false
