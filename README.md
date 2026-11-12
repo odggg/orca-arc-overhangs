@@ -38,6 +38,10 @@ All UI code and graphics were created for this project. See [UX design notes](do
 - Adjust inner wall overlap independently from Arc spacing.
 - Optionally select Hilbert infill for the next layer; the default keeps the slicer's pattern.
 
+## GitHub to OrcaCloud publishing
+
+Published stable GitHub releases can upload their exact universal WHL and release notes to OrcaCloud automatically. Connect the repository once in OrcaCloud; no stored API key is needed. See [publishing setup and manual validation](docs/GITHUB_PUBLISHING.md).
+
 ## Build and check
 
 Requires Python 3.12 and Node.js for the UI bridge check.
