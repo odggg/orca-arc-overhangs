@@ -29,20 +29,23 @@ publish anything. No plugin runtime or version change is part of this setup.
 ## Existing releases and verification
 
 Under GitHub **Actions → Publish to OrcaCloud → Run workflow**, choose `main` and
-enter an existing stable release tag. Enable **dry_run** to validate and download
-its asset without requesting an OrcaCloud identity or uploading anything.
-Disable it to publish that existing release after connecting the repository.
-This allows `v0.3.1` to be published without changing its existing tag or wheel.
+enter an existing stable release tag. This manual run only downloads and validates
+its asset. It has no OIDC permission and cannot upload to OrcaCloud.
+
+OrcaCloud requires a **release-event** identity. In our integration check, a manual
+upload of `v0.3.1` returned HTTP 401 despite obtaining a GitHub OIDC token. The
+workflow therefore deliberately restricts uploads to newly published releases.
+An older tag that predates this workflow is not moved or recreated to trigger it.
 
 A Cloud release must have a version greater than the current Cloud version.
-Repeating an already successful upload is rejected by OrcaCloud; do not delete or
-move tags to work around that rule. A successful upload returns HTTP 201. HTTP 401
-usually means the repository is not connected to exactly one OrcaCloud plugin.
-Check the workflow log and the plugin's public version after publishing.
+Repeating an already successful upload is rejected by OrcaCloud. A successful
+upload returns HTTP 201. HTTP 401 means the release identity or the repository's
+connection was rejected. Check the workflow log and the plugin's public version.
 
 ## Authentication and checks
 
-The job has only `contents: read` and `id-token: write`. GitHub's temporary job
+The publish job has only `contents: read` and `id-token: write`; manual validation
+has only `contents: read`. GitHub's temporary job
 identity is requested with audience `orcacloud` after validating the wheel.
 GitHub's automatic job token reads release metadata/assets; it is never sent to
 OrcaCloud or to a cross-host download redirect. Uploads are serialized and are

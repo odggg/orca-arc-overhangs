@@ -1,3 +1,12 @@
+# Release validation - 0.3.2 (2026-11-12)
+
+Publishing automation only: 14 standard-library tests cover release asset selection,
+wheel integrity, release-event authentication, secret redaction and redirects.
+The existing 0.3.1 GitHub wheel passed a real download/integrity dry run. Manual
+upload was rejected by OrcaCloud (HTTP 401); uploads now require a release event.
+The plugin source differs from 0.3.1 only in version metadata; existing regression,
+package and browser checks remain required for this release.
+
 # UI validation — 0.3.1 (2026-11-12)
 
 70 Python regressions, both configuration bridge checks, the restricted file-access

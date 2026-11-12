@@ -167,7 +167,7 @@ class PublishingTests(unittest.TestCase):
 
     def test_oidc_audience_and_missing_permissions(self):
         opener = Opener(b'{"value":"identity-secret"}')
-        client = p.Client({"ACTIONS_ID_TOKEN_REQUEST_URL": "https://example.test/token?a=1&audience=old",
+        client = p.Client({"GITHUB_EVENT_NAME": "release", "ACTIONS_ID_TOKEN_REQUEST_URL": "https://example.test/token?a=1&audience=old",
                            "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-secret"}, opener)
         self.assertEqual(client.oidc_token(), "identity-secret")
         request = opener.requests[0]
@@ -176,6 +176,15 @@ class PublishingTests(unittest.TestCase):
         self.assertEqual(client.safe("identity-secret request-secret"), "<redacted> <redacted>")
         with self.assertRaisesRegex(p.PublishError, "id-token"):
             p.Client({}, Opener()).oidc_token()
+
+    def test_manual_workflow_cannot_request_upload_identity(self):
+        opener = Opener()
+        client = p.Client({"GITHUB_EVENT_NAME": "workflow_dispatch",
+                           "ACTIONS_ID_TOKEN_REQUEST_URL": "https://example.test/token",
+                           "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-secret"}, opener)
+        with self.assertRaisesRegex(p.PublishError, "release-event"):
+            client.oidc_token()
+        self.assertEqual(opener.requests, [])
 
     def test_http_errors_redact_all_credentials(self):
         error = urllib.error.HTTPError(p.PUBLISH_URL, 401, "Unauthorized", {}, io.BytesIO(b"github-secret request-secret identity-secret"))

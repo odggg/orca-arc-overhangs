@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.3.1  -  12.11.2026  -  experimentell
+Version 0.3.2  -  12.11.2026  -  experimentell
 
 Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 

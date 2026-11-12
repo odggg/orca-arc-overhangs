@@ -90,6 +90,8 @@ class Client:
         credential = self.env.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
         if not url or not credential:
             raise PublishError("Publishing requires GitHub Actions with id-token: write. Use --dry-run for local checks.")
+        if self.env.get("GITHUB_EVENT_NAME") != "release":
+            raise PublishError("OrcaCloud publishing requires a release-event workflow; use --dry-run for manual checks.")
         parts = urllib.parse.urlsplit(url)
         if parts.scheme != "https":
             raise PublishError("The GitHub OIDC endpoint must use HTTPS.")

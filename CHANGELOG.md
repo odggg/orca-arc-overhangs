@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 - 2026-11-12
+- Automatically publish stable GitHub releases to the connected OrcaCloud plugin using GitHub OIDC; no stored OrcaCloud API key is required.
+- Upload only the exact universal `py3-none-any` WHL attached to the release, with its version and changelog.
+- Verify package size, SHA-256 checksum, embedded version, wheel tag and RECORD integrity before upload.
+- Add manual release-asset validation without uploading and document the publishing setup.
+- Add 14 publishing regression tests. No toolpath, print-order, settings or UI behavior changes from 0.3.1.
+
 ## 0.3.1 — 2026-11-12
 - Add an original graphical workbench with Overview, Fine tuning and How it works.
 - Show simplified, bounded support paths from the last export as a local 2D snapshot; keep the explanatory schematic separate.
