@@ -29,7 +29,7 @@ header = '''# /// script
 # name = "Arc Overhang"
 # description = "Concentric arc overhangs for OrcaSlicer 2.5. GPL-3.0; based on Kelsch, Nicolai Wachenschwan and Steven McCulloch."
 # author = "Kelsch / Nicolai Wachenschwan / Steven McCulloch; Orca 2.5 adaptation"
-# version = "0.3.0"
+# version = "0.3.1"
 # ///
 """Arc Overhang for OrcaSlicer 2.5. Modified 2026-10-24.
 GPL-3.0, no warranty. See LICENSE in the source distribution.
@@ -57,7 +57,11 @@ from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 out = ROOT / 'dist'
 out.mkdir(exist_ok=True)
 adapter = (ROOT / 'adapter.py.in').read_text(encoding='utf-8')
-source = header + geometry + '\n\n' + adapter
+template = (ROOT / 'ui/config.html').read_text(encoding='utf-8')
+styles = (ROOT / 'ui/styles.css').read_text(encoding='utf-8')
+script = (ROOT / 'ui/config.js').read_text(encoding='utf-8')
+template = template.replace('__STYLES__', styles).replace('__SCRIPT__', script)
+source = header + geometry + '\n\nUI_TEMPLATE = ' + repr(template) + '\n\n' + adapter
 (out / 'arc_overhang.py').write_text(source, encoding='utf-8', newline='\n')
 mirrors = ROOT / 'src'
 mirrors.mkdir(exist_ok=True)

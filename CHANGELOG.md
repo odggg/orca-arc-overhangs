@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 — 2026-11-12
+- Add an original graphical workbench with Overview, Fine tuning and How it works.
+- Show simplified, bounded support paths from the last export as a local 2D snapshot; keep the explanatory schematic separate.
+- Preserve all 60 configuration controls and existing defaults while showing mode-specific settings.
+- Add draft-state handling, stale-settings notices, read-only feedback, accessible focus and a responsive light/dark layout with a sticky save bar.
+- Keep preview geometry out of pipeline result logs; a snapshot failure does not fail or change G-code generation.
+- Verify the Arc/Wave output against 0.3.0 in both print orders, apart from version comments.
+- Add rendered browser checks alongside native-bridge, engine and restricted-file-access tests.
+- Build one universal any wheel for new versions.
+
 ## 0.3.0 — 2026-11-11
 - Add a **Print order** dropdown. Default `layer_tail` retains the 0.2.4 sequence: normal walls/infill → Arcs/Waves → Overhang walls. Optional `slicer` retains Orca's normal wall/infill order, including "Print infill first".
 - In `slicer` order only early Overhang walls move after the last generated support block of that layer/tool run. Layer and tool-selection boundaries stay fixed.

@@ -1,4 +1,4 @@
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
@@ -1539,6 +1539,43 @@ def gallery_header(cfg, text=""):
             + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
                        for key, value in fields) + gallery_print_profile(text) + "\n")
 
+def export_preview(records, cfg):
+    """Bounded, simplified snapshot for the local UI; never used to generate G-code."""
+    layers, used = [], 0
+    limited = False
+    for layer, z, tool, mode, paths, contour in records:
+        if len(layers) >= 8 or used >= 10000:
+            limited = True
+            break
+        entry = {"layer": layer + 1, "z": round(z, 4), "tool": tool,
+                 "mode": mode, "paths": [], "outlines": []}
+        for line in paths:
+            if len(entry["paths"]) >= 240 or used >= 10000:
+                limited = True
+                break
+            coords = list(line.simplify(0.04, preserve_topology=False).coords)
+            if len(coords) > 96:
+                coords = [coords[round(i * (len(coords) - 1) / 95)] for i in range(96)]
+                limited = True
+            if used + len(coords) > 10000:
+                limited = True
+                break
+            entry["paths"].append([[round(x, 4), round(y, 4)] for x, y in coords])
+            used += len(coords)
+        outline_budget = 1024
+        for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
+            for ring in [poly.exterior, *poly.interiors]:
+                coords = list(ring.coords)
+                if len(coords) > outline_budget:
+                    limited = True
+                    continue
+                entry["outlines"].append([[round(x, 4), round(y, 4)] for x, y in coords])
+                outline_budget -= len(coords)
+        if entry["paths"]:
+            layers.append(entry)
+    return {"schema": 1, "layers": layers, "limited": limited, "settings": dict(cfg)}
+
+
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
     report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "print_order": cfg["print_order"], "skip_reasons": {}}
@@ -1559,6 +1596,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         by_layer.setdefault(feature.layer, []).append(feature)
     shapes = {}
     replacements = []
+    preview_records = []
     hilbert_targets = {}
     wave_mode = cfg["overhang_mode"] == "wave"
     wave_regions = {}
@@ -1635,6 +1673,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
                            if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
+        if len(preview_records) < 8:
+            preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], arcs, current))
         for k in range(1, hilbert_layers + 1):
             hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
         if wave_mode:
@@ -1739,6 +1779,13 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         return text, report
     lines = "".join(lines).splitlines(keepends=True)
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
+    try:
+        report["preview"] = export_preview(preview_records, cfg)
+        report["preview"]["limited"] |= report["replaced_features"] > len(report["preview"]["layers"])
+    except Exception:
+        # A presentation failure must not turn a successful G-code export into
+        # a failed print export. Do not log geometry or source paths here.
+        report["preview_error"] = "Support was generated, but its UI snapshot is unavailable."
     return MARKER + VERSION + "\n" + gallery_header(cfg, text) + "".join(lines), report
 
 def process_file(path, overrides=None, resolved=None, cancelled=lambda: False):
@@ -1958,151 +2005,45 @@ def config_page(as_tab=False):
         ("z_min_mm", "Minimum Z", "mm"),
         ("z_max_mm", "Maximum Z", "mm"),
     ]
-    names = {target if isinstance(target, str) else target[1]: "wave_overhang_" + orca for orca, (target, _) in WAVE_IMPORT.items()}
-    def row(key, label, unit):
+    def escape(value):
+        return (str(value).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))
+    names = {target if isinstance(target, str) else target[1]: "wave_overhang_" + source
+             for source, (target, _) in WAVE_IMPORT.items()}
+    quick = {"arc_speed_mm_s", "arc_spacing_nozzle_ratio", "wall_overlap_mm",
+             "wave_speed_mm_s", "wave_line_spacing_mm", "wave_flow_mm3_per_mm"}
+    groups = {name: [] for name in ("arc_quick", "wave_quick", "anchor_quick", "arc", "wave", "floor", "shared")}
+    section = "arc"
+    for key, label, unit in fields:
         if key is None:
-            return f"<h3>{label}</h3>"
+            section = {"Arc mode": "arc", "Wave mode": "wave", "Wave floor (layers above the waves)": "floor", "Both modes": "shared"}[label]
+            continue
+        unit = unit.replace("mm3", "mm³").replace("mm2", "mm²")
         if unit == "bool":
-            control = f'<input id="{key}" type="checkbox">'
+            control = f'<input id="{key}" type="checkbox" aria-describedby="help-{key}">'
         elif unit == "select":
             options = "".join(f'<option value="{c}">{c.capitalize()}</option>' for c in CHOICES[key])
-            control = f'<span><select id="{key}">{options}</select></span>'
+            control = f'<select id="{key}" aria-describedby="help-{key}">{options}</select>'
         else:
-            control = f'<span><input id="{key}" name="{key}" type="number" step="any" min="0" required> {unit}</span>'
+            step = "1" if isinstance(DEFAULTS[key], int) else "any"
+            control = f'<div class="number-control"><input id="{key}" name="{key}" type="number" step="{step}" min="0" required aria-describedby="help-{key}"><span>{unit}</span></div>'
         hint = HELP.get(key, "")
-        if key in names:
-            hint = (hint + " " if hint else "") + f"(WaveOverhangs: {names[key]})"
-        return f'<label>{label}{control}</label>' + (f'<div class="hint">{hint}</div>' if hint else "")
-    rows = "".join(row(*field) for field in fields)
-    page = r"""<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arc Overhang</title>
-<style>
-:root{color-scheme:light dark;font:14px system-ui,sans-serif}body{max-width:780px;margin:24px auto;padding:0 20px}
-h1{font-size:26px;margin-bottom:8px}p{line-height:1.5;color:light-dark(#555,#aaa)}
-label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #8884}
-input[type=number],select{min-width:180px;padding:7px;border:1px solid #8886;border-radius:5px;font:inherit}
-button{padding:10px 17px;border:0;border-radius:5px;background:#147c60;color:white;cursor:pointer;font:inherit;margin:18px 12px 0 0}
-#status{margin-left:12px}summary{cursor:pointer;margin-top:20px;font-weight:600}.notice{padding:12px;background:#8881;border-radius:6px}
-small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
-.hint{font-size:12px;color:light-dark(#555,#aaa);padding:2px 0 8px}textarea{width:100%;min-height:90px;box-sizing:border-box;font:12px monospace}
-</style><h1>Arc Overhang</h1>
-<p>Concentric arc toolpaths (Arc mode) or wavefront lines (Wave mode) for flat overhangs. Applied during G-code export.</p>
-<p class="notice"><b>Applies to both modes:</b> the plugin only replaces extrusions that Orca labels <b>Bridge</b> or <b>Internal Bridge</b>. In Orca's Quality tab, Overhangs section, turn <b>off "Extra perimeters on overhangs"</b>; otherwise Orca fills overhangs with extra walls ("Overhang wall") and the plugin finds no bridge to replace. Also set <b>"Bridge counterbore holes"</b> to <b>None</b>: "Partially bridged" makes Orca print supported straight strips that are left as they are. Slice, check the Preview for light-blue Bridge lines, then export.</p>
-<p id="last-report" role="status"></p><p class="notice">Inner wall overlap is the distance the Arc region can extend into printed walls. Larger values can reach inner wall lines. Arc spacing is independent: 0.5 with a 0.4 mm nozzle gives 0.2 mm spacing.</p>
-<div id="settings"><label>Enable Arc Overhang<input id="enabled" type="checkbox"></label>
-<label>Overhang mode<span><select id="overhang_mode"><option value="arc">Arc (concentric arcs)</option><option value="wave">Wave (offset wavefronts)</option></select></span></label>
-<label>Print order<span><select id="print_order"><option value="layer_tail">Normal walls/infill → Arcs/Waves → Overhang walls (0.2.4)</option><option value="slicer">Keep slicer order; Overhang walls after Arcs/Waves</option></select></span></label>
-<p class="hint">The default keeps our previous order. The slicer option keeps normal walls and infill in their original places, including Print infill first. Both options stay within each layer and tool section.</p>
-<label>Infill on next layer<span><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern</option><option value="hilbert">Hilbert curve (slower)</option></select></span></label>
-<p class="hint">Hilbert changes only eligible internal solid infill directly above replaced support. Top surfaces, sparse infill and bridges are kept. Reopen the exported G-code to see the result.</p>
-<details><summary>Import a WaveOverhangs profile</summary>
-<p>Take the values from a <b>waveoverhangs.com/gallery</b> entry (open a model, then copy from the page) or from the G-code you sliced with WaveOverhangs.</p>
-<ul>
-<li><b>Usable:</b> the "View Orca config block" text (lines like <code>; wave_overhang_line_spacing = 0.35</code>), the "View WaveOverhangs debug header" text (the <code>WAVE_OVERHANG_CONFIG</code> line), or a profile JSON containing <code>wave_overhang_*</code> keys. Paste the whole block; only the wave settings are picked up.</li>
-<li><b>Ignored:</b> everything else (printer, filament, speeds of normal features, walls, infill). Set those in Orca as usual. Wave settings with no plugin equivalent are listed after importing.</li>
-</ul>
-<p>Import fills in the fields below and switches the mode to Wave. Press Save settings to keep them.</p>
-<textarea id="import_text" placeholder="; wave_overhang_line_spacing = 0.35"></textarea><br><button id="import" type="button">Import pasted values</button></details>
-__ROWS__
-<button id="save" type="button">Save settings</button><button id="refresh" type="button">Refresh</button><span id="status" role="status" style="margin-left:6px"></span>
-</div><small>Version 0.3.0  -  GPL-3.0  -  No warranty. Algorithm: Steven McCulloch, Nicolai Wachenschwan and Kelsch. Orca 2.5 adaptation dated 2026-10-24.</small>
-<script>
-const defaults = __DEFAULTS__;
-const IMPORT = __IMPORT__;
-const ALIASES = __ALIASES__;
-const fields = Object.keys(defaults);
-const status = document.getElementById('status');
-// Unsaved edits survive tab switches: keep a draft and never overwrite it on refocus.
-const DRAFT='arc_overhang_draft';
-let draft=null;
-try{draft=JSON.parse(localStorage.getItem(DRAFT)||'null');}catch(e){}
-function collect(){
-  const values={};
-  for(const key of fields){
-    const el=document.getElementById(key);
-    if(!el) continue;
-    values[key]=typeof defaults[key]==='boolean'?el.checked:(typeof defaults[key]==='string'?el.value:Number(el.value));
-  }
-  return values;
-}
-function remember(){
-  draft=collect();
-  try{localStorage.setItem(DRAFT,JSON.stringify(draft));}catch(e){}
-  status.textContent='Unsaved changes.';
-}
-function forget(){draft=null;try{localStorage.removeItem(DRAFT);}catch(e){}}
-async function initialize(discard){
-  if(discard===true) forget();
-  else if(draft && document.getElementById(fields[0]).dataset.ready) return;
-  try {
-    let saved = await settingsBridge.getConfig();
-    if(typeof saved === 'string') saved = JSON.parse(saved);
-    const values = {...defaults,...(saved||{}),...(draft||{})};
-    for(const key of fields){
-      const el=document.getElementById(key);
-      if(!el) continue;
-      if(typeof defaults[key]==='boolean') el.checked=values[key]; else el.value=values[key];
-      el.dataset.ready='1';
-    }
-    if(draft) status.textContent='Unsaved changes.';
-  }catch(error){status.textContent='Could not load settings: '+error.message;}
-}
-document.getElementById('save').onclick=async()=>{
-  const values={};
-  for(const key of fields){
-    const el=document.getElementById(key);
-    if(!el) continue;
-    values[key]=typeof defaults[key]==='boolean'?el.checked:(typeof defaults[key]==='string'?el.value:Number(el.value));
-    if(typeof values[key]==='number'&&!Number.isFinite(values[key])){status.textContent='Please enter valid numbers.';return;}
-  }
-  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s){status.textContent='Minimum speed must not exceed maximum arc speed.';return;}
-  if(values.z_min_mm>values.z_max_mm){status.textContent='Invalid Z range.';return;}
-  try{
-    const ok=await settingsBridge.saveConfig(values);
-    if(ok!==false) forget();
-    status.textContent=ok===false?'Save failed.':
-      (ok && ok.preset_override_active ? 'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.' : 'Saved.');
-  }catch(error){status.textContent='Save failed: '+error.message;}
-};
-function importProfile(text){
-  const marker={}, explicit={}, prefixed=new Set(), ignored=[];
-  for(const line of text.split(/\r?\n/)){
-    if(line.includes('WAVE_OVERHANG_CONFIG')) for(const m of line.matchAll(/(\w+)=(\S+)/g)) marker[ALIASES[m[1]]||m[1]]=m[2];
-    for(const m of line.matchAll(/wave_overhang_(\w+?)["']?\s*[:=]\s*["']?([^\s"',;]+)/g)){explicit[m[1]]=m[2];prefixed.add(m[1]);}
-  }
-  const found={...marker,...explicit}, values={overhang_mode:'wave'};
-  for(const [key,raw] of Object.entries(found)){
-    const spec=IMPORT[key];
-    if(!spec){ if(prefixed.has(key) && !['min_angle','spacing_mode','seam_mode','debug_gcode','outer_perimeters'].includes(key)) ignored.push('wave_overhang_'+key); continue; }
-    const [target,kind]=spec, number=Number(raw);
-    if(kind==='text'){ if(['smart','zigzag','monotonic'].includes(raw.toLowerCase())) values[target]=raw.toLowerCase(); else ignored.push('wave_overhang_'+key); }
-    else if(kind==='bool') values[target]=['1','true'].includes(raw.toLowerCase());
-    else if(!Number.isFinite(number)) ignored.push('wave_overhang_'+key);
-    else if(kind==='fan'){ values[target[0]]=number>=0; values[target[1]]=Math.max(0,number); }
-    else values[target]=number;
-  }
-  return {values,ignored};
-}
-document.getElementById('import').onclick=()=>{
-  const {values,ignored}=importProfile(document.getElementById('import_text').value||'');
-  const count=Object.keys(values).length-1;
-  if(!count){status.textContent='No wave_overhang_ settings found in the pasted text.';return;}
-  for(const [key,value] of Object.entries(values)){
-    const el=document.getElementById(key);
-    if(!el) continue;
-    if(typeof value==='boolean') el.checked=value; else el.value=value;
-  }
-  remember();
-  document.getElementById('import_text').value='';
-  status.textContent='Imported '+count+' settings; press Save to keep them.'+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
-};
-document.getElementById('refresh').onclick=()=>initialize(true);
-document.getElementById('settings').addEventListener('input',remember);
-document.getElementById('settings').addEventListener('change',remember);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden) initialize();});
-initialize();
-</script></html>"""
+        if key == "arc_speed_mm_s":
+            hint = "Upper speed limit. Short arcs can print more slowly to allow cooling."
+        elif key == "arc_spacing_nozzle_ratio":
+            hint = "Distance between paths as a nozzle factor. 0.5 with a 0.4 mm nozzle means 0.2 mm spacing."
+        elif key == "wall_overlap_mm":
+            hint = "How far support can reach into the wall region. Can extend across multiple wall lines; 0 adds no overlap."
+        row = (f'<div class="field" data-field="{key}"><label for="{key}">{escape(label)}</label>{control}'
+               f'<p class="field-help" id="help-{key}">{escape(hint)}</p></div>')
+        group = "anchor_quick" if key == "wall_overlap_mm" else section + "_quick" if key in quick else section
+        groups[group].append(row)
+    # Retain the legacy ratio setting in the expert controls as well: no saved
+    # configuration key silently disappears when the UI is simplified.
+    groups["wave"].append('<div class="field" data-field="wave_spacing_nozzle_ratio"><label for="wave_spacing_nozzle_ratio">Fallback spacing / nozzle</label><div class="number-control"><input id="wave_spacing_nozzle_ratio" type="number" min="0.1" max="1.5" step="any"><span>factor</span></div><p class="field-help">Used only when Wave line spacing is 0.</p></div>')
+    page = UI_TEMPLATE
+    for name, rows in groups.items():
+        page = page.replace("__" + name.upper() + "__", "".join(rows))
     bridge = r"""
 let saving = null;
 const settingsBridge = {
@@ -2155,17 +2096,18 @@ const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
     const report=response.last_report;
-    document.getElementById('last-report').textContent=report ?
-      (report.error ? 'Last export: '+report.error :
-       'Last export: '+report.replaced_features+' bridges replaced, '+report.generated_arcs+' arc toolpaths, '+(report.hilbert_features||0)+' Hilbert infill features, '+report.skipped_features+' skipped. '+JSON.stringify(report.skip_reasons||{})) :
-      'No export with this plugin version yet.';
+    renderReport(report);
     return response.config;
   },
   saveConfig:config=>requestSettings('save',config)
 };
 """
-        page = page.replace('<div id="settings">', '<p>This page shows settings for the active preset. Saving updates global defaults; existing preset overrides still take precedence.</p><div id="settings">')
-    return page.replace("__ROWS__", rows).replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT)).replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("<script>", "<script>" + bridge, 1)
+    context = ("You are editing global defaults for the active preset. Existing preset overrides take precedence."
+               if as_tab else "Settings belong to this Orca plugin configuration. Save your process preset after editing.")
+    return (page.replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT))
+            .replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("__VERSION__", VERSION)
+            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge))
+
 
 
 # The engine can be tested from a normal Python interpreter; Orca registers it here.
@@ -2207,7 +2149,7 @@ if orca is not None:
                 _last_report = dict(report)
                 message = f"Arc Overhang: {report['replaced_features']} features, {report['generated_arcs']} arcs, {report['skipped_features']} skipped."
                 print(message)
-                return orca.ExecutionResult.success(message, json.dumps(report))
+                return orca.ExecutionResult.success(message, json.dumps({k: v for k, v in report.items() if k != "preview"}))
             except Cancelled:
                 return orca.ExecutionResult.skipped("Arc Overhang cancelled; G-code unchanged.")
             except Exception as error:

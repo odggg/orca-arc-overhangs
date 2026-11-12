@@ -4,7 +4,7 @@ permissions:
   contents: read
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: pnpm/action-setup@v4
       - run: python -m pip install -r requirements-dev.txt
       - run: python build_plugin.py
       - run: python tests.py
@@ -20,7 +21,10 @@ jobs:
       - run: node test_tab.js
       - run: python package_release.py
       - run: python test_package.py
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:ui
       - uses: actions/upload-artifact@v4
         with:
-          name: arc-overhang-v0.3.0
-          path: Arc_Overhang_OrcaSlicer_2.5_v0.3.0.zip
+          name: arc-overhang-v0.3.1
+          path: Arc_Overhang_OrcaSlicer_2.5_v0.3.1.zip
