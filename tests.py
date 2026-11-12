@@ -583,6 +583,57 @@ class Tests(unittest.TestCase):
         self.assertEqual(ignored, ["wave_overhang_mystery"])  # the other new keys do nothing in WaveOverhangs
         a.configuration(values)
 
+    def test_import_gallery_wave_settings_section(self):
+        # Rendered "Wave settings" block of a waveoverhangs.com entry (labels, values on the next line)
+        text = """### Wave settings
+
+**Wave perimeters**
+: \\-
+
+**Line spacing**
+: 0\\.35 mm
+
+**Wave flow**
+: 0.15 mm³/mm
+
+**Print speed**: 2 mm/s
+
+**Travel speed**
+: 40 mm/s
+
+**Fan speed**
+: 100 %
+
+**Floor layers**
+: 2
+
+**Replace bridges**
+: no
+"""
+        values, ignored = a.import_wave_profile(text)
+        self.assertEqual(values["overhang_mode"], "wave")
+        self.assertEqual(values["wave_line_spacing_mm"], 0.35)
+        self.assertEqual(values["wave_flow_mm3_per_mm"], 0.15)
+        self.assertEqual(values["wave_speed_mm_s"], 2.0)
+        self.assertEqual(values["wave_travel_speed_mm_s"], 40.0)
+        self.assertEqual((values["wave_fan_override"], values["wave_fan_percent"]), (True, 100.0))
+        self.assertEqual(values["wave_floor_layers"], 2.0)
+        self.assertFalse(values["wave_instead_of_bridges"])
+        self.assertEqual(ignored, [])
+        a.configuration(values)
+        # Browser copy of the gallery <dl>: labels and values on their own lines, no ":" prefix.
+        plain_copy = "Wave settings\nWave perimeters\n-\nLine spacing\n0.35 mm\nFan speed\n100 %\nReplace bridges\nno\n"
+        values, ignored = a.import_wave_profile(plain_copy)
+        self.assertEqual(values["wave_line_spacing_mm"], 0.35)
+        self.assertEqual((values["wave_fan_override"], values["wave_fan_percent"]), (True, 100.0))
+        self.assertFalse(values["wave_instead_of_bridges"])
+        self.assertEqual(ignored, [])
+        # A config block sliced by this plugin carries no wave settings: only the marker line
+        # of a print that kept its header can be read, and plain config text reads as nothing.
+        plain = "; accel_to_decel_enable = 1\n; plugins = \"orca_arc_overhang-0.3.0-py3-none-any\"\n"
+        values, ignored = a.import_wave_profile(plain)
+        self.assertEqual(values, {"overhang_mode": "wave"})
+
     def test_wave_aux_fan_and_acceleration_inside_bridge(self):
         source = fixture().replace("G1 X19 Y10.5 F1800\n", "G1 X19 Y10.5 F1800\nM204 S2500\n", 1)
         output, report = a.process_text(source, {"overhang_mode": "wave", "minimum_coverage_percent": 80,

@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.3.0 — 2026-11-11
+- Profile import reads the rendered **Wave settings** section of a waveoverhangs.com gallery entry (labels with the value below or beside them, with or without a ":" prefix), the way a browser copy of the page arrives.
+- Failed import now explains why: a config block of a print sliced by this plugin carries no `wave_overhang_*` keys (its values are only in the `WAVE_OVERHANG_CONFIG` debug header), so the message points to the debug header instead of only saying nothing was found; the pasted text is kept.
 - Add a **Print order** dropdown. Default `layer_tail` retains the 0.2.4 sequence: normal walls/infill → Arcs/Waves → Overhang walls. Optional `slicer` retains Orca's normal wall/infill order, including "Print infill first".
 - In `slicer` order only early Overhang walls move after the last generated support block of that layer/tool run. Layer and tool-selection boundaries stay fixed.
 - Fix the extruder counter and feed restored after relocated blocks (previously taken before the block's final reset).

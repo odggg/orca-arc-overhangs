@@ -2045,13 +2045,49 @@ WAVE_MARKER_ALIASES = {
     "corner_spacing": "line_spacing_corner", "corner_taper": "corner_taper_distance",
     "corner_angle": "corner_angle_threshold", "end_retract": "end_retract_length", "nozzle_temp_override": "nozzle_temp",
 }
+# Labels of the rendered "Wave settings" list on a waveoverhangs.com gallery entry, mapped to
+# WAVE_OVERHANG_CONFIG key names. "Wave perimeters" has no plugin equivalent and is left out.
+WAVE_GALLERY_LABELS = {
+    "line spacing": "line_spacing", "wave flow": "flow_mm3_per_mm", "print speed": "print_speed",
+    "travel speed": "travel_speed", "fan speed": "fan_speed", "floor layers": "floor_layers",
+    "replace bridges": "instead_of_bridges",
+}
+
+def gallery_wave_values(text):
+    """Read the rendered "Wave settings" section of a gallery entry (label lines, value below or after)."""
+    values = {}
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        label = line.replace("*", "").strip()
+        match = next((key for name, key in WAVE_GALLERY_LABELS.items() if label.lower() == name), None)
+        value = lines[index + 1] if match is not None and index + 1 < len(lines) else ""
+        if match is None:  # "Print speed: 2 mm/s" or "Print speed 2 mm/s" on one line
+            for name, key in WAVE_GALLERY_LABELS.items():
+                if label.lower().startswith(name):
+                    match = key
+                    value = label.split(":", 1)[1] if ":" in label else label[len(name):]
+                    break
+        if match is None:
+            continue
+        token = value.replace("\\.", ".").replace("*", "").strip().lstrip(":").strip().split()
+        token = token[0] if token else ""
+        if token.lower() in ("yes", "no"):
+            token = "1" if token.lower() == "yes" else "0"
+        else:
+            try:
+                float(token)
+            except ValueError:  # "-", a missing value or an unreadable unit
+                continue
+        values[match] = token
+    return values
 
 def import_wave_profile(text):
-    """Read WaveOverhangs settings from G-code comments, a profile/JSON or a gallery config line.
+    """Read WaveOverhangs settings from G-code comments, a profile/JSON or a gallery entry.
 
     Returns (plugin settings, names that have no plugin equivalent)."""
     marker, found = {}, {}
     prefixed = set()
+    gallery = gallery_wave_values(text)
     for line in text.splitlines():
         if "WAVE_OVERHANG_CONFIG" in line:
             for key, value in re.findall(r"(\w+)=(\S+)", line):
@@ -2059,7 +2095,7 @@ def import_wave_profile(text):
         for key, value in re.findall(r"wave_overhang_(\w+?)[\"']?\s*[:=]\s*[\"']?([^\s\"',;]+)", line):
             found[key] = value
             prefixed.add(key)
-    found = {**marker, **found}  # explicit wave_overhang_ lines beat the one-line summary
+    found = {**gallery, **marker, **found}  # gallery < debug header < explicit wave_overhang_ lines
     values, ignored = {"overhang_mode": "wave"}, []
     for key, raw in found.items():
         if key not in WAVE_IMPORT:
@@ -2228,7 +2264,7 @@ small{display:block;margin:20px 0;color:light-dark(#555,#aaa)}
 <details><summary>Import a WaveOverhangs profile</summary>
 <p>Take the values from a <b>waveoverhangs.com/gallery</b> entry (open a model, then copy from the page) or from the G-code you sliced with WaveOverhangs.</p>
 <ul>
-<li><b>Usable:</b> the "View Orca config block" text (lines like <code>; wave_overhang_line_spacing = 0.35</code>), the "View WaveOverhangs debug header" text (the <code>WAVE_OVERHANG_CONFIG</code> line), or a profile JSON containing <code>wave_overhang_*</code> keys. Paste the whole block; only the wave settings are picked up.</li>
+<li><b>Usable:</b> the entry's <b>Wave settings</b> section (copy the labels and values, <code>Line spacing : 0.35 mm</code>), the "View Orca config block" text of a fork-sliced print (lines like <code>; wave_overhang_line_spacing = 0.35</code>), the "View WaveOverhangs debug header" text (the <code>WAVE_OVERHANG_CONFIG</code> line), or a profile JSON containing <code>wave_overhang_*</code> keys. Paste the whole thing; only the wave settings are picked up. A config block of a print sliced by this plugin has no wave settings: its values are in the debug header.</li>
 <li><b>Ignored:</b> everything else (printer, filament, speeds of normal features, walls, infill). Set those in Orca as usual. Wave settings with no plugin equivalent are listed after importing.</li>
 </ul>
 <p>Import fills in the fields below and switches the mode to Wave. Press Save settings to keep them.</p>
@@ -2294,13 +2330,31 @@ document.getElementById('save').onclick=async()=>{
       (ok && ok.preset_override_active ? 'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.' : 'Saved.');
   }catch(error){status.textContent='Save failed: '+error.message;}
 };
+// Rendered "Wave settings" labels of a waveoverhangs.com gallery entry -> WAVE_OVERHANG_CONFIG keys.
+// "Wave perimeters" has no plugin equivalent and is left out.
+const GALLERY={'line spacing':'line_spacing','wave flow':'flow_mm3_per_mm','print speed':'print_speed','travel speed':'travel_speed','fan speed':'fan_speed','floor layers':'floor_layers','replace bridges':'instead_of_bridges'};
 function importProfile(text){
   const marker={}, explicit={}, prefixed=new Set(), ignored=[];
-  for(const line of text.split(/\r?\n/)){
+  const lines=text.split(/\r?\n/);
+  const gallery={};
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
     if(line.includes('WAVE_OVERHANG_CONFIG')) for(const m of line.matchAll(/(\w+)=(\S+)/g)) marker[ALIASES[m[1]]||m[1]]=m[2];
     for(const m of line.matchAll(/wave_overhang_(\w+?)["']?\s*[:=]\s*["']?([^\s"',;]+)/g)){explicit[m[1]]=m[2];prefixed.add(m[1]);}
+    const label=line.replace(/\*/g,'').trim();
+    let key=GALLERY[label.toLowerCase()], value='';
+    if(key) value=lines[i+1]||''; // value on the line below
+    else{ // "Print speed: 2 mm/s" or "Print speed 2 mm/s" on one line
+      for(const name of Object.keys(GALLERY)){
+        if(label.toLowerCase().startsWith(name)){key=GALLERY[name];value=label.includes(':')?label.split(':').slice(1).join(':'):label.slice(name.length);break;}
+      }
+    }
+    if(!key) continue;
+    const token=(value.replace(/\\\./g,'.').replace(/\*/g,'').replace(/^\s*:\s*/,'').trim().split(/\s+/)[0]||'').toLowerCase();
+    if(token==='yes'||token==='no') gallery[key]=token==='yes'?'1':'0';
+    else if(token!==''&&Number.isFinite(Number(token))) gallery[key]=token;
   }
-  const found={...marker,...explicit}, values={overhang_mode:'wave'};
+  const found={...gallery,...marker,...explicit}, values={overhang_mode:'wave'};
   for(const [key,raw] of Object.entries(found)){
     const spec=IMPORT[key];
     if(!spec){ if(prefixed.has(key) && !['min_angle','spacing_mode','seam_mode','debug_gcode','outer_perimeters'].includes(key)) ignored.push('wave_overhang_'+key); continue; }
@@ -2314,9 +2368,15 @@ function importProfile(text){
   return {values,ignored};
 }
 document.getElementById('import').onclick=()=>{
-  const {values,ignored}=importProfile(document.getElementById('import_text').value||'');
+  const text=document.getElementById('import_text').value||'';
+  const {values,ignored}=importProfile(text);
   const count=Object.keys(values).length-1;
-  if(!count){status.textContent='No wave_overhang_ settings found in the pasted text.';return;}
+  if(!count){
+    status.textContent=/orca_arc_overhang/.test(text) ?
+      'The config block of a print sliced by this plugin carries no wave settings (the plugin writes them only to the debug header). Paste the "View WaveOverhangs debug header" text instead.' :
+      'No wave settings found in the pasted text. Paste a waveoverhangs.com entry (its "Wave settings" section), a WAVE_OVERHANG_CONFIG line, or wave_overhang_ lines.';
+    return;
+  }
   for(const [key,value] of Object.entries(values)){
     const el=document.getElementById(key);
     if(!el) continue;
