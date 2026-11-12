@@ -50,6 +50,8 @@ files = {
     "docs/PR1_REVIEW.md": ROOT / "docs/PR1_REVIEW.md",
     "docs/UX_DESIGN.md": ROOT / "docs/UX_DESIGN.md",
     "docs/GITHUB_PUBLISHING.md": ROOT / "docs/GITHUB_PUBLISHING.md",
+    "docs/AUTOMATIC_PREVIEW.md": ROOT / "docs/AUTOMATIC_PREVIEW.md",
+    "tests/test_slice_preview.py": ROOT / "tests/test_slice_preview.py",
     ".github/workflows/publish-orcacloud.yml": ROOT / ".github/workflows/publish-orcacloud.yml",
     "scripts/publish_orcacloud.py": ROOT / "scripts/publish_orcacloud.py",
     "tests/test_orcacloud_publish.py": ROOT / "tests/test_orcacloud_publish.py",

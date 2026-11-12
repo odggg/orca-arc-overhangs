@@ -18,15 +18,15 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 <p class="context-note">You are editing global defaults for the active preset. Existing preset overrides take precedence.</p>
 <main id="settings">
 <section id="view-overview" class="app-view" aria-label="Overview">
-<div class="section-heading"><div><p class="kicker">THE WORKBENCH</p><h2>Shape your overhang support.</h2><p>Choose how the overhang is filled. Export, then inspect the result.</p></div><label class="enable-switch"><span>Enable processing</span><input id="enabled" type="checkbox" role="switch"></label></div>
-<p id="processing-note" class="inline-note" hidden>Processing is disabled. You can adjust settings, then enable and save them before exporting.</p>
+<div class="section-heading"><div><p class="kicker">THE WORKBENCH</p><h2>Shape your overhang support.</h2><p>Choose how the overhang is filled. Slice your model, then inspect the Arcs.</p></div><label class="enable-switch"><span>Enable processing</span><input id="enabled" type="checkbox" role="switch"></label></div>
+<p id="processing-note" class="inline-note" hidden>Processing is disabled. You can adjust settings, then enable and save them before slicing.</p>
 <div class="overview-grid">
-<section class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">LAST EXPORT</p><h3 id="preview-heading">Your generated support</h3></div><label class="layer-picker"><span class="sr-only">Exported region</span><select id="preview-layer" disabled><option>No export yet</option></select></label></div>
+<section  class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">SLICE PREVIEW</p><h3 id="preview-heading">Your generated support</h3></div><label class="layer-picker"><span class="sr-only">Overhang region</span><select id="preview-layer" disabled><option>Slice a model first</option></select></label></div>
 <div id="preview-warning" class="inline-note" hidden></div>
-<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Simplified support paths from the last export"><g id="export-outlines"></g><g id="export-paths"></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4>A path, once you export.</h4><p>Select Arc Overhang in your process pipeline and export. Generated support will appear here; this view does not upload your model.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>
-<div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">A simplified 2D snapshot of the last export.</span></div>
-<div class="export-stats" aria-label="Last export summary"><div><span id="stat-regions">—</span><small>regions replaced</small></div><div><span id="stat-paths">—</span><small>support paths</small></div><div><span id="stat-hilbert">—</span><small>Hilbert regions</small></div></div>
-<p id="last-report" class="report-summary" role="status">No export with this plugin version yet.</p><details id="report-details" class="report-details" hidden><summary>Why regions were kept</summary><ul id="skip-list"></ul></details></section>
+<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Support paths for the sliced model"><g id="export-outlines"></g><g id="export-paths"></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4 id="preview-empty-title">Slice your model to see its Arcs.</h4><p id="preview-empty-message">Enable Arc Overhang in your process settings, then click Slice plate. The preview appears automatically when calculation finishes.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>
+<div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">Support paths for your sliced model.</span></div>
+<div class="export-stats" aria-label="Slice preview summary"><div><span id="stat-regions">—</span><small>regions replaced</small></div><div><span id="stat-paths">—</span><small>support paths</small></div><div><span id="stat-hilbert">—</span><small>Hilbert regions</small></div></div>
+<p id="last-report" class="report-summary" role="status">Slice a model to generate the preview.</p><details id="report-details" class="report-details" hidden><summary>Why regions were kept</summary><ul id="skip-list"></ul></details></section>
 <aside class="setup-stack" aria-label="Essential settings"><section class="panel setup-panel"><div class="step-heading"><span>01</span><div><h3>Choose your path</h3><p>One overhang, two approaches.</p></div></div><label for="overhang_mode" class="sr-only">Overhang mode</label><select id="overhang_mode" class="mode-select"><option value="arc">Concentric Arcs</option><option value="wave">Wave fronts · experimental</option></select><p id="mode-note" class="mode-note"></p><div data-mode="arc" class="quick-fields"><div class="field" data-field="arc_speed_mm_s"><label for="arc_speed_mm_s">Arc speed</label><div class="number-control"><input id="arc_speed_mm_s" name="arc_speed_mm_s" type="number" step="any" min="0" required aria-describedby="help-arc_speed_mm_s"><span>mm/s</span></div><p class="field-help" id="help-arc_speed_mm_s">Upper speed limit. Short arcs can print more slowly to allow cooling.</p></div><div class="field" data-field="arc_spacing_nozzle_ratio"><label for="arc_spacing_nozzle_ratio">Arc spacing / nozzle diameter</label><div class="number-control"><input id="arc_spacing_nozzle_ratio" name="arc_spacing_nozzle_ratio" type="number" step="any" min="0" required aria-describedby="help-arc_spacing_nozzle_ratio"><span>Factor</span></div><p class="field-help" id="help-arc_spacing_nozzle_ratio">Distance between paths as a nozzle factor. 0.5 with a 0.4 mm nozzle means 0.2 mm spacing.</p></div></div><div data-mode="wave" class="quick-fields" hidden><div class="field" data-field="wave_line_spacing_mm"><label for="wave_line_spacing_mm">Wave line spacing</label><div class="number-control"><input id="wave_line_spacing_mm" name="wave_line_spacing_mm" type="number" step="any" min="0" required aria-describedby="help-wave_line_spacing_mm"><span>mm</span></div><p class="field-help" id="help-wave_line_spacing_mm">Distance between neighbouring wave lines. 0.35 mm is the usual value for a 0.4 mm nozzle.</p></div><div class="field" data-field="wave_flow_mm3_per_mm"><label for="wave_flow_mm3_per_mm">Wave flow</label><div class="number-control"><input id="wave_flow_mm3_per_mm" name="wave_flow_mm3_per_mm" type="number" step="any" min="0" required aria-describedby="help-wave_flow_mm3_per_mm"><span>mm³/mm</span></div><p class="field-help" id="help-wave_flow_mm3_per_mm">Plastic pushed out per mm of wave line (an absolute volume, not a multiplier).</p></div><div class="field" data-field="wave_speed_mm_s"><label for="wave_speed_mm_s">Wave print speed</label><div class="number-control"><input id="wave_speed_mm_s" name="wave_speed_mm_s" type="number" step="any" min="0" required aria-describedby="help-wave_speed_mm_s"><span>mm/s</span></div><p class="field-help" id="help-wave_speed_mm_s">Print speed of the wave lines. Very slow on purpose so each line cools in the air.</p></div></div><div class="quick-fields"><div class="field" data-field="wall_overlap_mm"><label for="wall_overlap_mm">Inner wall overlap</label><div class="number-control"><input id="wall_overlap_mm" name="wall_overlap_mm" type="number" step="any" min="0" required aria-describedby="help-wall_overlap_mm"><span>mm</span></div><p class="field-help" id="help-wall_overlap_mm">How far support can reach into the wall region. Can extend across multiple wall lines; 0 adds no overlap.</p></div></div><button type="button" class="text-button" id="open-tuning">All settings <span aria-hidden="true">↗</span></button></section></aside>
 </div>
 <div class="decision-grid"><section class="panel decision"><div class="step-heading"><span>02</span><div><h3>Decide the sequence</h3><p>Where support sits in the layer.</p></div></div><label for="print_order" class="sr-only">Print order</label><select id="print_order"><option value="layer_tail">Our previous order · default</option><option value="slicer">Keep slicer order</option></select><ol id="sequence" class="sequence"><li>Walls + infill</li><li>Arcs / Waves</li><li>Overhang walls</li></ol><p id="sequence-note" class="field-help">Applied within each layer and tool section.</p></section>
@@ -40,8 +40,8 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 <details class="settings-group" data-mode="wave" hidden><summary><span>Import a Wave profile</span><small>Paste values; review before saving</small></summary><div class="import-area"><p>Paste WaveOverhangs <code>wave_overhang_*</code> settings, a profile JSON, or its <code>WAVE_OVERHANG_CONFIG</code> comment. Only recognised Wave options are imported. Printer and filament profiles stay in Orca.</p><label for="import_text">Profile values</label><textarea id="import_text" rows="5" placeholder="; wave_overhang_line_spacing = 0.35" spellcheck="false"></textarea><button id="import" class="secondary" type="button">Import pasted values</button></div></details>
 </section>
 <section id="view-guide" class="app-view" aria-label="How it works" hidden><div class="section-heading"><div><p class="kicker">UNDERSTAND THE PATH</p><h2>From supported edge to open space.</h2><p>A visual explanation of the selected method. This drawing is a concept, not your model.</p></div></div><section class="panel guide-panel"><div class="panel-heading"><h3 id="guide-heading">Concentric Arcs</h3><span class="local-badge">Concept illustration</span></div><svg id="guide-drawing" viewBox="0 0 640 270" role="img" aria-label="Concept drawing of generated support"><defs><pattern id="support-hatch" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M0 10L10 0" stroke="currentColor" opacity=".15"/></pattern><clipPath id="guide-clip"><rect x="188" y="26" width="400" height="204" rx="8"/></clipPath></defs><rect x="42" y="26" width="146" height="204" rx="8" fill="url(#support-hatch)" stroke="currentColor" opacity=".6"/><rect x="188" y="26" width="400" height="204" rx="8" fill="none" stroke="currentColor" stroke-dasharray="5 7" opacity=".25"/><g id="guide-paths" clip-path="url(#guide-clip)"></g><text x="42" y="255">Supported area</text><text x="384" y="255">Overhang area</text></svg><div class="guide-copy"><h4 id="guide-title">Connected paths, built outwards.</h4><p id="guide-note"></p><div class="mini-measure"><span>Current spacing</span><strong id="spacing-readout">0.95 × nozzle</strong></div></div></section>
-<div class="guide-steps"><article><span>1</span><h3>Enable the pipeline</h3><p>Select Arc Overhang in Orca's process pipeline settings. Enabling this switch alone does not select the pipeline for your preset.</p></article><article><span>2</span><h3>Slice &amp; export</h3><p>Only suitable unsupported Bridge regions are replaced. If Orca uses extra overhang walls instead of bridges, that area stays unchanged.</p></article><article><span>3</span><h3>Reopen &amp; inspect</h3><p>Orca's normal preview precedes post-processing. Reopen the exported G-code to inspect the final print order and paths before printing.</p></article></div>
-<details class="settings-group"><summary><span>When no support appears</span><small>What to check</small></summary><div class="guide-text"><p>Check that the pipeline is selected and that the export includes unsupported Bridge or Internal Bridge paths. A supported bridge above infill is intentionally retained.</p><p>The default minimum area is 50 mm². Small, unanchored or insufficiently covered regions remain as sliced. Read the last export's skipped reasons on Overview.</p><p>For counterbore models, partially bridged strips may already be supported. Check Orca's counterbore setting if you expected a different result.</p></div></details>
+<div class="guide-steps"><article><span>1</span><h3>Enable the pipeline</h3><p>Select Arc Overhang in Orca's process pipeline settings. Enabling this switch alone does not select the pipeline for your preset.</p></article><article><span>2</span><h3>Slice your model</h3><p>Only suitable unsupported Bridge regions are replaced. If Orca uses extra overhang walls instead of bridges, that area stays unchanged.</p></article><article><span>3</span><h3>Inspect the Arcs</h3><p>Open the Arc Overhang tab to inspect the generated support. Choose a region to see its layer and tool.</p></article></div>
+<details class="settings-group"><summary><span>When no support appears</span><small>What to check</small></summary><div class="guide-text"><p>Check that the pipeline is selected and that the sliced model includes unsupported Bridge or Internal Bridge paths. A supported bridge above infill is intentionally retained.</p><p>The default minimum area is 50 mm². Small, unanchored or insufficiently covered regions remain as sliced. Read the preview's skipped reasons on Overview.</p><p>For counterbore models, partially bridged strips may already be supported. Check Orca's counterbore setting if you expected a different result.</p></div></details>
 </section>
 </main>
 <div class="save-bar"><div class="save-state"><span class="state-dot" aria-hidden="true"></span><span id="status" role="status" aria-live="polite">Loading settings…</span></div><div class="save-actions"><button id="refresh" type="button" class="secondary">Reload saved</button><button id="save" type="button" class="primary">Save settings <span aria-hidden="true">↗</span></button></div></div>
@@ -70,8 +70,11 @@ const settingsBridge = {
     const response=await requestSettings('read');
     const report=response.last_report;
     renderReport(report);
+    renderSliceState(response.state);
+    previewRevision=response.revision;
     return response.config;
   },
+  getPreview:()=>requestSettings('preview',{revision:previewRevision}),
   saveConfig:config=>requestSettings('save',config)
 };
 
@@ -82,6 +85,7 @@ const fields = Object.keys(defaults);
 const $ = id => document.getElementById(id);
 const all = selector => Array.from(document.querySelectorAll?.(selector) || []);
 const status = $('status');
+let previewRevision = null, previewPollBusy = false;
 let draft = null, ready = false, savingUI = false, lastReport = null, showWholeLayer = false;
 function text(id, value) { const el=$(id); if(el) el.textContent=value; }
 function collect() {
@@ -127,7 +131,7 @@ function renderGuide() {
   }
   text('guide-heading',wave?'Wave fronts':'Concentric Arcs');
   text('guide-title',wave?'A front that grows from support.':'Connected paths, built outwards.');
-  text('guide-note',wave?'Each front grows from supported material. Flow, spacing and cooling affect adhesion; this drawing explains the pattern and does not predict print quality.':'The first path starts on existing support. Later paths connect to material already laid down. The actual geometry is calculated from your exported Bridge regions.');
+  text('guide-note',wave?'Each front grows from supported material. Flow, spacing and cooling affect adhesion; this drawing explains the pattern and does not predict print quality.':'The first path starts on existing support. Later paths connect to material already laid down. The actual geometry is calculated from the Bridge regions of your sliced model.');
   text('spacing-readout',wave?`${raw===0?'Nozzle ratio':Number.isFinite(raw)?raw:'—'}${raw===0?'':' mm'}`:`${Number.isFinite(raw)?raw:'—'} × nozzle`);
 }
 function renderPreviewWarning() {
@@ -135,7 +139,7 @@ function renderPreviewWarning() {
   const snapshot=lastReport?.preview, values=collect();
   const different=snapshot?.settings && fields.some(key=>snapshot.settings[key]!==undefined && snapshot.settings[key]!==values[key]);
   el.hidden=!different;
-  el.textContent=different?'Settings differ from this export snapshot. Save and export again to update the paths.':'';
+  el.textContent=different?'Settings changed. Save and slice again to update the preview.':'';
 }
 function renderSnapshot(index=0) {
   const layers=lastReport?.preview?.layers || [], layer=layers[index];
@@ -161,7 +165,7 @@ function renderSnapshot(index=0) {
       poly.setAttribute('points',line.map(p=>p.join(',')).join(' ')); group.appendChild(poly);
     }
   }
-  text('preview-caption',`Layer ${layer.layer} · Z ${layer.z} mm · T${layer.tool} · ${layer.mode==='wave'?'Wave':'Arc'}${lastReport.preview.limited?' · limited snapshot':' · simplified 2D'}`);
+  text('preview-caption',`Layer ${layer.layer} · Z ${layer.z} mm · T${layer.tool} · ${layer.mode==='wave'?'Wave':'Arc'}${lastReport.preview.limited?' · limited preview':' · simplified 2D'}`);
 }
 function renderReport(report) {
   lastReport=report || null;
@@ -169,7 +173,7 @@ function renderReport(report) {
   text('stat-regions',valid?report.replaced_features:'—');
   text('stat-paths',valid?report.generated_arcs:'—');
   text('stat-hilbert',valid?(report.hilbert_features||0):'—');
-  text('last-report',!report?'No export with this plugin version yet.':report.error?'Last export: '+report.error:`Last export: ${report.replaced_features} regions replaced, ${report.generated_arcs} support paths, ${report.skipped_features} skipped.${report.preview_error?' '+report.preview_error:''}`);
+  text('last-report',!report?'Slice a model to generate the preview.':report.error?'Preview: '+report.error:`Preview: ${report.replaced_features} regions replaced, ${report.generated_arcs} support paths, ${report.skipped_features} skipped.${report.preview_error?' '+report.preview_error:''}`);
   const reasons=Object.entries(report?.skip_reasons||{}), details=$('report-details'),list=$('skip-list');
   if(details) details.hidden=!reasons.length;
   if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement('li'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }
@@ -177,7 +181,7 @@ function renderReport(report) {
   if(select) {
     select.replaceChildren(); const layers=report?.preview?.layers||[];
     for(const [index,layer] of layers.entries()) { const option=document.createElement('option'); option.value=String(index); option.textContent=`Region ${index+1} · Layer ${layer.layer} · T${layer.tool}`; select.appendChild(option); }
-    if(!layers.length) { const option=document.createElement('option'); option.textContent='No support snapshot'; select.appendChild(option); }
+    if(!layers.length) { const option=document.createElement('option'); option.textContent='No Arc regions'; select.appendChild(option); }
     select.disabled=!layers.length;
   }
   if($('preview-fit')) $('preview-fit').disabled=!(report?.preview?.layers||[]).length;
@@ -272,4 +276,33 @@ if($('preview-layer')) $('preview-layer').onchange=()=>renderSnapshot(Number($('
 if($('preview-fit')) $('preview-fit').onclick=()=>{showWholeLayer=!showWholeLayer; $('preview-fit').setAttribute('aria-pressed',String(showWholeLayer)); $('preview-fit').textContent=showWholeLayer?'Fit support':'Show whole layer'; renderSnapshot(Number($('preview-layer')?.value||0));};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden) initialize();});
 initialize();
+
+function renderSliceState(state) {
+  const messages={waiting:'Slice a model to generate the preview.',slicing:'Slicing your model…',
+    calculating:'Calculating Arc/Wave paths…',stale:'Model or settings changed. Slice again to update the preview.',
+    cancelled:'Slicing stopped. Slice again to generate a preview.',failed:'Preview unavailable. Check the message below.',
+    unavailable:'No preview is available for this slice. Slice the model again.',disabled:'Enable Arc Overhang and slice your model.'};
+  text('preview-empty-title',state==='ready'?'No eligible overhangs':state==='calculating'?'Building your preview':state==='slicing'?'Slicing your model':'Slice preview');
+  text('preview-empty-message',messages[state] || 'The current slice contains no eligible Arc/Wave regions. Check the region details below.');
+  if(messages[state]) {
+    text('preview-caption',messages[state]);
+    text('last-report',lastReport?.error?'Preview: '+lastReport.error:messages[state]);
+  } else if(state==='ready' && !(lastReport?.preview?.layers||[]).length) {
+    text('preview-caption','No eligible Arc/Wave regions in this slice.');
+  }
+}
+async function pollSlicePreview() {
+  if(previewPollBusy || document.hidden || !settingsBridge.getPreview) return;
+  previewPollBusy=true;
+  try {
+    const response=await settingsBridge.getPreview();
+    if(response.changed) {
+      previewRevision=response.revision;
+      renderReport(response.last_report);
+      renderSliceState(response.state);
+    }
+  } catch(error) { /* The configuration connection reports host failures separately. */ }
+  finally { previewPollBusy=false; }
+}
+if(typeof setInterval==='function') setInterval(pollSlicePreview,1500);
 </script></body></html>

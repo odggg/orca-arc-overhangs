@@ -14,12 +14,13 @@ const {chromium}=require('playwright');
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(/^https?:/.test(r.url())) network.push(r.url());});
   await page.addInitScript(({defaults,report})=>{
-   window.__config={...defaults};window.__report=report;window.__saved=[];window.__readonly=false;
+   window.__config={...defaults};window.__report=report;window.__saved=[];window.__readonly=false;window.__revision=1;window.__state="ready";
    let receive;
    window.orca={onMessage:cb=>{receive=cb;},getContext:()=>({readOnly:window.__readonly}),
     postMessage:request=>queueMicrotask(()=>{
      if(request.action==='save') { window.__config={...request.config};window.__saved.push({...request.config}); }
-     receive({request_id:request.request_id,ok:true,config:window.__config,last_report:window.__report});
+     receive({request_id:request.request_id,ok:true,config:window.__config,last_report:window.__report,
+       revision:window.__revision,state:window.__state,changed:request.config?.revision!==window.__revision});
     })};
   },{defaults,report});
   await page.goto(pathToFileURL(path.resolve('tab-preview.html')).href);
@@ -75,6 +76,16 @@ const {chromium}=require('playwright');
   await page.waitForTimeout(100);assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3');
   await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
   assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'2');
+  // Slice events refresh only preview data; unsaved settings are preserved.
+  await page.locator('#wave_speed_mm_s').fill('3.25');
+  await page.evaluate(()=>{window.__revision++;window.__state='slicing';window.__report=null;});
+  await page.getByText('Slicing your model…',{exact:true}).first().waitFor();
+  assert.equal(await page.locator('#export-paths polyline').count(),0);
+  assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3.25');
+  await page.evaluate(report=>{window.__revision++;window.__state='ready';window.__report=report;},report);
+  await page.waitForFunction(()=>document.querySelectorAll('#export-paths polyline').length===61);
+  assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3.25');
+  assert(!/export/i.test(await page.locator('body').innerText()),'No manual export step in the UI');
   // Host data is text, never HTML.
   await page.evaluate(()=>{window.__report={error:'<img src=x onerror="window.__xss=true">'};});
   await page.locator('#refresh').click();await page.waitForTimeout(100);

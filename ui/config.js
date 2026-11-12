@@ -5,6 +5,7 @@ const fields = Object.keys(defaults);
 const $ = id => document.getElementById(id);
 const all = selector => Array.from(document.querySelectorAll?.(selector) || []);
 const status = $('status');
+let previewRevision = null, previewPollBusy = false;
 let draft = null, ready = false, savingUI = false, lastReport = null, showWholeLayer = false;
 function text(id, value) { const el=$(id); if(el) el.textContent=value; }
 function collect() {
@@ -50,7 +51,7 @@ function renderGuide() {
   }
   text('guide-heading',wave?'Wave fronts':'Concentric Arcs');
   text('guide-title',wave?'A front that grows from support.':'Connected paths, built outwards.');
-  text('guide-note',wave?'Each front grows from supported material. Flow, spacing and cooling affect adhesion; this drawing explains the pattern and does not predict print quality.':'The first path starts on existing support. Later paths connect to material already laid down. The actual geometry is calculated from your exported Bridge regions.');
+  text('guide-note',wave?'Each front grows from supported material. Flow, spacing and cooling affect adhesion; this drawing explains the pattern and does not predict print quality.':'The first path starts on existing support. Later paths connect to material already laid down. The actual geometry is calculated from the Bridge regions of your sliced model.');
   text('spacing-readout',wave?`${raw===0?'Nozzle ratio':Number.isFinite(raw)?raw:'—'}${raw===0?'':' mm'}`:`${Number.isFinite(raw)?raw:'—'} × nozzle`);
 }
 function renderPreviewWarning() {
@@ -58,7 +59,7 @@ function renderPreviewWarning() {
   const snapshot=lastReport?.preview, values=collect();
   const different=snapshot?.settings && fields.some(key=>snapshot.settings[key]!==undefined && snapshot.settings[key]!==values[key]);
   el.hidden=!different;
-  el.textContent=different?'Settings differ from this export snapshot. Save and export again to update the paths.':'';
+  el.textContent=different?'Settings changed. Save and slice again to update the preview.':'';
 }
 function renderSnapshot(index=0) {
   const layers=lastReport?.preview?.layers || [], layer=layers[index];
@@ -84,7 +85,7 @@ function renderSnapshot(index=0) {
       poly.setAttribute('points',line.map(p=>p.join(',')).join(' ')); group.appendChild(poly);
     }
   }
-  text('preview-caption',`Layer ${layer.layer} · Z ${layer.z} mm · T${layer.tool} · ${layer.mode==='wave'?'Wave':'Arc'}${lastReport.preview.limited?' · limited snapshot':' · simplified 2D'}`);
+  text('preview-caption',`Layer ${layer.layer} · Z ${layer.z} mm · T${layer.tool} · ${layer.mode==='wave'?'Wave':'Arc'}${lastReport.preview.limited?' · limited preview':' · simplified 2D'}`);
 }
 function renderReport(report) {
   lastReport=report || null;
@@ -92,7 +93,7 @@ function renderReport(report) {
   text('stat-regions',valid?report.replaced_features:'—');
   text('stat-paths',valid?report.generated_arcs:'—');
   text('stat-hilbert',valid?(report.hilbert_features||0):'—');
-  text('last-report',!report?'No export with this plugin version yet.':report.error?'Last export: '+report.error:`Last export: ${report.replaced_features} regions replaced, ${report.generated_arcs} support paths, ${report.skipped_features} skipped.${report.preview_error?' '+report.preview_error:''}`);
+  text('last-report',!report?'Slice a model to generate the preview.':report.error?'Preview: '+report.error:`Preview: ${report.replaced_features} regions replaced, ${report.generated_arcs} support paths, ${report.skipped_features} skipped.${report.preview_error?' '+report.preview_error:''}`);
   const reasons=Object.entries(report?.skip_reasons||{}), details=$('report-details'),list=$('skip-list');
   if(details) details.hidden=!reasons.length;
   if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement('li'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }
@@ -100,7 +101,7 @@ function renderReport(report) {
   if(select) {
     select.replaceChildren(); const layers=report?.preview?.layers||[];
     for(const [index,layer] of layers.entries()) { const option=document.createElement('option'); option.value=String(index); option.textContent=`Region ${index+1} · Layer ${layer.layer} · T${layer.tool}`; select.appendChild(option); }
-    if(!layers.length) { const option=document.createElement('option'); option.textContent='No support snapshot'; select.appendChild(option); }
+    if(!layers.length) { const option=document.createElement('option'); option.textContent='No Arc regions'; select.appendChild(option); }
     select.disabled=!layers.length;
   }
   if($('preview-fit')) $('preview-fit').disabled=!(report?.preview?.layers||[]).length;
@@ -195,3 +196,32 @@ if($('preview-layer')) $('preview-layer').onchange=()=>renderSnapshot(Number($('
 if($('preview-fit')) $('preview-fit').onclick=()=>{showWholeLayer=!showWholeLayer; $('preview-fit').setAttribute('aria-pressed',String(showWholeLayer)); $('preview-fit').textContent=showWholeLayer?'Fit support':'Show whole layer'; renderSnapshot(Number($('preview-layer')?.value||0));};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden) initialize();});
 initialize();
+
+function renderSliceState(state) {
+  const messages={waiting:'Slice a model to generate the preview.',slicing:'Slicing your model…',
+    calculating:'Calculating Arc/Wave paths…',stale:'Model or settings changed. Slice again to update the preview.',
+    cancelled:'Slicing stopped. Slice again to generate a preview.',failed:'Preview unavailable. Check the message below.',
+    unavailable:'No preview is available for this slice. Slice the model again.',disabled:'Enable Arc Overhang and slice your model.'};
+  text('preview-empty-title',state==='ready'?'No eligible overhangs':state==='calculating'?'Building your preview':state==='slicing'?'Slicing your model':'Slice preview');
+  text('preview-empty-message',messages[state] || 'The current slice contains no eligible Arc/Wave regions. Check the region details below.');
+  if(messages[state]) {
+    text('preview-caption',messages[state]);
+    text('last-report',lastReport?.error?'Preview: '+lastReport.error:messages[state]);
+  } else if(state==='ready' && !(lastReport?.preview?.layers||[]).length) {
+    text('preview-caption','No eligible Arc/Wave regions in this slice.');
+  }
+}
+async function pollSlicePreview() {
+  if(previewPollBusy || document.hidden || !settingsBridge.getPreview) return;
+  previewPollBusy=true;
+  try {
+    const response=await settingsBridge.getPreview();
+    if(response.changed) {
+      previewRevision=response.revision;
+      renderReport(response.last_report);
+      renderSliceState(response.state);
+    }
+  } catch(error) { /* The configuration connection reports host failures separately. */ }
+  finally { previewPollBusy=false; }
+}
+if(typeof setInterval==='function') setInterval(pollSlicePreview,1500);

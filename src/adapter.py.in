@@ -2097,8 +2097,11 @@ const settingsBridge = {
     const response=await requestSettings('read');
     const report=response.last_report;
     renderReport(report);
+    renderSliceState(response.state);
+    previewRevision=response.revision;
     return response.config;
   },
+  getPreview:()=>requestSettings('preview',{revision:previewRevision}),
   saveConfig:config=>requestSettings('save',config)
 };
 """
@@ -2106,7 +2109,8 @@ const settingsBridge = {
                if as_tab else "Settings belong to this Orca plugin configuration. Save your process preset after editing.")
     return (page.replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT))
             .replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("__VERSION__", VERSION)
-            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge))
+            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge)
+            .replace("__PREVIEW_ATTRIBUTES__", "" if as_tab else "hidden"))
 
 
 
@@ -2120,6 +2124,29 @@ except ModuleNotFoundError as error:
 
 _pipeline_capability = None
 _last_report = None
+_preview_revision = 0
+_preview_state = "waiting"
+_preview_generation = 0
+
+
+def publish_preview(report, state="ready"):
+    global _last_report, _preview_revision, _preview_state
+    _last_report = report
+    _preview_state = state
+    _preview_revision += 1
+
+
+def preview_file(path, config, resolved=None, cancelled=lambda: False):
+    """Calculate support from Orca's completed slice without modifying its file."""
+    original = Path(path).read_bytes()
+    if original[:2] == b"PK" or b"\0" in original[:1024]:
+        raise UnsupportedGCode("The slice preview requires text G-code.")
+    text = (original[3:] if original.startswith(b"\xef\xbb\xbf") else original).decode("utf-8")
+    if MARKER in text:
+        return None  # A later host event must not replace a processed preview with an empty one.
+    _, report = process_text(text, config, resolved, cancelled)
+    return report
+
 
 if orca is not None:
     class ArcOverhangCapability(orca.slicing.SlicingPipelineCapabilityBase):
@@ -2138,22 +2165,83 @@ if orca is not None:
             return True
         def get_config_ui(self):
             return config_page()
+        def invalidate_preview(self):
+            global _preview_generation
+            _preview_generation += 1
+            publish_preview(None, "stale")
+
+        def on_lifecycle_event(self, event, ctx):
+            global _preview_generation
+            events = getattr(orca, "LifecycleEvent", None)
+            if events is None:
+                return
+            def is_event(name):
+                return event == getattr(events, name, None)
+            if is_event("SliceStarted"):
+                _preview_generation += 1
+                self._slice_resolved = None
+                publish_preview(None, "slicing")
+                return
+            if any(is_event(name) for name in ("NewProject", "ProjectOpened", "ProjectClosed",
+                    "ObjectAdded", "ObjectDeleted", "ObjectTransformed", "ObjectChanged",
+                    "PlateSelected", "PlateDeleted", "PresetSelected", "PresetSaved")):
+                _preview_generation += 1
+                publish_preview(None, "stale")
+                return
+            codes = getattr(orca, "LifecycleEvtCode", None)
+            success = codes is not None and ctx.code == codes.Ok
+            if is_event("SlicingJobComplete") and not success:
+                _preview_generation += 1
+                publish_preview(None, "cancelled")
+                return
+            if not is_event("GCodeExportFinished"):
+                return
+            if not success:
+                publish_preview(None, "failed")
+                return
+            # Orca closes and renames the internal slice file before this event.
+            # Its msg is the output path for successful GCodeExportFinished events.
+            path = getattr(ctx, "msg", "")
+            if not isinstance(path, str) or not path or "\n" in path:
+                publish_preview(None, "unavailable")
+                return
+            generation = _preview_generation
+            try:
+                cfg = configuration(json.loads(self.get_config() or "{}"))
+                if not cfg["enabled"]:
+                    publish_preview(None, "disabled")
+                    return
+                publish_preview(None, "calculating")
+                report = preview_file(path, cfg, getattr(self, "_slice_resolved", None),
+                                      lambda: generation != _preview_generation)
+                if generation == _preview_generation and report is not None:
+                    publish_preview(report)
+                elif generation == _preview_generation:
+                    publish_preview(None, "unavailable")
+            except Cancelled:
+                pass
+            except Exception as error:
+                if generation == _preview_generation:
+                    publish_preview({"error": str(error)}, "failed")
+
         def execute(self, ctx):
             global _last_report
             if ctx.step != orca.slicing.Step.psGCodePostProcess:
+                if hasattr(ctx, "config_value"):
+                    self._slice_resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 return orca.ExecutionResult.skipped("Arc Overhang runs at psGCodePostProcess.")
             try:
                 cfg = json.loads(self.get_config() or "{}")
                 resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 report = process_file(ctx.gcode_path, cfg, resolved, ctx.cancelled)
-                _last_report = dict(report)
+                publish_preview(dict(report))
                 message = f"Arc Overhang: {report['replaced_features']} features, {report['generated_arcs']} arcs, {report['skipped_features']} skipped."
                 print(message)
                 return orca.ExecutionResult.success(message, json.dumps({k: v for k, v in report.items() if k != "preview"}))
             except Cancelled:
                 return orca.ExecutionResult.skipped("Arc Overhang cancelled; G-code unchanged.")
             except Exception as error:
-                _last_report = {"error":str(error)}
+                publish_preview({"error":str(error)}, "failed")
                 return orca.ExecutionResult.failure(orca.PluginResult.FatalError, "Arc Overhang: " + str(error))
 
 
@@ -2173,16 +2261,26 @@ if orca is not None:
                 if capability is None:
                     raise RuntimeError("Arc Overhang processing is not loaded. Enable both plugin capabilities.")
                 action = data.get("action")
-                if action not in ("read", "save"):
+                if action not in ("read", "save", "preview"):
                     raise ValueError("Unknown request.")
+                if action == "preview":
+                    previous = data.get("config") or {}
+                    revision = _preview_revision
+                    response = {"request_id": request_id, "ok": True, "revision": revision,
+                                "state": _preview_state, "changed": previous.get("revision") != revision}
+                    if response["changed"]:
+                        response["last_report"] = _last_report
+                    self.post_message(response)
+                    return
                 if action == "save":
                     requested = configuration(data.get("config"))
                     if not isinstance(data.get("config"), dict):
                         raise ValueError("Settings must be a JSON object.")
                     if not capability.save_config(json.dumps(requested)):
                         raise RuntimeError("Could not save settings.")
+                    capability.invalidate_preview()
                 effective = configuration(json.loads(capability.get_config() or "{}"))
-                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":_last_report}
+                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":_last_report, "revision":_preview_revision, "state":_preview_state}
                 if action == "save":
                     response["preset_override_active"] = effective != requested
                 self.post_message(response)
