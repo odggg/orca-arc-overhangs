@@ -52,6 +52,7 @@ files = {
     "docs/GITHUB_PUBLISHING.md": ROOT / "docs/GITHUB_PUBLISHING.md",
     "docs/AUTOMATIC_PREVIEW.md": ROOT / "docs/AUTOMATIC_PREVIEW.md",
     "tests/test_slice_preview.py": ROOT / "tests/test_slice_preview.py",
+    "tests/test_preview_playback.py": ROOT / "tests/test_preview_playback.py",
     ".github/workflows/publish-orcacloud.yml": ROOT / ".github/workflows/publish-orcacloud.yml",
     "scripts/publish_orcacloud.py": ROOT / "scripts/publish_orcacloud.py",
     "tests/test_orcacloud_publish.py": ROOT / "tests/test_orcacloud_publish.py",

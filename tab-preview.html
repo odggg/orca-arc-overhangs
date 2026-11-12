@@ -11,6 +11,9 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 @media(max-width:1000px){.app-shell{padding:20px 22px 0}.overview-grid{grid-template-columns:minmax(0,1fr) 295px;gap:16px}.decision-grid{gap:16px}.panel-heading{padding:17px}.setup-panel{padding:17px}h2{font-size:26px}.plot-caption>span:last-child{margin-left:0}}@media(max-width:760px){.app-shell{padding:18px 16px 0}.overview-grid,.decision-grid{grid-template-columns:1fr}.app-header{gap:10px}.app-header>.local-badge{display:none}.section-heading{align-items:flex-start;flex-direction:column;margin-top:24px}.enable-switch{align-self:flex-end}.field-grid{grid-template-columns:1fr}.field-grid .field{border-bottom:1px solid var(--line)}.field-grid .field:last-child{border:0}.quick-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.quick-fields .field{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.quick-fields .number-control input{width:74px}.quick-fields .field-help{margin:0}.guide-steps{grid-template-columns:1fr;gap:10px}.guide-copy{display:block}.mini-measure{border:0;border-top:1px solid var(--line);padding:14px 0 0}.save-bar{bottom:8px;flex-wrap:wrap}.save-state{max-width:100%;font-size:11px}.save-actions{margin-left:auto}.app-footer{flex-direction:column;gap:4px}.plot,#export-drawing{min-height:280px;height:280px}h2{font-size:25px}}@media(max-width:440px){.quick-fields{grid-template-columns:1fr}.quick-fields .field{display:grid;grid-template-columns:1fr auto}.quick-fields .field-help{grid-column:1/-1}.number-control input{width:84px}.view-nav{gap:23px}.view-nav button{font-size:12px}.layer-picker{max-width:55%}.panel-heading h3{font-size:14px}.guide-panel .panel-heading>.local-badge{font-size:9px}.guide-copy h4{font-size:17px}.sequence{flex-wrap:wrap}.app-shell{padding:14px 12px 0}}@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 
 .plot-caption .text-button{font-size:10px;padding:0}.plot-caption .text-button:disabled{cursor:default}
+
+.preview-pickers{display:flex;gap:10px;max-width:65%;min-width:0}.preview-pickers label{display:grid;gap:4px;font-size:10px;color:var(--muted);min-width:0}.preview-pickers select{max-width:100%;font-size:11px;padding:7px}.preview-controls{border-top:1px solid var(--line);padding:14px 22px}.preview-layer-nav,.preview-playback,.preview-playback-info{display:flex;align-items:center;gap:10px;min-width:0}.preview-layer-nav{margin-bottom:12px;font-size:11px;color:var(--muted)}.preview-controls input[type=range]{flex:1;min-width:45px;width:100%;accent-color:var(--accent)}.preview-controls button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--accent);font-size:11px}.preview-controls button:disabled{opacity:.4;cursor:default}.preview-playback label{display:flex;align-items:center;gap:5px;font-size:10px}.preview-playback select{font-size:11px;padding:5px;width:65px}.preview-playback-info{justify-content:space-between;flex-wrap:wrap;margin-top:12px;color:var(--muted);font-size:10px}.preview-playback-info label{display:flex;gap:5px;align-items:center}.preview-playback-info input{accent-color:var(--accent)}#preview-motion-note{font-size:10px;color:var(--muted);margin:8px 0 0}#preview-travels polyline{fill:none;stroke:var(--muted);stroke-dasharray:3 4;stroke-width:1;vector-effect:non-scaling-stroke}#preview-nozzle{fill:#d78037;stroke:var(--panel);stroke-width:1.5;vector-effect:non-scaling-stroke}#export-paths polyline.active{stroke:#d78037}
+@media(max-width:760px){.export-panel .panel-heading{flex-wrap:wrap}.preview-pickers{width:100%;max-width:100%}.preview-pickers label{flex:1}.preview-controls{padding:12px 16px}.preview-playback{gap:6px;flex-wrap:wrap}.preview-playback input[type=range]{min-width:80px}.preview-playback label{margin-left:auto}}
 </style></head>
 <body><div class="app-shell">
 <header class="app-header"><div class="identity"><svg class="brand" viewBox="0 0 40 40" aria-hidden="true"><path d="M7 31V9h9v22M19 31a12 12 0 0 1 12-12M19 24a5 5 0 0 1 5-5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/></svg><div><h1>Arc Overhang <span class="version">0.3.2</span></h1><p class="eyebrow">Overhang support, made visible.</p></div></div><span class="local-badge"><span></span> Local · open source</span></header>
@@ -21,10 +24,15 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 <div class="section-heading"><div><p class="kicker">THE WORKBENCH</p><h2>Shape your overhang support.</h2><p>Choose how the overhang is filled. Slice your model, then inspect the Arcs.</p></div><label class="enable-switch"><span>Enable processing</span><input id="enabled" type="checkbox" role="switch"></label></div>
 <p id="processing-note" class="inline-note" hidden>Processing is disabled. You can adjust settings, then enable and save them before slicing.</p>
 <div class="overview-grid">
-<section  class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">SLICE PREVIEW</p><h3 id="preview-heading">Your generated support</h3></div><label class="layer-picker"><span class="sr-only">Overhang region</span><select id="preview-layer" disabled><option>Slice a model first</option></select></label></div>
+<section  class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">SLICE PREVIEW</p><h3 id="preview-heading">Your generated support</h3></div><div class="preview-pickers"><label>Layer<select id="preview-layer" disabled><option>Slice a model first</option></select></label><label>Overhang<select id="preview-region" disabled><option>No regions</option></select></label></div></div>
 <div id="preview-warning" class="inline-note" hidden></div>
-<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Support paths for the sliced model"><g id="export-outlines"></g><g id="export-paths"></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4 id="preview-empty-title">Slice your model to see its Arcs.</h4><p id="preview-empty-message">Enable Arc Overhang in your process settings, then click Slice plate. The preview appears automatically when calculation finishes.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>
+<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Support paths for the sliced model"><g id="export-outlines"></g><g id="preview-travels"></g><g id="export-paths"></g><g id="preview-head"><circle id="preview-nozzle" hidden></circle></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4 id="preview-empty-title">Slice your model to see its Arcs.</h4><p id="preview-empty-message">Enable Arc Overhang in your process settings, then click Slice plate. The preview appears automatically when calculation finishes.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>
 <div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">Support paths for your sliced model.</span></div>
+<div class="preview-controls" aria-label="Layer and print playback">
+<div class="preview-layer-nav"><button type="button" id="preview-prev" disabled aria-label="Previous overhang">←</button><label for="preview-layer-range">Layer</label><input id="preview-layer-range" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Layer with Arc or Wave overhangs"><button type="button" id="preview-next" disabled aria-label="Next overhang">→</button></div>
+<div class="preview-playback"><button type="button" id="preview-play" disabled aria-label="Play print animation">Play</button><button type="button" id="preview-reset" disabled>Restart</button><label class="sr-only" for="preview-progress">Print progress within selected overhang</label><input type="range" id="preview-progress" min="0" max="1000" value="1000" step="1" disabled><label>Speed<select id="preview-speed"><option value="1">1×</option><option value="5">5×</option><option value="20" selected>20×</option><option value="100">100×</option></select></label></div>
+<div class="preview-playback-info"><label><input id="preview-show-travel" type="checkbox"> Show travel moves</label><output id="preview-progress-label" aria-live="off">No toolpaths loaded</output></div><p id="preview-motion-note">Selected overhang only · toolpath time estimate, without acceleration.</p>
+</div>
 <div class="export-stats" aria-label="Slice preview summary"><div><span id="stat-regions">—</span><small>regions replaced</small></div><div><span id="stat-paths">—</span><small>support paths</small></div><div><span id="stat-hilbert">—</span><small>Hilbert regions</small></div></div>
 <p id="last-report" class="report-summary" role="status">Slice a model to generate the preview.</p><details id="report-details" class="report-details" hidden><summary>Why regions were kept</summary><ul id="skip-list"></ul></details></section>
 <aside class="setup-stack" aria-label="Essential settings"><section class="panel setup-panel"><div class="step-heading"><span>01</span><div><h3>Choose your path</h3><p>One overhang, two approaches.</p></div></div><label for="overhang_mode" class="sr-only">Overhang mode</label><select id="overhang_mode" class="mode-select"><option value="arc">Concentric Arcs</option><option value="wave">Wave fronts · experimental</option></select><p id="mode-note" class="mode-note"></p><div data-mode="arc" class="quick-fields"><div class="field" data-field="arc_speed_mm_s"><label for="arc_speed_mm_s">Arc speed</label><div class="number-control"><input id="arc_speed_mm_s" name="arc_speed_mm_s" type="number" step="any" min="0" required aria-describedby="help-arc_speed_mm_s"><span>mm/s</span></div><p class="field-help" id="help-arc_speed_mm_s">Upper speed limit. Short arcs can print more slowly to allow cooling.</p></div><div class="field" data-field="arc_spacing_nozzle_ratio"><label for="arc_spacing_nozzle_ratio">Arc spacing / nozzle diameter</label><div class="number-control"><input id="arc_spacing_nozzle_ratio" name="arc_spacing_nozzle_ratio" type="number" step="any" min="0" required aria-describedby="help-arc_spacing_nozzle_ratio"><span>Factor</span></div><p class="field-help" id="help-arc_spacing_nozzle_ratio">Distance between paths as a nozzle factor. 0.5 with a 0.4 mm nozzle means 0.2 mm spacing.</p></div></div><div data-mode="wave" class="quick-fields" hidden><div class="field" data-field="wave_line_spacing_mm"><label for="wave_line_spacing_mm">Wave line spacing</label><div class="number-control"><input id="wave_line_spacing_mm" name="wave_line_spacing_mm" type="number" step="any" min="0" required aria-describedby="help-wave_line_spacing_mm"><span>mm</span></div><p class="field-help" id="help-wave_line_spacing_mm">Distance between neighbouring wave lines. 0.35 mm is the usual value for a 0.4 mm nozzle.</p></div><div class="field" data-field="wave_flow_mm3_per_mm"><label for="wave_flow_mm3_per_mm">Wave flow</label><div class="number-control"><input id="wave_flow_mm3_per_mm" name="wave_flow_mm3_per_mm" type="number" step="any" min="0" required aria-describedby="help-wave_flow_mm3_per_mm"><span>mm³/mm</span></div><p class="field-help" id="help-wave_flow_mm3_per_mm">Plastic pushed out per mm of wave line (an absolute volume, not a multiplier).</p></div><div class="field" data-field="wave_speed_mm_s"><label for="wave_speed_mm_s">Wave print speed</label><div class="number-control"><input id="wave_speed_mm_s" name="wave_speed_mm_s" type="number" step="any" min="0" required aria-describedby="help-wave_speed_mm_s"><span>mm/s</span></div><p class="field-help" id="help-wave_speed_mm_s">Print speed of the wave lines. Very slow on purpose so each line cools in the air.</p></div></div><div class="quick-fields"><div class="field" data-field="wall_overlap_mm"><label for="wall_overlap_mm">Inner wall overlap</label><div class="number-control"><input id="wall_overlap_mm" name="wall_overlap_mm" type="number" step="any" min="0" required aria-describedby="help-wall_overlap_mm"><span>mm</span></div><p class="field-help" id="help-wall_overlap_mm">How far support can reach into the wall region. Can extend across multiple wall lines; 0 adds no overlap.</p></div></div><button type="button" class="text-button" id="open-tuning">All settings <span aria-hidden="true">↗</span></button></section></aside>
@@ -69,12 +77,13 @@ const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
     const report=response.last_report;
+    previewRevision=response.revision;
     renderReport(report);
     renderSliceState(response.state);
-    previewRevision=response.revision;
     return response.config;
   },
   getPreview:()=>requestSettings('preview',{revision:previewRevision}),
+  getRegion:(id,revision)=>requestSettings('region',{id,revision}),
   saveConfig:config=>requestSettings('save',config)
 };
 
@@ -141,31 +150,148 @@ function renderPreviewWarning() {
   el.hidden=!different;
   el.textContent=different?'Settings changed. Save and slice again to update the preview.':'';
 }
-function renderSnapshot(index=0) {
-  const layers=lastReport?.preview?.layers || [], layer=layers[index];
-  const empty=$('preview-empty'), canvas=$('export-drawing');
-  if(empty) empty.hidden=!!layer;
-  if(!canvas) return;
-  const paths=$('export-paths'), outlines=$('export-outlines');
-  if(!paths || !outlines) return;
-  paths.replaceChildren(); outlines.replaceChildren();
-  if(!layer) { canvas.setAttribute('viewBox','0 0 480 340'); return; }
-  const lines=showWholeLayer?[...(layer.outlines||[]),...(layer.paths||[])]:layer.paths||[];
-  const points=lines.flat().filter(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite));
-  if(!points.length) return;
-  const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
-  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-  const span=Math.max(maxX-minX,maxY-minY,1), pad=span*.12;
-  canvas.setAttribute('viewBox',`${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);
-  for(const [key,group] of [['outlines',outlines],['paths',paths]]) {
-    group.setAttribute('transform',`translate(0 ${minY+maxY}) scale(1 -1)`);
-    for(const line of layer[key]||[]) {
-      if(!line.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))) continue;
-      const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
-      poly.setAttribute('points',line.map(p=>p.join(',')).join(' ')); group.appendChild(poly);
-    }
+let activeRegion=null, previewScene=null, playbackTime=0, playbackFrame=null, lastFrameTime=null;
+let regionRequest=0, selectedRegionId=null, previewLayerKeys=[];
+const regionKey=region=>`${region.layer}:${region.z}`;
+function previewRegions() { return lastReport?.preview?.layers||[]; }
+function stopPlayback() {
+  if(playbackFrame!==null && typeof cancelAnimationFrame==='function') cancelAnimationFrame(playbackFrame);
+  playbackFrame=null;lastFrameTime=null;
+  text('preview-play','Play');$('preview-play')?.setAttribute('aria-label','Play print animation');
+}
+function playbackEnabled(enabled) {
+  for(const id of ['preview-play','preview-reset','preview-progress']) if($(id)) $(id).disabled=!enabled;
+}
+function clearDrawing() {
+  for(const id of ['export-paths','export-outlines','preview-travels']) $(id)?.replaceChildren();
+  $('preview-nozzle')?.setAttribute('hidden','');
+}
+function fillRegionChoices(layerKey, preferred=null) {
+  const select=$('preview-region');if(!select) return;
+  const regions=previewRegions().filter(region=>regionKey(region)===layerKey);
+  select.replaceChildren();
+  for(const region of regions) {
+    const option=document.createElement('option');option.value=String(region.id);
+    option.textContent=`Overhang ${region.id+1} · T${region.tool} · ${region.path_count??region.paths?.length??0} paths`;
+    select.appendChild(option);
   }
-  text('preview-caption',`Layer ${layer.layer} · Z ${layer.z} mm · T${layer.tool} · ${layer.mode==='wave'?'Wave':'Arc'}${lastReport.preview.limited?' · limited preview':' · simplified 2D'}`);
+  select.disabled=!regions.length;
+  select.value=String(regions.some(region=>region.id===preferred)?preferred:regions[0]?.id??'');
+  const slider=$('preview-layer-range');if(slider) slider.value=String(Math.max(0,previewLayerKeys.indexOf(layerKey)));
+  loadPreviewRegion(Number(select.value));
+}
+function populatePreviewChoices() {
+  const select=$('preview-layer');if(!select) return;
+  const regions=previewRegions();
+  previewLayerKeys=[...new Set(regions.map(regionKey))].sort((a,b)=>Number(a.split(':')[1])-Number(b.split(':')[1])||Number(a.split(':')[0])-Number(b.split(':')[0]));
+  const previous=regions.find(region=>region.id===selectedRegionId);
+  select.replaceChildren();
+  for(const key of previewLayerKeys) {
+    const region=regions.find(item=>regionKey(item)===key), option=document.createElement('option');
+    option.value=key;option.textContent=`Layer ${region.layer} · Z ${region.z} mm`;select.appendChild(option);
+  }
+  select.disabled=!regions.length;
+  if(!regions.length) {
+    const option=document.createElement('option');option.textContent='No overhang layers';select.appendChild(option);
+  } else select.value=previous?regionKey(previous):previewLayerKeys[0];
+  const slider=$('preview-layer-range');if(slider){slider.max=String(Math.max(0,previewLayerKeys.length-1));slider.disabled=previewLayerKeys.length<2;}
+  fillRegionChoices(select.value,previous?.id);
+}
+async function loadPreviewRegion(id) {
+  stopPlayback();const token=++regionRequest,revision=previewRevision;
+  activeRegion=null;previewScene=null;clearDrawing();playbackEnabled(false);
+  const regions=previewRegions(),entry=regions.find(region=>region.id===id);
+  selectedRegionId=entry?.id??null;
+  const position=regions.indexOf(entry);
+  if($('preview-prev')) $('preview-prev').disabled=position<=0;
+  if($('preview-next')) $('preview-next').disabled=position<0||position>=regions.length-1;
+  if($('preview-empty')) $('preview-empty').hidden=!!entry;
+  if($('preview-fit')) $('preview-fit').disabled=!entry;
+  if(!entry) {text('preview-progress-label','No toolpaths loaded');return;}
+  text('preview-caption','Loading overhang…');
+  try {
+    const region=entry.paths?entry:(await settingsBridge.getRegion(id,revision)).region;
+    if(token!==regionRequest || revision!==previewRevision) return;
+    activeRegion=region;playbackTime=Number(region.duration)||0;
+    renderSnapshot();
+  } catch(error) {
+    if(token===regionRequest) text('preview-caption',error.message||'Could not load this overhang.');
+  }
+}
+function moveRegion(direction) {
+  const regions=previewRegions(),index=regions.findIndex(region=>region.id===selectedRegionId);
+  const next=regions[index+direction];if(!next)return;
+  $('preview-layer').value=regionKey(next);fillRegionChoices(regionKey(next),next.id);
+}
+function makePolyline(group,line) {
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('points',line.map(point=>point.slice(0,2).join(',')).join(' '));group.appendChild(poly);return poly;
+}
+function renderSnapshot() {
+  const region=activeRegion,canvas=$('export-drawing');if(!canvas)return;
+  clearDrawing();
+  if(!region){canvas.setAttribute('viewBox','0 0 480 340');return;}
+  const showTravel=!!$('preview-show-travel')?.checked;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  function include(point){if(!point||!Number.isFinite(point[0])||!Number.isFinite(point[1]))return;minX=Math.min(minX,point[0]);maxX=Math.max(maxX,point[0]);minY=Math.min(minY,point[1]);maxY=Math.max(maxY,point[1]);}
+  for(const line of region.paths) for(const point of line) include(point);
+  if(showWholeLayer) for(const line of region.outlines||[]) for(const point of line)include(point);
+  if(showTravel) for(const motion of region.motions||[]) {include(motion);include(motion.slice(3));}
+  if(!Number.isFinite(minX))return;
+  const span=Math.max(maxX-minX,maxY-minY,1),pad=span*.12;
+  canvas.setAttribute('viewBox',`${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);
+  for(const id of ['export-outlines','export-paths','preview-travels','preview-head']) $(id)?.setAttribute('transform',`translate(0 ${minY+maxY}) scale(1 -1)`);
+  for(const line of region.outlines||[]) makePolyline($('export-outlines'),line);
+  const nodes=region.paths.map(line=>makePolyline($('export-paths'),line));
+  const ends=[],pathEnds=region.paths.map(()=>0),travels=[];let duration=0;
+  for(const [index,motion] of (region.motions||[]).entries()) {
+    duration+=Math.max(0,motion[6]);ends.push(duration);
+    if(motion[7]===1) pathEnds[motion[8]]=duration;
+    if(showTravel&&motion[7]===0) travels.push({index,node:makePolyline($('preview-travels'),[motion.slice(0,2),motion.slice(3,5)])});
+  }
+  previewScene={nodes,ends,pathEnds,travels,duration,fullPoints:region.paths.map(line=>line.map(p=>p.join(',')).join(' ')),states:nodes.map(()=>null)};
+  $('preview-nozzle')?.setAttribute('r',String(span*.009));
+  playbackTime=Math.min(playbackTime,duration);playbackEnabled(duration>0);
+  text('preview-caption',`Overhang ${region.id+1} · Layer ${region.layer} · Z ${region.z} mm · T${region.tool} · ${region.mode==='wave'?'Wave':'Arc'}`);
+  renderPlayback();
+}
+function clockText(seconds){const n=Math.max(0,Math.floor(seconds));return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;}
+function renderPlayback() {
+  if(!activeRegion||!previewScene)return;
+  const {ends,pathEnds,nodes,travels,duration,fullPoints,states}=previewScene,motions=activeRegion.motions||[];
+  let low=0,high=ends.length;
+  while(low<high){const middle=(low+high)>>1;if(ends[middle]<=playbackTime)low=middle+1;else high=middle;}
+  const index=Math.min(low,motions.length-1),motion=motions[index];
+  const start=index>0?ends[index-1]:0,ratio=motion?Math.max(0,Math.min(1,(playbackTime-start)/Math.max(motion[6],1e-12))):0;
+  const position=motion?motion.slice(0,3).map((value,axis)=>value+(motion[axis+3]-value)*ratio):null;
+  let printed=0;
+  nodes.forEach((node,path)=>{
+    const complete=pathEnds[path]<=playbackTime;
+    const partial=motion&&motion[7]===1&&motion[8]===path&&!complete;
+    const state=complete?'complete':partial?'active':'future';
+    if(states[path]!==state){node.toggleAttribute('hidden',state==='future');node.classList.toggle('active',state==='active');if(complete)node.setAttribute('points',fullPoints[path]);states[path]=state;}
+    if(complete)printed++;
+    else if(partial)node.setAttribute('points',[...activeRegion.paths[path].slice(0,motion[9]),position.slice(0,2)].map(p=>p.join(',')).join(' '));
+  });
+  for(const travel of travels){travel.node.toggleAttribute('hidden',travel.index>index);if(travel.index===index&&motion[7]===0)travel.node.setAttribute('points',`${motion[0]},${motion[1]} ${position[0]},${position[1]}`);else {const m=motions[travel.index];travel.node.setAttribute('points',`${m[0]},${m[1]} ${m[3]},${m[4]}`);}}
+  const nozzle=$('preview-nozzle');if(nozzle&&position){nozzle.removeAttribute('hidden');nozzle.setAttribute('cx',position[0]);nozzle.setAttribute('cy',position[1]);}
+  if($('preview-progress'))$('preview-progress').value=String(duration?Math.round(playbackTime/duration*1000):1000);
+  const state=playbackTime>=duration?'Complete':motion?.[7]===1?'Printing':motion?.[7]===0?'Travel':'Retract / wait';
+  text('preview-progress-label',`${clockText(playbackTime)} / ${clockText(duration)} · ${printed}/${nodes.length} paths · ${state}${position?' · Z '+position[2].toFixed(2)+' mm':''}`);
+}
+function playbackTick(timestamp) {
+  if(!previewScene){stopPlayback();return;}
+  if(lastFrameTime!==null)playbackTime=Math.min(previewScene.duration,playbackTime+Math.max(0,timestamp-lastFrameTime)/1000*Number($('preview-speed')?.value||20));
+  lastFrameTime=timestamp;renderPlayback();
+  if(playbackTime>=previewScene.duration){stopPlayback();return;}
+  playbackFrame=requestAnimationFrame(playbackTick);
+}
+function togglePlayback() {
+  if(playbackFrame!==null){stopPlayback();return;}
+  if(!previewScene||!previewScene.duration)return;
+  if(playbackTime>=previewScene.duration)playbackTime=0;
+  text('preview-play','Pause');$('preview-play').setAttribute('aria-label','Pause print animation');
+  lastFrameTime=null;renderPlayback();playbackFrame=requestAnimationFrame(playbackTick);
 }
 function renderReport(report) {
   lastReport=report || null;
@@ -177,15 +303,7 @@ function renderReport(report) {
   const reasons=Object.entries(report?.skip_reasons||{}), details=$('report-details'),list=$('skip-list');
   if(details) details.hidden=!reasons.length;
   if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement('li'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }
-  const select=$('preview-layer');
-  if(select) {
-    select.replaceChildren(); const layers=report?.preview?.layers||[];
-    for(const [index,layer] of layers.entries()) { const option=document.createElement('option'); option.value=String(index); option.textContent=`Region ${index+1} · Layer ${layer.layer} · T${layer.tool}`; select.appendChild(option); }
-    if(!layers.length) { const option=document.createElement('option'); option.textContent='No Arc regions'; select.appendChild(option); }
-    select.disabled=!layers.length;
-  }
-  if($('preview-fit')) $('preview-fit').disabled=!(report?.preview?.layers||[]).length;
-  renderSnapshot(); renderPreviewWarning();
+  populatePreviewChoices(); renderPreviewWarning();
 }
 function remember() { draft=collect(); status.textContent='Unsaved changes.'; renderState(); }
 function readonly() { return window.orca.getContext ? !!window.orca.getContext().readOnly : false; }
@@ -272,9 +390,17 @@ $('settings').addEventListener('change',event=>{if(fields.includes(event.target.
 for(const button of all('[data-view]')) button.onclick=()=>selectView(button.dataset.view);
 if($('open-guide')) $('open-guide').onclick=()=>selectView('guide');
 if($('open-tuning')) $('open-tuning').onclick=()=>selectView('tuning');
-if($('preview-layer')) $('preview-layer').onchange=()=>renderSnapshot(Number($('preview-layer').value));
-if($('preview-fit')) $('preview-fit').onclick=()=>{showWholeLayer=!showWholeLayer; $('preview-fit').setAttribute('aria-pressed',String(showWholeLayer)); $('preview-fit').textContent=showWholeLayer?'Fit support':'Show whole layer'; renderSnapshot(Number($('preview-layer')?.value||0));};
-document.addEventListener('visibilitychange',()=>{if(!document.hidden) initialize();});
+if($('preview-layer')) $('preview-layer').onchange=()=>fillRegionChoices($('preview-layer').value);
+if($('preview-region')) $('preview-region').onchange=()=>loadPreviewRegion(Number($('preview-region').value));
+if($('preview-layer-range')) $('preview-layer-range').oninput=()=>{$('preview-layer').value=previewLayerKeys[Number($('preview-layer-range').value)];fillRegionChoices($('preview-layer').value);};
+if($('preview-prev')) $('preview-prev').onclick=()=>moveRegion(-1);
+if($('preview-next')) $('preview-next').onclick=()=>moveRegion(1);
+if($('preview-play')) $('preview-play').onclick=togglePlayback;
+if($('preview-reset')) $('preview-reset').onclick=()=>{stopPlayback();playbackTime=0;renderPlayback();};
+if($('preview-progress')) $('preview-progress').oninput=()=>{stopPlayback();playbackTime=Number($('preview-progress').value)/1000*(previewScene?.duration||0);renderPlayback();};
+if($('preview-show-travel')) $('preview-show-travel').onchange=()=>renderSnapshot();
+if($('preview-fit')) $('preview-fit').onclick=()=>{showWholeLayer=!showWholeLayer; $('preview-fit').setAttribute('aria-pressed',String(showWholeLayer)); $('preview-fit').textContent=showWholeLayer?'Fit support':'Show whole layer'; renderSnapshot();};
+document.addEventListener('visibilitychange',()=>{stopPlayback();if(!document.hidden) initialize();});
 initialize();
 
 function renderSliceState(state) {

@@ -314,23 +314,17 @@ class Tests(unittest.TestCase):
         for placeholder in ('__STYLES__', '__SCRIPT__', '__BRIDGE__', '__ARC_QUICK__', '__ANCHOR_QUICK__'):
             self.assertNotIn(placeholder, page)
 
-    def test_ui_snapshot_is_bounded_and_uses_generated_paths(self):
+    def test_ui_preview_uses_final_printed_paths(self):
         output, report = a.process_text(fixture())
         snapshot = report['preview']
-        self.assertEqual(snapshot['schema'], 1)
+        self.assertEqual(snapshot['schema'], 2)
         self.assertEqual(len(snapshot['layers']), 1)
-        layer = snapshot['layers'][0]
-        self.assertEqual((layer['layer'],layer['z'],layer['tool'],layer['mode']), (2,.4,0,'arc'))
-        self.assertEqual(len(layer['paths']),report['generated_arcs'])
-        self.assertLess(sum(len(p) for l in snapshot['layers'] for p in l['paths']),10001)
-        cfg=a.configuration()
-        line=a.LineString([(0,0),(1,1)])
-        record=(1,.4,0,'arc',[line]*300,a.Polygon([(0,0),(2,0),(2,2),(0,2)]))
-        limited=a.export_preview([record]*20,cfg)
-        self.assertTrue(limited['limited'])
-        self.assertLessEqual(len(limited['layers']),8)
-        self.assertTrue(all(len(l['paths'])<=240 for l in limited['layers']))
-        self.assertLess(len(__import__('json').dumps(limited)),350000)
+        region = snapshot['layers'][0]
+        self.assertEqual((region['layer'],region['z'],region['tool'],region['mode']), (2,.4,0,'arc'))
+        self.assertEqual(len(region['paths']),report['generated_arcs'])
+        self.assertEqual(sum(m[7] == 1 for m in region['motions']),sum(len(p)-1 for p in region['paths']))
+        self.assertAlmostEqual(region['duration'],sum(m[6] for m in region['motions']))
+        self.assertFalse(snapshot['limited'])
         self.assertNotIn('preview',a.process_text(fixture(),{'enabled':False})[1])
 
     def test_ui_changes_do_not_change_released_toolpaths(self):
@@ -718,7 +712,7 @@ class Tests(unittest.TestCase):
     def test_actual_orca_metadata_contract_and_registration(self):
         import types, runpy, tomllib
         file = ROOT / "dist/arc_overhang.py"
-        source = file.read_text()
+        source = file.read_text(encoding="utf-8")
         block = source.split("# /// script\n",1)[1].split("# ///",1)[0]
         metadata = tomllib.loads("\n".join(line[2:] for line in block.splitlines()))
         self.assertEqual(metadata["tool"]["orcaslicer"]["plugin"]["version"], a.VERSION)

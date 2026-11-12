@@ -1539,41 +1539,96 @@ def gallery_header(cfg, text=""):
             + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
                        for key, value in fields) + gallery_print_profile(text) + "\n")
 
-def export_preview(records, cfg):
-    """Bounded, simplified snapshot for the local UI; never used to generate G-code."""
-    layers, used = [], 0
-    limited = False
-    for layer, z, tool, mode, paths, contour in records:
-        if len(layers) >= 8 or used >= 10000:
-            limited = True
-            break
-        entry = {"layer": layer + 1, "z": round(z, 4), "tool": tool,
-                 "mode": mode, "paths": [], "outlines": []}
-        for line in paths:
-            if len(entry["paths"]) >= 240 or used >= 10000:
-                limited = True
+def export_preview(records, cfg, lines, cancelled=lambda: False):
+    """Read every generated block in final print order. Geometry never changes output."""
+    spans, start = [], None
+    for index, line in enumerate(lines):
+        if line.strip() == MARKER + "BEGIN":
+            start = index
+        elif line.strip() == MARKER + "END" and start is not None:
+            spans.append((start, index + 1))
+            start = None
+    if not spans:
+        return {"schema": 2, "layers": [], "limited": False, "settings": dict(cfg)}
+    # Keep only moves inside generated blocks, including their actual approach/return state.
+    block_moves = [{} for _ in spans]
+    block = 0
+    for feature in parse(lines, cancelled):
+        for move in feature.moves:
+            while block < len(spans) and move.index >= spans[block][1]:
+                block += 1
+            if block == len(spans):
                 break
-            coords = list(line.simplify(0.04, preserve_topology=False).coords)
-            if len(coords) > 96:
-                coords = [coords[round(i * (len(coords) - 1) / 95)] for i in range(96)]
-                limited = True
-            if used + len(coords) > 10000:
-                limited = True
-                break
-            entry["paths"].append([[round(x, 4), round(y, 4)] for x, y in coords])
-            used += len(coords)
-        outline_budget = 1024
-        for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
-            for ring in [poly.exterior, *poly.interiors]:
-                coords = list(ring.coords)
-                if len(coords) > outline_budget:
-                    limited = True
-                    continue
-                entry["outlines"].append([[round(x, 4), round(y, 4)] for x, y in coords])
-                outline_budget -= len(coords)
-        if entry["paths"]:
-            layers.append(entry)
-    return {"schema": 1, "layers": layers, "limited": limited, "settings": dict(cfg)}
+            if move.index > spans[block][0]:
+                block_moves[block][move.index] = (feature.layer, move)
+    contours = {(layer + 1, tool): contour for layer, z, tool, mode, paths, contour in records}
+    entries = []
+    for region_id, ((start, end), moves) in enumerate(zip(spans, block_moves)):
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        entry = {"id": region_id, "mode": cfg["overhang_mode"], "paths": [], "outlines": [], "motions": []}
+        active_path = None
+        position = None
+        total = 0.0
+        for index in range(start + 1, end):
+            if lines[index].startswith("; Arc "):
+                active_path = None
+            item = moves.get(index)
+            if item is None:
+                cmd, words = command(lines[index])
+                if cmd == "G4" and position is not None:
+                    seconds = max(0.0, words.get("S", words.get("P", 0) / 1000))
+                    if seconds:
+                        entry["motions"].append([*position, *position, seconds, 2, -1, -1])
+                        total += seconds
+                continue
+            layer, move = item
+            before, after = move.before, move.after
+            origin = [before.x, before.y, before.z]
+            target = [after.x, after.y, after.z]
+            if any(v is None or not math.isfinite(v) for v in origin + target):
+                continue
+            distance = math.dist(origin, target)
+            if distance <= 1e-9 and abs(move.delta_e) <= 1e-9:
+                continue
+            kind = 1 if distance > 1e-9 and move.delta_e > 0 else (0 if distance > 1e-9 else 2)
+            seconds = (distance if distance > 1e-9 else abs(move.delta_e)) / max(after.feed / 60, 1e-9)
+            path_id = vertex = -1
+            if kind == 1:
+                if active_path is None:
+                    active_path = len(entry["paths"])
+                    entry["paths"].append([origin[:2]])
+                entry["paths"][active_path].append(target[:2])
+                path_id = active_path
+                vertex = len(entry["paths"][active_path]) - 1
+                entry.update(layer=layer + 1, z=round(after.z, 5), tool=after.tool)
+            else:
+                active_path = None
+            # xyz from/to, nominal duration, kind (travel/print/pause), path, vertex.
+            entry["motions"].append([*origin, *target, seconds, kind, path_id, vertex])
+            total += seconds
+            position = target
+        if not entry["paths"]:
+            continue
+        contour = contours.get((entry["layer"], entry["tool"]))
+        if contour is not None:
+            for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
+                for ring in (poly.exterior, *poly.interiors):
+                    entry["outlines"].append([[round(x, 5), round(y, 5)] for x, y in ring.coords])
+        entry["duration"] = total
+        entry["path_count"] = len(entry["paths"])
+        entries.append(entry)
+    return {"schema": 2, "layers": entries, "limited": False, "settings": dict(cfg)}
+
+
+def preview_catalog(report):
+    """Small region index; the page requests full geometry for one region at a time."""
+    if not report or "preview" not in report:
+        return report
+    preview = report["preview"]
+    return {**report, "preview": {**preview, "layers": [
+        {key: value for key, value in region.items() if key not in ("paths", "outlines", "motions")}
+        for region in preview["layers"]]}}
 
 
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
@@ -1673,8 +1728,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
                            if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
-        if len(preview_records) < 8:
-            preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], arcs, current))
+        preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], (), current))
         for k in range(1, hilbert_layers + 1):
             hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
         if wave_mode:
@@ -1780,8 +1834,9 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     lines = "".join(lines).splitlines(keepends=True)
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     try:
-        report["preview"] = export_preview(preview_records, cfg)
-        report["preview"]["limited"] |= report["replaced_features"] > len(report["preview"]["layers"])
+        report["preview"] = export_preview(preview_records, cfg, lines, cancelled)
+    except Cancelled:
+        raise
     except Exception:
         # A presentation failure must not turn a successful G-code export into
         # a failed print export. Do not log geometry or source paths here.
@@ -2096,12 +2151,13 @@ const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
     const report=response.last_report;
+    previewRevision=response.revision;
     renderReport(report);
     renderSliceState(response.state);
-    previewRevision=response.revision;
     return response.config;
   },
   getPreview:()=>requestSettings('preview',{revision:previewRevision}),
+  getRegion:(id,revision)=>requestSettings('region',{id,revision}),
   saveConfig:config=>requestSettings('save',config)
 };
 """
@@ -2261,15 +2317,26 @@ if orca is not None:
                 if capability is None:
                     raise RuntimeError("Arc Overhang processing is not loaded. Enable both plugin capabilities.")
                 action = data.get("action")
-                if action not in ("read", "save", "preview"):
+                if action not in ("read", "save", "preview", "region"):
                     raise ValueError("Unknown request.")
+                if action == "region":
+                    query = data.get("config") or {}
+                    if query.get("revision") != _preview_revision:
+                        raise ValueError("The slice changed. Loading the new preview.")
+                    region_id = query.get("id")
+                    regions = (_last_report or {}).get("preview", {}).get("layers", [])
+                    region = next((item for item in regions if item["id"] == region_id), None)
+                    if region is None:
+                        raise ValueError("The selected overhang is no longer available.")
+                    self.post_message({"request_id": request_id, "ok": True, "revision": _preview_revision, "region": region})
+                    return
                 if action == "preview":
                     previous = data.get("config") or {}
                     revision = _preview_revision
                     response = {"request_id": request_id, "ok": True, "revision": revision,
                                 "state": _preview_state, "changed": previous.get("revision") != revision}
                     if response["changed"]:
-                        response["last_report"] = _last_report
+                        response["last_report"] = preview_catalog(_last_report)
                     self.post_message(response)
                     return
                 if action == "save":
@@ -2280,7 +2347,7 @@ if orca is not None:
                         raise RuntimeError("Could not save settings.")
                     capability.invalidate_preview()
                 effective = configuration(json.loads(capability.get_config() or "{}"))
-                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":_last_report, "revision":_preview_revision, "state":_preview_state}
+                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":preview_catalog(_last_report), "revision":_preview_revision, "state":_preview_state}
                 if action == "save":
                     response["preset_override_active"] = effective != requested
                 self.post_message(response)

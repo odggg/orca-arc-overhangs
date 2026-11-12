@@ -25,9 +25,10 @@ controls. Existing GPL licensing and contributor attribution are preserved.
 ## Truthful graphical feedback
 
 The exported-support view uses the engine's generated paths and layer outlines;
-it is not a fabricated model or a live simulation. Snapshots are bounded to eight
-regions, 240 displayed paths per region and 10,000 support points overall, with
-separate contour limits. The display may simplify geometry; G-code is unchanged.
+it is not a fabricated model or a live simulation. The development layer player indexes all generated regions and loads geometry for
+one selected region at a time. It extracts support motions after final scheduling
+and animates their actual order. Layer outlines are simplified for context. See
+[AUTOMATIC_PREVIEW.md](AUTOMATIC_PREVIEW.md) for playback and validation details.
 
 A snapshot keeps its source settings so a mismatch can be shown after edits.
 There is no unsupported claim that the tab detects model or project changes.

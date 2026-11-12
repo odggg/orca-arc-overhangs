@@ -25,6 +25,12 @@ The plugin only replaces extrusions Orca labels Bridge or Internal Bridge. If Or
 - Light/dark themes, keyboard focus, a narrow layout and a sticky save bar are
   included. No remote fonts, licence checks or network calls are added.
 
+The development preview includes layer/overhang selection and Play/Pause, Restart,
+a progress slider, playback speed, nozzle position and optional travel paths. All
+generated regions remain selectable; geometry loads one region at a time. Motion
+follows the final generated G-code, with estimated timing. This feature is in the
+preview development branch and still needs an in-app slice test before release.
+
 All UI code and graphics were created for this project. See [UX design notes](docs/UX_DESIGN.md).
 
 ## Current behavior

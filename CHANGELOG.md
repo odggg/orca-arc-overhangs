@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - automatic preview and layer player
+- Calculate the plugin preview automatically from the completed slice; remove manual export instructions.
+- Select all generated Arc/Wave regions by layer, Z height and tool, with previous/next navigation.
+- Add Play/Pause, Restart, scrubbing, playback speed, nozzle position and optional travel paths using final G-code motion order.
+- Remove the eight-region, 240-path and 10,000-point preview cutoffs; transfer only the selected region geometry.
+- Invalidate stale previews and reject late region responses without overwriting unsaved settings.
+- Add lifecycle, full-region coverage, final-motion and rendered playback tests. In-app slice validation is still pending before release.
+
 ## 0.3.2 - 2026-11-12
 - Automatically publish stable GitHub releases to the connected OrcaCloud plugin using GitHub OIDC; no stored OrcaCloud API key is required.
 - Upload only the exact universal `py3-none-any` WHL attached to the release, with its version and changelog.

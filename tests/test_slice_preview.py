@@ -89,6 +89,19 @@ class SlicePreviewTests(unittest.TestCase):
         self.cap.execute(types.SimpleNamespace(step=1,config_value=lambda key:'0.6' if key=='nozzle_diameter' else None))
         self.assertEqual(self.cap._slice_resolved['nozzle_diameter'],'0.6')
         self.fire('SliceStarted');self.assertIsNone(self.cap._slice_resolved)
+    def test_catalog_and_region_requests_are_revision_scoped(self):
+        self.fire('GCodeExportFinished')
+        self.page.on_message({'action':'read','request_id':1})
+        catalog=self.page.message
+        region=catalog['last_report']['preview']['layers'][0]
+        self.assertNotIn('motions',region)
+        self.page.on_message({'action':'region','request_id':2,'config':{'id':region['id'],'revision':catalog['revision']}})
+        self.assertTrue(self.page.message['ok'])
+        self.assertTrue(self.page.message['region']['motions'])
+        self.fire('ObjectChanged')
+        self.page.on_message({'action':'region','request_id':3,'config':{'id':region['id'],'revision':catalog['revision']}})
+        self.assertFalse(self.page.message['ok'])
+
     def test_save_invalidates_preview(self):
         self.state['publish_preview']({'generated_arcs':1})
         self.page.on_message({'action':'save','request_id':1,'config':{'arc_speed_mm_s':3}})
