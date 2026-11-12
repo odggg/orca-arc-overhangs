@@ -1,10 +1,10 @@
 # Arc Overhang for OrcaSlicer 2.5
 
-Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.3.1 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
+Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.3.2 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## Install and use
 
-Use [orca_arc_overhang-0.3.1-py3-none-any.whl](dist/orca_arc_overhang-0.3.1-py3-none-any.whl) or [the 0.3.1 ZIP](Arc_Overhang_OrcaSlicer_2.5_v0.3.1.zip). The stable single-file plugin is [dist/arc_overhang.py](dist/arc_overhang.py). German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
+Use [orca_arc_overhang-0.3.2-py3-none-any.whl](dist/orca_arc_overhang-0.3.2-py3-none-any.whl) or [the 0.3.2 ZIP](Arc_Overhang_OrcaSlicer_2.5_v0.3.2.zip). The stable single-file plugin is [dist/arc_overhang.py](dist/arc_overhang.py). German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
 
 The plugin edits G-code during export. The slicing preview does not show the change: reopen the exported file to inspect it.
 

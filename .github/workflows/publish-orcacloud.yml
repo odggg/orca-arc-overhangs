@@ -6,26 +6,38 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing stable GitHub release tag (for example v0.3.1)
+        description: Existing stable GitHub release tag to validate (no upload)
         required: true
         type: string
-      dry_run:
-        description: Validate the release asset without uploading to OrcaCloud
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: orcacloud-publishing
   cancel-in-progress: false
 
 jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate existing release without uploading
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python scripts/publish_orcacloud.py --tag "$RELEASE_TAG" --dry-run
+
   publish:
-    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,11 +48,5 @@ jobs:
       - name: Publish exact universal release asset
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          args=(--tag "$RELEASE_TAG")
-          if [[ "$DRY_RUN" == "true" ]]; then args+=(--dry-run); fi
-          python scripts/publish_orcacloud.py "${args[@]}"
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python scripts/publish_orcacloud.py --tag "$RELEASE_TAG"
