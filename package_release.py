@@ -2,11 +2,12 @@ from pathlib import Path
 import hashlib
 import json
 import zipfile
+import re
 from wheel.wheelfile import WheelFile
 
 ROOT = Path(__file__).parent
 DIST = ROOT / "dist"
-version = "0.3.0"
+version = re.search(r'^VERSION = "([^"\n]+)"', (DIST / "arc_overhang.py").read_text(encoding="utf-8"), re.M)[1]
 name = "orca_arc_overhang"
 info = name + "-" + version + ".dist-info"
 wheel = DIST / f"{name}-{version}-py3-none-any.whl"
@@ -36,22 +37,8 @@ with zipfile.ZipFile(wheel) as archive:
     assert info + "/RECORD" in archive.namelist()
     assert len([n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]) == 1
 
-# Produce standard, installable platform wheels, not renamed .whl aliases.
-# The code is pure Python; NumPy/Shapely resolve their own platform dependencies.
-PLATFORMS = ("win_amd64", "win_arm64", "linux_x86_64", "linux_aarch64",
-             "macosx_11_0_arm64", "macosx_10_13_x86_64")
-platform_wheels = []
-for platform in PLATFORMS:
-    platform_wheel = DIST / f"{name}-{version}-py3-none-{platform}.whl"
-    with zipfile.ZipFile(wheel) as source, WheelFile(str(platform_wheel), "w") as archive:
-        for entry in source.namelist():
-            if entry == info + "/RECORD":
-                continue  # WheelFile regenerates RECORD including changed WHEEL metadata.
-            data = source.read(entry)
-            if entry == info + "/WHEEL":
-                data = data.replace(b"Tag: py3-none-any", f"Tag: py3-none-{platform}".encode())
-            archive.writestr(entry, data)
-    platform_wheels.append(platform_wheel)
+# The plugin is pure Python. Publish one universal wheel; dependencies resolve
+# their own platform packages. Keep older releases in Git/tags.
 
 (ROOT / "LICENSE").write_bytes((ROOT / "upstream" / "LICENSE").read_bytes())
 
@@ -61,6 +48,10 @@ files = {
     "CHANGELOG.md": ROOT / "CHANGELOG.md",
     "RELEASE_NOTES.md": ROOT / "RELEASE_NOTES.md",
     "docs/PR1_REVIEW.md": ROOT / "docs/PR1_REVIEW.md",
+    "docs/UX_DESIGN.md": ROOT / "docs/UX_DESIGN.md",
+    "docs/ui/overview.png": ROOT / "docs/ui/overview.png",
+    "docs/ui/guide.png": ROOT / "docs/ui/guide.png",
+    "docs/ui/dark.png": ROOT / "docs/ui/dark.png",
     "VALIDATION.md": ROOT / "VALIDATION.md",
     "COMMUNITY_ISSUE_AUDIT.md": ROOT / "COMMUNITY_ISSUE_AUDIT.md",
     "THIRD_PARTY_NOTICES.md": ROOT / "THIRD_PARTY_NOTICES.md",
@@ -69,6 +60,13 @@ files = {
     "adapter.py.in": ROOT / "adapter.py.in",
     "tests.py": ROOT / "tests.py",
     "test_package.py": ROOT / "test_package.py",
+    "test_browser.js": ROOT / "test_browser.js",
+    "package.json": ROOT / "package.json",
+    "pnpm-lock.yaml": ROOT / "pnpm-lock.yaml",
+    "tests/ui_gcode_baselines.json": ROOT / "tests/ui_gcode_baselines.json",
+    "ui/config.html": ROOT / "ui/config.html",
+    "ui/styles.css": ROOT / "ui/styles.css",
+    "ui/config.js": ROOT / "ui/config.js",
     "test_ui.js": ROOT / "test_ui.js",
     "test_audit.py": ROOT / "test_audit.py",
     "test_tab.js": ROOT / "test_tab.js",
@@ -86,9 +84,8 @@ files = {
     "examples/synthetic_after.gcode": ROOT / "examples/synthetic_after.gcode",
     "icon.png": ROOT / "icon.png",
 }
-files.update({"dist/" + file.name: file for file in platform_wheels})
 manifest = {path: hashlib.sha256(file.read_bytes()).hexdigest() for path, file in files.items()}
-package = ROOT / "Arc_Overhang_OrcaSlicer_2.5_v0.3.0.zip"
+package = ROOT / f"Arc_Overhang_OrcaSlicer_2.5_v{version}.zip"
 with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED) as archive:
     for path, file in files.items():
         archive.write(file, path)

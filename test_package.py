@@ -18,7 +18,7 @@ assert (ROOT / "src/adapter.py.in").read_bytes() == (ROOT / "adapter.py.in").rea
 assert (ROOT / "config-preview.html").read_text(encoding="utf-8") == plugin.config_page()
 assert (ROOT / "tab-preview.html").read_text(encoding="utf-8") == plugin.config_page(as_tab=True)
 wheels = sorted((ROOT / "dist").glob(f"orca_arc_overhang-{plugin.VERSION}-*.whl"))
-assert len(wheels) == 7, [file.name for file in wheels]
+assert len(wheels) == 1, [file.name for file in wheels]
 for file in wheels:
     name, version, _, tags = parse_wheel_filename(file.name)
     assert str(name) == "orca-arc-overhang" and str(version) == plugin.VERSION
@@ -39,4 +39,4 @@ with zipfile.ZipFile(ROOT / f"Arc_Overhang_OrcaSlicer_2.5_v{plugin.VERSION}.zip"
         assert hashlib.sha256(archive.read(entry)).hexdigest() == digest
         assert not entry.startswith(("archive/", "evidence/", "fixtures/", "docs/cloud-chat"))
     assert all("dist/" + file.name in manifest for file in wheels)
-print("Package validation: seven valid wheels, source/metadata/RECORD consistency, previews and ZIP manifest passed.")
+print("Package validation: one universal wheel, source/metadata/RECORD consistency, previews and ZIP manifest passed.")

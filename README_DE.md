@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.3.0  -  11.11.2026  -  experimentell
+Version 0.3.1  -  12.11.2026  -  experimentell
 
 Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 
@@ -115,6 +115,24 @@ werden nicht unterstuetzt. Parameterlose Firmware-Retraktion (G10/G11) wird unte
 Standardmaessig gelten Temperatur und Luefterwerte des ersetzten Bridge-Abschnitts weiter. Im Wave-Modus sind optionale Temperatur-, Bauteil- und Aux-Luefter-Ueberschreibungen moeglich; die vorherigen Werte werden danach wiederhergestellt. Die Temperatur gehoert zum aktiven Werkzeug. Der Gehaeuseluefter bleibt unberuehrt.
 Die eingestellte Plugin-Retraktion muss zu deinem Drucker passen.
 Z-Hop waehrend der erzeugten Arc- und Wave-Fahrten ist mit der Einstellung z_hop_mm moeglich (Standard 0 = aus).
+
+## Neue grafische Oberflaeche
+
+- **Overview**: wenige Grundeinstellungen, Druckreihenfolge, Folgeschicht und
+  vereinfachte 2D-Ansicht der erzeugten Stuetzbahnen des letzten Exports.
+- **Fine tuning**: alle erweiterten Optionen, passend zum Arc- oder Wave-Modus.
+  Die Werte des anderen Modus bleiben beim Speichern erhalten.
+- **How it works**: eigens gezeichnete schematische Erklaerung des Verfahrens.
+  Diese Grafik ist ausdruecklich von der echten Exportansicht getrennt.
+
+Eine Meldung zeigt, wenn die Einstellungen vom dargestellten Export abweichen.
+Nach dem Speichern erneut exportieren. Modell-Aenderungen werden von dieser
+Ansicht nicht live ueberwacht. Fuer die endgueltige Kontrolle den exportierten
+G-Code in Orca neu oeffnen. Die Vorschau bleibt lokal und veraendert keine Bahnen.
+
+Die Speichern-Leiste ist immer erreichbar. Helle und dunkle Darstellung,
+Tastaturfokus und schmale Fenster werden unterstuetzt. Die neue Version wird als
+ein universelles any-Wheel gebaut. Die Oberflaeche bleibt vorerst Englisch.
 
 ## Wichtige Einstellungen
 | Einstellung in der Maske | JSON-Schluessel | Standard | Wirkung |
