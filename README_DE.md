@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.4.1  -  13.11.2026  -  experimentell
+Version 0.4.2  -  13.11.2026  -  experimentell
 
 Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 
@@ -8,7 +8,7 @@ auf Orcas natives Python-Pluginsystem. Grundlage ist der konzentrische
 Arc-Algorithmus von Steven McCulloch, Nicolai Wachenschwan und Kelsch.
 
 ## Installation
-1. Die Datei **orca_arc_overhang-0.4.1-py3-none-any.whl** aus dem GitHub-Release herunterladen.
+1. Die Datei **orca_arc_overhang-0.4.2-py3-none-any.whl** aus dem GitHub-Release herunterladen.
 2. In OrcaSlicer 2.5 das Menue **Plugins** oeffnen.
 3. **Install local plugin** waehlen und die heruntergeladene WHL installieren.
    Nur eine Variante des Plugins aktivieren.

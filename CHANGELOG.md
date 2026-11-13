@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 - 2026-11-13
 
 - Import copied Wave settings from gallery pages.
 - Explain which text to copy when a profile import contains no Wave settings.
+- Publish universal WHL releases to Orca Cloud automatically from GitHub.
+
+Thanks to @persano for the gallery import fixes and release automation contribution.
 
 ## 0.4.1 - 2026-11-13
 
