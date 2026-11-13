@@ -1,14 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-11-13
 
-- Move path visibility, view controls and layer/playback navigation into translucent, collapsible viewport overlays.
-- Open the full selected layer by default, including walls and infill; retain individual support inspection.
-- Show pending-settings and re-slice guidance inside the preview.
-- Apply valid tab edits to the active process on supported Orca builds and synchronize sidebar changes back to the tab.
-- Use Orca's process-setting change path to invalidate the old slice; stop saving global defaults behind preset overrides.
-- Preserve other plugins' settings, reject stale profile/configuration writes, and keep invalid typing intermediates from changing the selected UI view.
-- Explain unsupported host APIs explicitly; starting a new slice still uses Orca's Slice plate button.
+- Layer controls, playback and path filters now sit in translucent, collapsible overlays.
+- The preview opens the whole layer, including walls and infill.
+- Tab and sidebar settings stay in sync on supported Orca builds. Applied changes mark the old slice as outdated.
+- Added an in-preview reminder to click Slice plate after changing settings.
+- Fixed preview dragging and improved the layout for small windows.
+
+Settings sync requires Orca's process editor support. On older builds, use Plugin Configuration in the sidebar.
 
 ## 0.4.0 - 2026-11-13
 - Add full-layer context and playback, path-type filters, previous-layer outlines, and an interactive 3D orthographic view.

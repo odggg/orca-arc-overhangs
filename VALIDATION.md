@@ -188,7 +188,7 @@ All plugin UI and runtime messages translated to English. Configuration keys and
 - Corrected layer-tail scheduling: 39 regressions pass, including modern/legacy ordering of normal walls/infill, Arcs and Overhang walls, preserved Overhang extrusion geometry and layer/end-code boundaries. Tool-selection boundaries remain fixed.
 
 
-## Preview overlays and process synchronization (unreleased)
+## Preview overlays and process synchronization (0.4.1)
 
 - Python regression suite: 117 tests passed, including process override preservation,
   same-key replacement, rejected writes, profile switches and sidebar conflicts.
