@@ -11,11 +11,18 @@ to exactly one plugin. No OrcaCloud API key or repository secret is needed.
 
 ## Normal releases
 
-1. Build and check the release as usual, including its universal wheel.
-2. Create a stable GitHub release with a semantic version tag, for example `v0.3.2`.
-3. Attach `orca_arc_overhang-0.3.2-py3-none-any.whl` and finish the release notes
-   **before publishing the release**.
-4. Publishing starts the **Publish to OrcaCloud** workflow automatically.
+1. Set the plugin version and add its notes to `CHANGELOG.md`.
+2. Push the matching stable tag, for example `v0.4.2`. Alternatively, run
+   **Actions → Release** with an existing tag that contains the release workflow.
+3. The workflow builds and checks the plugin, then creates a release draft with
+   only `orca_arc_overhang-0.4.2-py3-none-any.whl` and that version's changelog.
+4. Review the draft and click **Publish release**. This starts **Publish to
+   OrcaCloud** automatically.
+
+The draft step is intentional: releases published using GitHub's built-in workflow
+token do not trigger another workflow. Publishing the prepared draft as a user
+produces the release event required by OrcaCloud. No additional credentials are
+needed. Existing releases are not rebuilt or overwritten.
 
 The workflow downloads the exact universal wheel from that release, verifies its
 size, GitHub SHA-256 digest (when provided), embedded version, universal wheel tag

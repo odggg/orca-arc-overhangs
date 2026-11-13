@@ -23,3 +23,5 @@ publish-filter.log
 node_modules/
 playwright-report/
 test-results/
+/release-assets/
+/release-notes.md

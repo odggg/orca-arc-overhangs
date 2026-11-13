@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing stable tag to prepare (e.g. v0.4.2)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build-and-release:
+    name: Build universal wheel and prepare release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'This tag already has a release. Choose a new version.' >&2
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Build and run regression suite
+        run: |
+          python build_plugin.py
+          python -m unittest discover -s tests -p test_orcacloud_publish.py -v
+          python -m unittest discover -s tests -p test_stage_release.py -v
+          python -m unittest discover -s tests -p test_slice_preview.py -v
+          python -m unittest discover -s tests -p test_preview_playback.py -v
+          python -m unittest discover -s tests -p test_workbench.py -v
+          python tests.py
+          python test_audit.py
+          node test_tab.js
+          python package_release.py
+          python test_package.py
+
+      - name: Stage only the verified universal wheel
+        run: python scripts/stage_release.py --tag "$RELEASE_TAG"
+
+      # Publishing with GITHUB_TOKEN would suppress the release event used by
+      # publish-orcacloud.yml. A person publishes this completed draft instead.
+      - name: Create release draft
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release-assets/*
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+          draft: true
+          prerelease: false
