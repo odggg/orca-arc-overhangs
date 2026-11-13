@@ -6,7 +6,7 @@
 # name = "Arc Overhang"
 # description = "Concentric arc overhangs for OrcaSlicer 2.5. GPL-3.0; based on Kelsch, Nicolai Wachenschwan and Steven McCulloch."
 # author = "Kelsch / Nicolai Wachenschwan / Steven McCulloch; Orca 2.5 adaptation"
-# version = "0.3.2"
+# version = "0.4.0"
 # ///
 """Arc Overhang for OrcaSlicer 2.5. Modified 2026-10-24.
 GPL-3.0, no warranty. See LICENSE in the source distribution.
@@ -227,12 +227,403 @@ def getArcBoundarys(concentricArcs: list) -> list:
             boundarys.append(arcLine)
     return boundarys
 
-UI_TEMPLATE = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n<title>Arc Overhang</title><style>:root{color-scheme:light dark;font:14px/1.5 "Segoe UI",system-ui,sans-serif;--bg:light-dark(#f6f5f0,#161c1b);--panel:light-dark(#fffefa,#1f2725);--ink:light-dark(#1c3230,#e1e9e5);--muted:light-dark(#63726b,#a4b4aa);--line:light-dark(#dce2d9,#39443d);--soft:light-dark(#f0f3ec,#29332b);--accent:light-dark(#19645a,#8ed4bb);--accent-ink:light-dark(#fffefa,#14281e);--warm:light-dark(#9d5c2b,#e8b780);--shadow:0 3px 16px #102e2110}\nhtml[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orca-theme=light],html[data-theme=light]{color-scheme:light}\n*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.55}a{color:var(--accent)}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}[hidden]{display:none!important}.sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}\n.app-shell{max-width:1320px;margin:auto;padding:28px 34px 0}.app-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:24px}.identity{display:flex;align-items:center;gap:12px}.brand{width:42px;height:42px;color:var(--accent)}h1{font-size:23px;letter-spacing:-.7px;line-height:1.3;margin:0;font-weight:650}.version{font:11px/1.5 ui-monospace,monospace;letter-spacing:0;color:var(--muted);vertical-align:middle;margin-left:8px}.eyebrow{font-size:12px;margin:2px 0 0;color:var(--muted)}.local-badge{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;white-space:nowrap}.local-badge>span{width:6px;height:6px;background:var(--accent);border-radius:50%}.view-nav{display:flex;gap:26px;border-bottom:1px solid var(--line)}.view-nav button{border:0;border-bottom:2px solid transparent;background:none;padding:12px 0;margin-bottom:-1px;color:var(--muted);font-weight:600}.view-nav button[aria-current=page]{color:var(--accent);border-color:var(--accent)}.context-note{font-size:11px;color:var(--muted);margin:10px 0 0}.section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:30px 0 22px}.kicker{font-size:10px;letter-spacing:1.7px;font-weight:700;color:var(--muted);margin:0 0 6px}h2{font-size:30px;line-height:1.2;letter-spacing:-1px;font-weight:600;margin:0 0 8px}.section-heading p:not(.kicker){color:var(--muted);margin:0}h3{font-size:16px;letter-spacing:-.25px;margin:0;font-weight:650}h4{font-size:18px;letter-spacing:-.4px;margin:8px 0}p{margin:0 0 12px}.enable-switch{display:flex;gap:12px;align-items:center;font-size:12px;white-space:nowrap}input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px;cursor:pointer}input[role=switch]{appearance:none;background:var(--line);border-radius:30px;width:40px;height:23px;position:relative;border:1px solid transparent}input[role=switch]::before{content:"";position:absolute;width:17px;height:17px;background:var(--panel);border-radius:50%;left:2px;top:2px;transition:transform .16s}input[role=switch]:checked{background:var(--accent)}input[role=switch]:checked::before{transform:translateX(17px)}\n.overview-grid{display:grid;grid-template-columns:minmax(0,1fr) 328px;gap:22px;align-items:start}.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);overflow:hidden}.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:20px 22px}.panel-heading .kicker{font-size:9px}.layer-picker{max-width:50%;font-size:11px}.layer-picker select{font-size:11px;padding:7px;max-width:100%}.plot{position:relative;min-height:360px;background:radial-gradient(ellipse at 50% 70%,var(--soft),transparent 68%)}#export-drawing{display:block;width:100%;height:360px}#export-paths polyline{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}#export-outlines polyline{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4;opacity:.7;vector-effect:non-scaling-stroke}.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:25px;max-width:450px;margin:auto}.empty-state svg{width:180px;height:110px;color:var(--accent);opacity:.6}.empty-state p{color:var(--muted);font-size:12px;max-width:300px}.text-button{background:none;border:0;padding:5px 0;color:var(--accent);font-size:12px;font-weight:650}.text-button span{padding-left:6px}.plot-caption{display:flex;gap:15px;align-items:center;flex-wrap:wrap;padding:10px 22px 18px;font-size:10px;color:var(--muted)}.plot-caption>span{display:inline-flex;gap:5px;align-items:center}.plot-caption>span:last-child{margin-left:auto}.legend-line{display:inline-block;width:14px;height:2px;background:var(--accent)}.legend-line.outline{height:0;background:none;border-top:1px dashed var(--muted)}.export-stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);padding:18px 0}.export-stats>div{text-align:center;border-right:1px solid var(--line)}.export-stats>div:last-child{border:0}.export-stats span{display:block;font-size:24px;line-height:1.1;letter-spacing:-.5px;font-weight:600}.export-stats small{display:block;font-size:10px;color:var(--muted);margin-top:5px}.report-summary{font-size:11px;color:var(--muted);padding:0 22px 14px;margin:0}.report-details{margin:0 22px 18px;font-size:12px}.report-details summary{cursor:pointer;color:var(--accent)}.report-details li{margin-top:7px}\n.setup-panel{padding:20px}.step-heading{display:flex;align-items:flex-start;gap:11px;margin-bottom:15px}.step-heading>span{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex-shrink:0;font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:50%;color:var(--accent)}.step-heading p{font-size:11px;color:var(--muted);margin:3px 0 0}.mode-select{font-weight:600;width:100%}.mode-note{font-size:11px;color:var(--muted);margin:10px 0 16px}.quick-fields{border-top:1px solid var(--line)}.field{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;align-items:center;padding:15px 0;border-bottom:1px solid var(--line)}.field>label{font-weight:600;font-size:12px}.field-help{font-size:11px;color:var(--muted);margin:6px 0 0}.field .field-help{grid-column:1/-1}.number-control{display:flex;align-items:center;gap:7px;white-space:nowrap}.number-control>span{font-size:10px;color:var(--muted);min-width:25px}.number-control input{width:82px;padding:8px 8px;font-variant-numeric:tabular-nums}select,input[type=number],textarea{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:9px 10px}select{max-width:100%}input[aria-invalid=true]{border-color:var(--warm);outline-color:var(--warm)}.decision-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}.decision{padding:20px 22px}.decision>select{width:100%;font-size:12px}.sequence{display:flex;align-items:center;gap:6px;padding:0;list-style:none;margin:14px 0 0;font-size:10px;color:var(--muted)}.sequence li{display:flex;align-items:center;gap:6px}.sequence li:not(:last-child)::after{content:"→";color:var(--warm)}.inline-note{font-size:11px;color:var(--warm);background:var(--soft);padding:10px 14px;margin:0 20px;border-radius:6px}.decision .inline-note{margin:10px 0 0}\n.settings-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:14px 0;overflow:hidden}.settings-group>summary{cursor:pointer;padding:18px 22px;font-size:15px;font-weight:600;list-style-position:inside}.settings-group>summary small{display:block;padding-left:18px;font-size:11px;color:var(--muted);font-weight:400;margin-top:3px}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px;padding:0 22px 15px}.field-grid .field:nth-last-child(-n+2){border-bottom:0}.import-area,.guide-text{padding:0 22px 22px;font-size:12px;color:var(--muted)}textarea{width:100%;display:block;margin:8px 0 12px;font:12px/1.5 ui-monospace,monospace}.guide-panel #guide-drawing{width:100%;max-height:330px;display:block;color:var(--ink)}#guide-drawing text{fill:var(--muted);font:12px "Segoe UI",sans-serif}#guide-paths path{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round}.guide-copy{border-top:1px solid var(--line);padding:20px 24px;display:grid;grid-template-columns:1fr auto;column-gap:30px}.guide-copy h4,.guide-copy p{grid-column:1}.guide-copy p{font-size:12px;color:var(--muted);max-width:630px}.mini-measure{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;justify-content:center;border-left:1px solid var(--line);padding-left:25px}.mini-measure span{font-size:11px;color:var(--muted)}.mini-measure strong{font-size:19px;font-weight:500}.guide-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin:28px 0}.guide-steps article>span{display:inline-block;font:14px ui-monospace,monospace;color:var(--warm);border-bottom:1px solid var(--warm);margin-bottom:12px;padding-right:16px}.guide-steps h3{font-size:15px;margin-bottom:8px}.guide-steps p{font-size:12px;color:var(--muted)}\n.save-bar{position:sticky;bottom:12px;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:16px;margin:30px 0 0;padding:13px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 25px #102e2120}.save-state{display:flex;align-items:center;gap:9px;max-width:65%;font-size:12px;color:var(--muted)}.state-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}.save-actions{display:flex;gap:9px;flex-shrink:0}.primary,.secondary{padding:10px 17px;border-radius:7px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--panel)}.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.primary span{padding-left:13px}.secondary:hover{background:var(--soft)}.app-footer{display:flex;justify-content:space-between;gap:15px;padding:17px 2px 22px;font-size:10px;color:var(--muted)}\n@media(max-width:1000px){.app-shell{padding:20px 22px 0}.overview-grid{grid-template-columns:minmax(0,1fr) 295px;gap:16px}.decision-grid{gap:16px}.panel-heading{padding:17px}.setup-panel{padding:17px}h2{font-size:26px}.plot-caption>span:last-child{margin-left:0}}@media(max-width:760px){.app-shell{padding:18px 16px 0}.overview-grid,.decision-grid{grid-template-columns:1fr}.app-header{gap:10px}.app-header>.local-badge{display:none}.section-heading{align-items:flex-start;flex-direction:column;margin-top:24px}.enable-switch{align-self:flex-end}.field-grid{grid-template-columns:1fr}.field-grid .field{border-bottom:1px solid var(--line)}.field-grid .field:last-child{border:0}.quick-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.quick-fields .field{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.quick-fields .number-control input{width:74px}.quick-fields .field-help{margin:0}.guide-steps{grid-template-columns:1fr;gap:10px}.guide-copy{display:block}.mini-measure{border:0;border-top:1px solid var(--line);padding:14px 0 0}.save-bar{bottom:8px;flex-wrap:wrap}.save-state{max-width:100%;font-size:11px}.save-actions{margin-left:auto}.app-footer{flex-direction:column;gap:4px}.plot,#export-drawing{min-height:280px;height:280px}h2{font-size:25px}}@media(max-width:440px){.quick-fields{grid-template-columns:1fr}.quick-fields .field{display:grid;grid-template-columns:1fr auto}.quick-fields .field-help{grid-column:1/-1}.number-control input{width:84px}.view-nav{gap:23px}.view-nav button{font-size:12px}.layer-picker{max-width:55%}.panel-heading h3{font-size:14px}.guide-panel .panel-heading>.local-badge{font-size:9px}.guide-copy h4{font-size:17px}.sequence{flex-wrap:wrap}.app-shell{padding:14px 12px 0}}@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}\n\n.plot-caption .text-button{font-size:10px;padding:0}.plot-caption .text-button:disabled{cursor:default}\n</style></head>\n<body><div class="app-shell">\n<header class="app-header"><div class="identity"><svg class="brand" viewBox="0 0 40 40" aria-hidden="true"><path d="M7 31V9h9v22M19 31a12 12 0 0 1 12-12M19 24a5 5 0 0 1 5-5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/></svg><div><h1>Arc Overhang <span class="version">__VERSION__</span></h1><p class="eyebrow">Overhang support, made visible.</p></div></div><span class="local-badge"><span></span> Local · open source</span></header>\n<nav class="view-nav" aria-label="Plugin workspace"><button type="button" data-view="overview" aria-current="page">Overview</button><button type="button" data-view="tuning">Fine tuning</button><button type="button" data-view="guide">How it works</button></nav>\n<p class="context-note">__CONTEXT__</p>\n<main id="settings">\n<section id="view-overview" class="app-view" aria-label="Overview">\n<div class="section-heading"><div><p class="kicker">THE WORKBENCH</p><h2>Shape your overhang support.</h2><p>Choose how the overhang is filled. Export, then inspect the result.</p></div><label class="enable-switch"><span>Enable processing</span><input id="enabled" type="checkbox" role="switch"></label></div>\n<p id="processing-note" class="inline-note" hidden>Processing is disabled. You can adjust settings, then enable and save them before exporting.</p>\n<div class="overview-grid">\n<section class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">LAST EXPORT</p><h3 id="preview-heading">Your generated support</h3></div><label class="layer-picker"><span class="sr-only">Exported region</span><select id="preview-layer" disabled><option>No export yet</option></select></label></div>\n<div id="preview-warning" class="inline-note" hidden></div>\n<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Simplified support paths from the last export"><g id="export-outlines"></g><g id="export-paths"></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4>A path, once you export.</h4><p>Select Arc Overhang in your process pipeline and export. Generated support will appear here; this view does not upload your model.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>\n<div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">A simplified 2D snapshot of the last export.</span></div>\n<div class="export-stats" aria-label="Last export summary"><div><span id="stat-regions">—</span><small>regions replaced</small></div><div><span id="stat-paths">—</span><small>support paths</small></div><div><span id="stat-hilbert">—</span><small>Hilbert regions</small></div></div>\n<p id="last-report" class="report-summary" role="status">No export with this plugin version yet.</p><details id="report-details" class="report-details" hidden><summary>Why regions were kept</summary><ul id="skip-list"></ul></details></section>\n<aside class="setup-stack" aria-label="Essential settings"><section class="panel setup-panel"><div class="step-heading"><span>01</span><div><h3>Choose your path</h3><p>One overhang, two approaches.</p></div></div><label for="overhang_mode" class="sr-only">Overhang mode</label><select id="overhang_mode" class="mode-select"><option value="arc">Concentric Arcs</option><option value="wave">Wave fronts · experimental</option></select><p id="mode-note" class="mode-note"></p><div data-mode="arc" class="quick-fields">__ARC_QUICK__</div><div data-mode="wave" class="quick-fields" hidden>__WAVE_QUICK__</div><div class="quick-fields">__ANCHOR_QUICK__</div><button type="button" class="text-button" id="open-tuning">All settings <span aria-hidden="true">↗</span></button></section></aside>\n</div>\n<div class="decision-grid"><section class="panel decision"><div class="step-heading"><span>02</span><div><h3>Decide the sequence</h3><p>Where support sits in the layer.</p></div></div><label for="print_order" class="sr-only">Print order</label><select id="print_order"><option value="layer_tail">Our previous order · default</option><option value="slicer">Keep slicer order</option></select><ol id="sequence" class="sequence"><li>Walls + infill</li><li>Arcs / Waves</li><li>Overhang walls</li></ol><p id="sequence-note" class="field-help">Applied within each layer and tool section.</p></section>\n<section class="panel decision"><div class="step-heading"><span>03</span><div><h3>The layer above</h3><p>Choose its internal solid infill.</p></div></div><label for="next_layer_pattern" class="sr-only">Infill on next layer</label><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern · default</option><option value="hilbert">Hilbert curve · slower, experimental</option></select><p class="field-help">Hilbert applies only to eligible internal solid infill directly above generated support. Top surfaces, bridges and sparse infill stay as sliced.</p><p id="floor-note" class="inline-note" hidden>Wave floor Hilbert is also enabled in Fine tuning. It can affect more than one layer.</p></section></div>\n</section>\n<section id="view-tuning" class="app-view" aria-label="Fine tuning" hidden><div class="section-heading"><div><p class="kicker">FINE TUNING</p><h2>A little more control.</h2><p>Your existing values are preserved, including settings for the other mode.</p></div></div>\n<details class="settings-group" data-mode="arc" open><summary><span>Arc behaviour</span><small>Shape, flow &amp; cooling time</small></summary><div class="field-grid">__ARC__</div></details>\n<details class="settings-group" data-mode="wave" open hidden><summary><span>Wave behaviour</span><small>Path shape, travel &amp; anchoring</small></summary><div class="field-grid">__WAVE__</div></details>\n<details class="settings-group" data-mode="wave" hidden><summary><span>Above the Waves</span><small>Floor layers, Hilbert &amp; cooling</small></summary><div class="field-grid">__FLOOR__</div></details>\n<details class="settings-group"><summary><span>Shared controls</span><small>Eligibility, travel, retraction &amp; limits</small></summary><div class="field-grid">__SHARED__</div></details>\n<details class="settings-group" data-mode="wave" hidden><summary><span>Import a Wave profile</span><small>Paste values; review before saving</small></summary><div class="import-area"><p>Paste WaveOverhangs <code>wave_overhang_*</code> settings, a profile JSON, or its <code>WAVE_OVERHANG_CONFIG</code> comment. Only recognised Wave options are imported. Printer and filament profiles stay in Orca.</p><label for="import_text">Profile values</label><textarea id="import_text" rows="5" placeholder="; wave_overhang_line_spacing = 0.35" spellcheck="false"></textarea><button id="import" class="secondary" type="button">Import pasted values</button></div></details>\n</section>\n<section id="view-guide" class="app-view" aria-label="How it works" hidden><div class="section-heading"><div><p class="kicker">UNDERSTAND THE PATH</p><h2>From supported edge to open space.</h2><p>A visual explanation of the selected method. This drawing is a concept, not your model.</p></div></div><section class="panel guide-panel"><div class="panel-heading"><h3 id="guide-heading">Concentric Arcs</h3><span class="local-badge">Concept illustration</span></div><svg id="guide-drawing" viewBox="0 0 640 270" role="img" aria-label="Concept drawing of generated support"><defs><pattern id="support-hatch" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M0 10L10 0" stroke="currentColor" opacity=".15"/></pattern><clipPath id="guide-clip"><rect x="188" y="26" width="400" height="204" rx="8"/></clipPath></defs><rect x="42" y="26" width="146" height="204" rx="8" fill="url(#support-hatch)" stroke="currentColor" opacity=".6"/><rect x="188" y="26" width="400" height="204" rx="8" fill="none" stroke="currentColor" stroke-dasharray="5 7" opacity=".25"/><g id="guide-paths" clip-path="url(#guide-clip)"></g><text x="42" y="255">Supported area</text><text x="384" y="255">Overhang area</text></svg><div class="guide-copy"><h4 id="guide-title">Connected paths, built outwards.</h4><p id="guide-note"></p><div class="mini-measure"><span>Current spacing</span><strong id="spacing-readout">0.95 × nozzle</strong></div></div></section>\n<div class="guide-steps"><article><span>1</span><h3>Enable the pipeline</h3><p>Select Arc Overhang in Orca\'s process pipeline settings. Enabling this switch alone does not select the pipeline for your preset.</p></article><article><span>2</span><h3>Slice &amp; export</h3><p>Only suitable unsupported Bridge regions are replaced. If Orca uses extra overhang walls instead of bridges, that area stays unchanged.</p></article><article><span>3</span><h3>Reopen &amp; inspect</h3><p>Orca\'s normal preview precedes post-processing. Reopen the exported G-code to inspect the final print order and paths before printing.</p></article></div>\n<details class="settings-group"><summary><span>When no support appears</span><small>What to check</small></summary><div class="guide-text"><p>Check that the pipeline is selected and that the export includes unsupported Bridge or Internal Bridge paths. A supported bridge above infill is intentionally retained.</p><p>The default minimum area is 50 mm². Small, unanchored or insufficiently covered regions remain as sliced. Read the last export\'s skipped reasons on Overview.</p><p>For counterbore models, partially bridged strips may already be supported. Check Orca\'s counterbore setting if you expected a different result.</p></div></details>\n</section>\n</main>\n<div class="save-bar"><div class="save-state"><span class="state-dot" aria-hidden="true"></span><span id="status" role="status" aria-live="polite">Loading settings…</span></div><div class="save-actions"><button id="refresh" type="button" class="secondary">Reload saved</button><button id="save" type="button" class="primary">Save settings <span aria-hidden="true">↗</span></button></div></div>\n<footer class="app-footer"><span>GPL-3.0 · runs locally · __VERSION__</span><span>Arc concept: McCulloch · Wachenschwan · Kelsch. Contributions: persano.</span></footer>\n</div><script>__BRIDGE__\nconst defaults = __DEFAULTS__;\nconst IMPORT = __IMPORT__;\nconst ALIASES = __ALIASES__;\nconst fields = Object.keys(defaults);\nconst $ = id => document.getElementById(id);\nconst all = selector => Array.from(document.querySelectorAll?.(selector) || []);\nconst status = $(\'status\');\nlet draft = null, ready = false, savingUI = false, lastReport = null, showWholeLayer = false;\nfunction text(id, value) { const el=$(id); if(el) el.textContent=value; }\nfunction collect() {\n  const values={};\n  for(const key of fields) {\n    const el=$(key); if(!el) continue;\n    values[key]=typeof defaults[key]===\'boolean\'?el.checked:(typeof defaults[key]===\'string\'?el.value:Number(el.value));\n  }\n  return values;\n}\nfunction selectView(name) {\n  for(const view of all(\'.app-view\')) view.hidden=view.id!==\'view-\'+name;\n  for(const button of all(\'[data-view]\')) {\n    if(button.dataset.view===name) button.setAttribute(\'aria-current\',\'page\');\n    else button.removeAttribute(\'aria-current\');\n  }\n  if(name===\'guide\') renderGuide();\n}\nfunction renderState() {\n  const disabled=$(\'processing-note\'); if(disabled) disabled.hidden=!!$(\'enabled\')?.checked;\n  const wave=$(\'overhang_mode\')?.value===\'wave\';\n  for(const section of all(\'[data-mode]\')) section.hidden=section.dataset.mode!==(wave?\'wave\':\'arc\');\n  text(\'mode-note\',wave?\'Offset fronts grow from the supported edge. Wave mode is experimental.\':\'Concentric paths connect to the previous layer and extend into the overhang.\');\n  const slicer=$(\'print_order\')?.value===\'slicer\';\n  const labels=slicer?[\'Slicer sequence\',\'Bridge → support\',\'Early overhang walls follow\']:[\'Walls + infill\',wave?\'Waves\':\'Arcs\',\'Overhang walls\'];\n  all(\'#sequence li\').forEach((el,index)=>{el.textContent=labels[index];});\n  text(\'sequence-note\',slicer?\'Normal walls and infill stay in their sliced positions. Early Overhang walls follow the support.\':\'The previous order is kept within each layer and tool section.\');\n  const note=$(\'floor-note\'); if(note) note.hidden=!(wave && $(\'wave_floor_use_hilbert\')?.checked);\n  renderGuide(); renderPreviewWarning();\n}\nfunction renderGuide() {\n  const group=$(\'guide-paths\'); if(!group) return;\n  const wave=$(\'overhang_mode\')?.value===\'wave\';\n  const raw=Number($(wave?\'wave_line_spacing_mm\':\'arc_spacing_nozzle_ratio\')?.value);\n  const spacing=Number.isFinite(raw)?Math.max(.05,Math.min(1.5,raw)):0.4;\n  const count=Math.max(8,Math.min(30,Math.round(13/spacing)));\n  while(group.firstChild) group.removeChild(group.firstChild);\n  for(let i=0;i<count;i++) {\n    const path=document.createElementNS(\'http://www.w3.org/2000/svg\',\'path\');\n    const step=400/count, x=193+i*step;\n    path.setAttribute(\'d\',wave?`M${x} 32 C${x+25} 83 ${x+25} 173 ${x} 224`:`M190 ${224-i*2} Q${190+i*4} ${32-i*1.2} ${Math.min(588,205+i*step)} 32`);\n    group.appendChild(path);\n  }\n  text(\'guide-heading\',wave?\'Wave fronts\':\'Concentric Arcs\');\n  text(\'guide-title\',wave?\'A front that grows from support.\':\'Connected paths, built outwards.\');\n  text(\'guide-note\',wave?\'Each front grows from supported material. Flow, spacing and cooling affect adhesion; this drawing explains the pattern and does not predict print quality.\':\'The first path starts on existing support. Later paths connect to material already laid down. The actual geometry is calculated from your exported Bridge regions.\');\n  text(\'spacing-readout\',wave?`${raw===0?\'Nozzle ratio\':Number.isFinite(raw)?raw:\'—\'}${raw===0?\'\':\' mm\'}`:`${Number.isFinite(raw)?raw:\'—\'} × nozzle`);\n}\nfunction renderPreviewWarning() {\n  const el=$(\'preview-warning\'); if(!el) return;\n  const snapshot=lastReport?.preview, values=collect();\n  const different=snapshot?.settings && fields.some(key=>snapshot.settings[key]!==undefined && snapshot.settings[key]!==values[key]);\n  el.hidden=!different;\n  el.textContent=different?\'Settings differ from this export snapshot. Save and export again to update the paths.\':\'\';\n}\nfunction renderSnapshot(index=0) {\n  const layers=lastReport?.preview?.layers || [], layer=layers[index];\n  const empty=$(\'preview-empty\'), canvas=$(\'export-drawing\');\n  if(empty) empty.hidden=!!layer;\n  if(!canvas) return;\n  const paths=$(\'export-paths\'), outlines=$(\'export-outlines\');\n  if(!paths || !outlines) return;\n  paths.replaceChildren(); outlines.replaceChildren();\n  if(!layer) { canvas.setAttribute(\'viewBox\',\'0 0 480 340\'); return; }\n  const lines=showWholeLayer?[...(layer.outlines||[]),...(layer.paths||[])]:layer.paths||[];\n  const points=lines.flat().filter(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite));\n  if(!points.length) return;\n  const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);\n  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);\n  const span=Math.max(maxX-minX,maxY-minY,1), pad=span*.12;\n  canvas.setAttribute(\'viewBox\',`${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);\n  for(const [key,group] of [[\'outlines\',outlines],[\'paths\',paths]]) {\n    group.setAttribute(\'transform\',`translate(0 ${minY+maxY}) scale(1 -1)`);\n    for(const line of layer[key]||[]) {\n      if(!line.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))) continue;\n      const poly=document.createElementNS(\'http://www.w3.org/2000/svg\',\'polyline\');\n      poly.setAttribute(\'points\',line.map(p=>p.join(\',\')).join(\' \')); group.appendChild(poly);\n    }\n  }\n  text(\'preview-caption\',`Layer ${layer.layer} · Z ${layer.z} mm · T${layer.tool} · ${layer.mode===\'wave\'?\'Wave\':\'Arc\'}${lastReport.preview.limited?\' · limited snapshot\':\' · simplified 2D\'}`);\n}\nfunction renderReport(report) {\n  lastReport=report || null;\n  const valid=report && !report.error;\n  text(\'stat-regions\',valid?report.replaced_features:\'—\');\n  text(\'stat-paths\',valid?report.generated_arcs:\'—\');\n  text(\'stat-hilbert\',valid?(report.hilbert_features||0):\'—\');\n  text(\'last-report\',!report?\'No export with this plugin version yet.\':report.error?\'Last export: \'+report.error:`Last export: ${report.replaced_features} regions replaced, ${report.generated_arcs} support paths, ${report.skipped_features} skipped.${report.preview_error?\' \'+report.preview_error:\'\'}`);\n  const reasons=Object.entries(report?.skip_reasons||{}), details=$(\'report-details\'),list=$(\'skip-list\');\n  if(details) details.hidden=!reasons.length;\n  if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement(\'li\'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }\n  const select=$(\'preview-layer\');\n  if(select) {\n    select.replaceChildren(); const layers=report?.preview?.layers||[];\n    for(const [index,layer] of layers.entries()) { const option=document.createElement(\'option\'); option.value=String(index); option.textContent=`Region ${index+1} · Layer ${layer.layer} · T${layer.tool}`; select.appendChild(option); }\n    if(!layers.length) { const option=document.createElement(\'option\'); option.textContent=\'No support snapshot\'; select.appendChild(option); }\n    select.disabled=!layers.length;\n  }\n  if($(\'preview-fit\')) $(\'preview-fit\').disabled=!(report?.preview?.layers||[]).length;\n  renderSnapshot(); renderPreviewWarning();\n}\nfunction remember() { draft=collect(); status.textContent=\'Unsaved changes.\'; renderState(); }\nfunction readonly() { return window.orca.getContext ? !!window.orca.getContext().readOnly : false; }\nasync function initialize(discard=false) {\n  try {\n    let saved=await settingsBridge.getConfig(); if(typeof saved===\'string\') saved=JSON.parse(saved);\n    if(discard===true) draft=null;\n    const values={...defaults,...(saved||{}),...(draft||{})};\n    for(const key of fields) {\n      const el=$(key); if(!el) continue;\n      if(typeof defaults[key]===\'boolean\') el.checked=values[key]; else el.value=values[key];\n      el.disabled=readonly(); el.removeAttribute?.(\'aria-invalid\');\n    }\n    ready=true; renderState();\n    status.textContent=readonly()?\'This preset is read-only.\':draft?\'Unsaved changes.\':\'Settings loaded.\';\n  } catch(error) { status.textContent=\'Could not load settings: \'+error.message; }\n}\nfunction invalid(key,message) {\n  const el=$(key); el?.setAttribute?.(\'aria-invalid\',\'true\');\n  if(el?.closest) {\n    selectView(\'tuning\');\n    const overview=el.closest(\'#view-overview\'); if(overview) selectView(\'overview\');\n    let parent=el.parentElement;\n    while(parent) { if(parent.tagName===\'DETAILS\') parent.open=true; if(parent.dataset?.mode) parent.hidden=false; parent=parent.parentElement; }\n    el.focus();\n  }\n  status.textContent=message;\n}\n$(\'save\').onclick=async()=>{\n  if(!ready) { status.textContent=\'Wait for settings to load.\'; return; }\n  if(readonly()) { status.textContent=\'This preset is read-only.\'; return; }\n  if(savingUI) return;\n  const values=collect();\n  for(const key of fields) {\n    $(key)?.removeAttribute?.(\'aria-invalid\');\n    if(typeof values[key]===\'number\' && (!Number.isFinite(values[key]) || $(key)?.value===\'\')) { invalid(key,\'Please enter a valid number for \'+key+\'.\'); return; }\n    if($(key)?.checkValidity && !$(key).checkValidity()) { invalid(key,$(key).validationMessage); return; }\n  }\n  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s) { invalid(\'minimum_arc_speed_mm_s\',\'Minimum speed must not exceed maximum arc speed.\'); return; }\n  if(values.z_min_mm>values.z_max_mm) { invalid(\'z_min_mm\',\'Invalid Z range.\'); return; }\n  savingUI=true; $(\'save\').disabled=true; status.textContent=\'Saving…\';\n  try {\n    const result=await settingsBridge.saveConfig(values);\n    if(result===false) status.textContent=\'Save failed.\';\n    else { draft=null; status.textContent=result?.preset_override_active?\'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.\':\'Saved.\'; }\n  } catch(error) {\n    const key=fields.find(key=>error.message.startsWith(key+\' \'));\n    if(key) invalid(key,\'Save failed: \'+error.message);\n    else status.textContent=\'Save failed: \'+error.message;\n  }\n  finally { savingUI=false; $(\'save\').disabled=false; renderPreviewWarning(); }\n};\nfunction importProfile(text) {\n  const marker={},explicit={},prefixed=new Set(),ignored=[];\n  for(const line of text.split(/\\r?\\n/)) {\n    if(line.includes(\'WAVE_OVERHANG_CONFIG\')) for(const m of line.matchAll(/(\\w+)=(\\S+)/g)) marker[ALIASES[m[1]]||m[1]]=m[2];\n    for(const m of line.matchAll(/wave_overhang_(\\w+?)["\']?\\s*[:=]\\s*["\']?([^\\s"\',;]+)/g)) { explicit[m[1]]=m[2]; prefixed.add(m[1]); }\n  }\n  const found={...marker,...explicit},values={overhang_mode:\'wave\'};\n  for(const [key,raw] of Object.entries(found)) {\n    const spec=IMPORT[key];\n    if(!spec) { if(prefixed.has(key)&&![\'min_angle\',\'spacing_mode\',\'seam_mode\',\'debug_gcode\',\'outer_perimeters\'].includes(key)) ignored.push(\'wave_overhang_\'+key); continue; }\n    const [target,kind]=spec,number=Number(raw);\n    if(kind===\'text\') { if([\'smart\',\'zigzag\',\'monotonic\'].includes(raw.toLowerCase())) values[target]=raw.toLowerCase(); else ignored.push(\'wave_overhang_\'+key); }\n    else if(kind===\'bool\') { if([\'0\',\'1\',\'true\',\'false\'].includes(raw.toLowerCase())) values[target]=[\'1\',\'true\'].includes(raw.toLowerCase()); else ignored.push(\'wave_overhang_\'+key); }\n    else if(!Number.isFinite(number)) ignored.push(\'wave_overhang_\'+key);\n    else if(kind===\'fan\') { values[target[0]]=number>=0; values[target[1]]=Math.max(0,number); }\n    else values[target]=number;\n  }\n  return {values,ignored};\n}\n$(\'import\').onclick=()=>{\n  if(readonly()) { status.textContent=\'This preset is read-only.\'; return; }\n  const {values,ignored}=importProfile($(\'import_text\').value||\'\');\n  const count=Object.keys(values).length-1;\n  if(!count) { status.textContent=\'No wave_overhang_ settings found in the pasted text.\'; return; }\n  for(const [key,value] of Object.entries(values)) { const el=$(key); if(!el) continue; if(typeof value===\'boolean\') el.checked=value; else el.value=value; }\n  remember(); $(\'import_text\').value=\'\';\n  status.textContent=`Imported ${count} settings; press Save to keep them.`+(ignored.length?\' No equivalent for: \'+ignored.join(\', \')+\'.\':\'\');\n};\n$(\'refresh\').onclick=()=>initialize(true);\n$(\'settings\').addEventListener(\'input\',event=>{if(fields.includes(event.target.id)) remember();});\n$(\'settings\').addEventListener(\'change\',event=>{if(fields.includes(event.target.id)) remember();});\nfor(const button of all(\'[data-view]\')) button.onclick=()=>selectView(button.dataset.view);\nif($(\'open-guide\')) $(\'open-guide\').onclick=()=>selectView(\'guide\');\nif($(\'open-tuning\')) $(\'open-tuning\').onclick=()=>selectView(\'tuning\');\nif($(\'preview-layer\')) $(\'preview-layer\').onchange=()=>renderSnapshot(Number($(\'preview-layer\').value));\nif($(\'preview-fit\')) $(\'preview-fit\').onclick=()=>{showWholeLayer=!showWholeLayer; $(\'preview-fit\').setAttribute(\'aria-pressed\',String(showWholeLayer)); $(\'preview-fit\').textContent=showWholeLayer?\'Fit support\':\'Show whole layer\'; renderSnapshot(Number($(\'preview-layer\')?.value||0));};\ndocument.addEventListener(\'visibilitychange\',()=>{if(!document.hidden) initialize();});\ninitialize();\n</script></body></html>\n'
+"""Local workbench geometry, display data and opt-in print strategies."""
 
-VERSION = "0.3.2"
+def adaptive_order(paths, support, width, cancelled=lambda: False):
+    """Choose only paths attached to already deposited material; prefer connected branches."""
+    remaining = list(paths)
+    result = []
+    printed = support.buffer(width * .05)
+    last = None
+    while remaining:
+        if cancelled(): raise Cancelled('Cancelled.')
+        eligible = [(i, path) for i, path in enumerate(remaining)
+                    if Point(path.coords[0]).distance(printed) <= width * .55]
+        if not eligible:
+            # Preserve the engine's dependency order if no candidate can be proven attached.
+            result.extend(remaining)
+            break
+        def score(item):
+            _, path = item
+            anchor = path.intersection(printed.buffer(width * .5)).length
+            connected = path.distance(last) <= width if last is not None else False
+            return (not connected, -anchor, path.length, item[0])
+        index, path = min(eligible, key=score)
+        remaining.pop(index)
+        result.append(path)
+        printed = printed.union(path.buffer(width * .5))
+        last = path
+    return result
+
+
+def emit_refined_arcs(arcs, before, after, cfg, printer, restore, pre, post, support=None):
+    wave = cfg['overhang_mode'] == 'wave'
+    diameter = printer['nozzle_diameter']
+    volume = cfg['wave_flow_mm3_per_mm'] if wave else math.pi * (diameter / 2) ** 2 * cfg['flow_multiplier']
+    e_ratio = volume / (math.pi * (printer['filament_diameter'] / 2) ** 2) * printer['filament_flow_ratio']
+    speed = cfg['wave_speed_mm_s'] if wave else cfg['arc_speed_mm_s']
+    travel = (cfg['wave_travel_speed_mm_s'] if wave else cfg['travel_speed_mm_s']) * 60
+    retract = cfg['wave_end_retract_mm'] if wave and cfg['wave_end_retract_mm'] else cfg['retract_length_mm']
+    retract_feed = cfg['retract_speed_mm_s'] * 60
+    z, hop = before.z, cfg['z_hop_mm']
+    modal = dict(before.modal)
+    # Resolve against wrappers as well as the incoming state.
+    for line in pre:
+        cmd, words = command(line)
+        if cmd == 'M106':
+            channel = int(words.get('P', 0))
+            modal[f'fan:{channel}'] = line
+        elif cmd == 'M204':
+            modal['acceleration'] = line
+    out = [MARKER + 'BEGIN\n', ';TYPE:Bridge\n', *pre]
+    acceleration = modal.get('acceleration')
+    if cfg['support_acceleration_mm_s2'] and acceleration:
+        out.append(f"M204 S{cfg['support_acceleration_mm_s2']:g}\n")
+    fan_key = next((key for key in ('fan:0', 'fan:1') if key in modal), None)
+    old_fan = modal.get(fan_key)
+    def fan(percent):
+        if fan_key:
+            out.append(f"M106 P{fan_key.split(':')[1]} S{round(percent*2.55)}\n")
+    last_path = None
+    printed = GeometryCollection()
+    def retract_travel(coords, allow_connected=False):
+        nonlocal last_path
+        connected = (allow_connected and last_path is not None and cfg['connected_travel_mm'] > 0
+                     and math.dist(last_path.coords[-1], coords) <= cfg['connected_travel_mm']
+                     and printed.buffer(diameter * .25).covers(LineString([last_path.coords[-1], coords])))
+        if not connected:
+            if retract:
+                out.append(f'G1 E{-retract:.7f} F{retract_feed:.2f}\n')
+            if last_path is not None and cfg['wipe_mm']:
+                end = last_path.length
+                # Follow the existing curve backwards, never a shortcut across it.
+                points = list(last_path.coords)
+                distance = 0.0
+                for a, b in zip(reversed(points[1:]), reversed(points[:-1])):
+                    length = math.dist(a, b)
+                    remain = min(length, cfg['wipe_mm'] - distance)
+                    if remain <= 0: break
+                    ratio = remain / max(length, 1e-12)
+                    x, y = (a[j] + (b[j] - a[j]) * ratio for j in (0, 1))
+                    out.append(f'G1 X{x:.5f} Y{y:.5f} F{travel:.2f}\n')
+                    distance += remain
+            if hop: out.append(f'G1 Z{z+hop:.5f} F{travel:.2f}\n')
+        out.append(f'G1 X{coords[0]:.5f} Y{coords[1]:.5f} F{travel:.2f}\n')
+        if not connected:
+            if hop: out.append(f'G1 Z{z:.5f} F{travel:.2f}\n')
+            if retract: out.append(f'G1 E{retract:.7f} F{retract_feed:.2f}\n')
+    distances=[arc.distance(arcs[0]) for arc in arcs] if arcs else []
+    furthest=max(distances,default=0)
+    for i, arc in enumerate(arcs):
+        initial = i < cfg['initial_path_count']
+        flow = cfg['initial_flow_percent'] / 100 if initial else 1.0
+        if initial: fan(cfg['initial_fan_percent'])
+        elif cfg['support_fan_override']: fan(cfg['support_fan_percent'])
+        elif old_fan: out.append(old_fan)
+        nominal = speed if wave else max(cfg['minimum_arc_speed_mm_s'], min(speed, arc.length / cfg['minimum_arc_time_s']))
+        nominal *= 1 - (1 - cfg['far_speed_percent'] / 100) * distances[i] / max(furthest,1e-9)
+        if printer.get('max_volumetric_speed'):
+            nominal = min(nominal, printer['max_volumetric_speed'] / (volume * flow * printer['filament_flow_ratio']))
+        coords = list(arc.coords)
+        retract_travel(coords[0], True)
+        out.append(f'; Arc {i+1}\nG1 F{nominal*60:.2f}\n')
+        # Only coast at an endpoint not close to any other path's deposited footprint.
+        end_free = support is not None and Point(coords[-1]).distance(support) > diameter*.5 and all(j == i or Point(coords[-1]).distance(other) > diameter * .6 for j, other in enumerate(arcs))
+        coast = min(cfg['edge_coast_mm'], arc.length * .1) if end_free else 0
+        cutoff, walked = arc.length - coast, 0.0
+        ink=[]
+        for a, b in zip(coords, coords[1:]):
+            length = math.dist(a, b)
+            if length <= 1e-9: continue
+            printed_length = max(0.0, min(length, cutoff - walked))
+            if 1e-9 < printed_length < length - 1e-9:
+                q = tuple(a[j] + (b[j]-a[j])*printed_length/length for j in (0,1))
+                ink.append(LineString([a,q]))
+                out.append(f'G1 X{q[0]:.5f} Y{q[1]:.5f} E{printed_length*e_ratio*flow:.7f}\n')
+                out.append(f'G1 X{b[0]:.5f} Y{b[1]:.5f}\n')
+            else:
+                if printed_length > 0: ink.append(LineString([a,b]))
+                extrusion = f' E{printed_length*e_ratio*flow:.7f}' if printed_length > 0 else ''
+                out.append(f'G1 X{b[0]:.5f} Y{b[1]:.5f}{extrusion}\n')
+            walked += length
+        cooling=max(0,cfg['path_cooling_s']-arc.length/max(nominal,1e-9))
+        if cooling: out.append(f'G4 P{math.ceil(cooling*1000)}\n')
+        last_path = arc
+        printed = printed.union(unary_union(ink).buffer(diameter*.5))
+    retract_travel((restore.x, restore.y))
+    if old_fan: out.append(old_fan)
+    if cfg['support_acceleration_mm_s2'] and acceleration: out.append(acceleration)
+    out.extend(post)
+    out.extend([f'G92 E{restore.e:.7f}\nG1 F{restore.feed:.2f}\n', MARKER+'END\n'])
+    return out
+
+
+def preview_role(role):
+    if 'overhang' in role: return 'overhang'
+    if 'outer' in role or 'external perimeter' in role: return 'outer'
+    if 'inner' in role or role == 'perimeter': return 'inner'
+    if 'bridge' in role: return 'bridge'
+    if 'sparse' in role: return 'infill'
+    if 'solid' in role: return 'solid'
+    if 'top' in role or 'bottom' in role: return 'surface'
+    if 'gap' in role: return 'gap'
+    if 'brim' in role or 'skirt' in role: return 'brim'
+    return 'other'
+
+
+def layer_contexts(lines, cancelled=lambda: False, wanted=None):
+    """Exact final layer playback, sharing one copy across all regions on a layer."""
+    features = parse(lines, cancelled)
+    generated, inside = set(), False
+    for i, line in enumerate(lines):
+        if line.strip() == MARKER+'BEGIN': inside = True
+        if inside: generated.add(i)
+        if line.strip() == MARKER+'END': inside = False
+    contexts = {}
+    for feature in features:
+        if feature.layer < 0 or wanted is not None and feature.layer+1 not in wanted: continue
+        key = str(feature.layer+1)
+        entry = contexts.setdefault(key, dict(paths=[], motions=[], roles=[], tools=[], duration=0.0))
+        active, last_role = None, None
+        moves_by_index = {move.index: move for move in feature.moves}
+        for index in range(feature.start,feature.end):
+            if index not in moves_by_index:
+                cmd, words = command(lines[index])
+                if cmd == 'G4' and entry['motions']:
+                    position=entry['motions'][-1][3:6]
+                    seconds=max(0,words.get('S',words.get('P',0)/1000))
+                    entry['motions'].append([*position,*position,seconds,2,-1,-1]);entry['duration']+=seconds
+                continue
+            move=moves_by_index[index]
+            if cancelled(): raise Cancelled('Cancelled.')
+            origin = [move.before.x, move.before.y, move.before.z]
+            target = [move.after.x, move.after.y, move.after.z]
+            if any(v is None or not math.isfinite(v) for v in origin+target): continue
+            role = 'support' if move.index in generated else preview_role(feature.role)
+            points = list(arc_polyline(move).coords) if move.command in ('G2','G3') else [origin[:2], target[:2]]
+            if points is None: points = [origin[:2], target[:2]]
+            xyz = [[float(p[0]), float(p[1]), origin[2]+(target[2]-origin[2])*i/max(1,len(points)-1)] for i,p in enumerate(points)]
+            distance = sum(math.dist(a,b) for a,b in zip(xyz,xyz[1:]))
+            if distance <= 1e-9 and abs(move.delta_e) <= 1e-9: continue
+            kind = 1 if distance > 1e-9 and move.delta_e > 0 else 0 if distance > 1e-9 else 2
+            if kind == 1 and (active is None or last_role != role or entry['paths'][active][-1] != xyz[0]):
+                active = len(entry['paths']);entry['paths'].append([xyz[0]])
+                entry['roles'].append(role);entry['tools'].append(move.after.tool)
+            if kind != 1: active = None
+            last_role = role
+            for a,b in zip(xyz,xyz[1:]):
+                seconds = (math.dist(a,b) if distance > 1e-9 else abs(move.delta_e))/max(move.after.feed/60,1e-9)
+                if kind == 1: entry['paths'][active].append(b)
+                entry['motions'].append([*a,*b,seconds,kind,active if active is not None else -1,len(entry['paths'][active])-1 if active is not None else -1])
+                entry['duration'] += seconds
+    # Context animation is movement time; stationary firmware/temperature waits aren't predicted.
+    return contexts
+
+
+def profile_suggestions(lines, resolved, tool):
+    printer = printer_settings(lines, resolved, tool)
+    raw = {}
+    for line in lines:
+        match = re.match(r'^;\s*(\w+)\s*=\s*(.*?)\s*$', line)
+        if match: raw[match[1]] = match[2]
+    raw.update({k:v for k,v in (resolved or {}).items() if v is not None})
+    material = raw.get('filament_type', 'Unknown')
+    if isinstance(material, str): material = re.split('[;,]',material)
+    if isinstance(material,(list,tuple)): material = material[tool] if tool < len(material) else 'Unknown'
+    material = str(material).strip('[]" ')
+    family = next((f for f in ('PLA','PETG','ABS','ASA','TPU','PA','PC') if material.upper().startswith(f)), 'Unknown')
+    try: fan_limit = scalar(raw.get('fan_max_speed', 100), 'fan_max_speed', tool)
+    except UnsupportedGCode: fan_limit = 100
+    if not isinstance(fan_limit, float): fan_limit = 100
+    fan_limit = max(0,min(100,fan_limit))
+    speed, fan = {'PLA':(2,100),'PETG':(1.5,80),'ABS':(1,30),'ASA':(1,30),'TPU':(.8,70),'PA':(1,30),'PC':(1,20)}.get(family,(1,50))
+    speed *= min(1.5,max(.5,printer['nozzle_diameter']/.4))
+    cap = printer['max_volumetric_speed']
+    if cap: speed = min(speed, cap/(math.pi*(printer['nozzle_diameter']/2)**2*1.35*printer['filament_flow_ratio']))
+    values = {'arc_speed_mm_s':round(speed,3), 'minimum_arc_speed_mm_s':round(min(.5,speed),3),
+              'wave_speed_mm_s':round(speed,3), 'support_fan_override':True,
+              'support_fan_percent':min(fan,fan_limit), 'peel_gap_mm':round(min(.15,printer['layer_height']*.5),3)}
+    return dict(tool=tool, material=material, family=family, nozzle=printer['nozzle_diameter'],
+                layer_height=printer['layer_height'], fan_limit=fan_limit, values=values,
+                note='Starting points for a test print, not calibrated material profiles. Review before applying.')
+
+
+def enrich_preview(report, lines, cfg, resolved, cancelled):
+    preview = report['preview']
+    wanted={r['layer'] for r in preview['layers']}
+    all_context = layer_contexts(lines, cancelled, wanted|{layer-1 for layer in wanted})
+    preview['contexts'] = {}
+    suggestions = {}
+    for region in preview['layers']:
+        layer = region['layer']; key = str(layer)
+        context = all_context.get(key, dict(paths=[],motions=[],roles=[],tools=[],duration=0))
+        previous = all_context.get(str(layer-1), {})
+        preview['contexts'][key] = {**context, 'previous':previous.get('paths',[]), 'path_count':len(context['paths'])}
+        width = printer_settings(lines,resolved,region['tool'])['nozzle_diameter']
+        deposited = unary_union([LineString(p).buffer(width*.5) for p in region['paths'] if len(p)>1])
+        region['deposited_area_mm2'] = round(deposited.area,2)
+        region['coverage_percent'] = report.get('minimum_coverage_percent')
+        if region['tool'] not in suggestions:
+            suggestions[region['tool']] = profile_suggestions(lines,resolved,region['tool'])
+    preview['suggestions'] = list(suggestions.values())
+
+
+def slowdown_above_support(lines, cfg, cancelled, resolved=None):
+    """Split extrusion at region boundaries; fitted arcs use 0.01 mm chord tolerance."""
+    features = parse(lines,cancelled)
+    inside = False; generated = set()
+    for i,line in enumerate(lines):
+        if line.strip()==MARKER+'BEGIN': inside=True
+        if inside: generated.add(i)
+        if line.strip()==MARKER+'END': inside=False
+    zones = {}
+    nozzles = {}
+    for f in features:
+        for m in f.moves:
+            line=segment(m)
+            if m.index in generated and line is not None:
+                tool=m.after.tool
+                if tool not in nozzles:
+                    nozzles[tool]=printer_settings(lines,resolved,tool)['nozzle_diameter']
+                zones.setdefault((f.layer,tool),[]).append(line.buffer(nozzles[tool]/2))
+    zones={key:unary_union(value) for key,value in zones.items()}
+    edits=[]
+    for f in features:
+        for m in f.moves:
+            if cancelled(): raise Cancelled('Cancelled.')
+            line=segment(m)
+            if line is None or m.index in generated or m.command not in ('G0','G1','G2','G3') or m.before.z != m.after.z: continue
+            matches=[geom for (layer,tool),geom in zones.items() if tool==m.after.tool and 1<=f.layer-layer<=cfg['upper_slowdown_layers']]
+            if not matches: continue
+            zone=unary_union(matches)
+            intersections=line.intersection(zone.boundary)
+            cuts=[0.0,line.length]
+            if m.command in ('G2','G3'):
+                cumulative=0
+                for a,b in zip(line.coords,list(line.coords)[1:]):
+                    cumulative+=math.dist(a,b);cuts.append(cumulative)
+            if not intersections.is_empty:
+                geometries=list(intersections.geoms) if hasattr(intersections,'geoms') else [intersections]
+                for part in geometries:
+                    if part.geom_type=='Point': cuts.append(line.project(part))
+                    elif part.geom_type=='LineString': cuts.extend(line.project(Point(p)) for p in part.coords)
+            cuts=sorted(set(round(c,10) for c in cuts))
+            if not any(zone.covers(line.interpolate((a+b)/2)) for a,b in zip(cuts,cuts[1:])): continue
+            out=[]; emitted=0
+            for i,(a,b) in enumerate(zip(cuts,cuts[1:])):
+                if b-a<1e-9: continue
+                point=line.interpolate(b)
+                slow=zone.covers(line.interpolate((a+b)/2))
+                feed=m.after.feed*(cfg['upper_speed_percent']/100 if slow else 1)
+                extrusion=m.delta_e-emitted if i==len(cuts)-2 else m.delta_e*(b-a)/line.length
+                emitted+=extrusion
+                out.append(f'G1 X{point.x:.5f} Y{point.y:.5f} E{extrusion:.9f} F{feed:.3f}\n')
+            out.append(f'G1 F{m.after.feed:.3f}\n')
+            edits.append((m.index,out))
+    for i,out in reversed(edits): lines[i:i+1]=out
+    return ''.join(lines).splitlines(keepends=True),len(edits)
+
+
+def process_removable(text, cfg, resolved, cancelled):
+    """Conservative detachable floor: insert above layer n-2, before layer n-1 exists.
+
+    The original bridge is retained. Reject unavailable space, changing tools at
+    the insertion, variable/nonplanar layers and uncertain command state.
+    """
+    lines=text.splitlines(keepends=True);features=parse(lines,cancelled)
+    by_layer={}
+    for f in features: by_layer.setdefault(f.layer,[]).append(f)
+    report=dict(replaced_features=0,generated_arcs=0,skipped_features=0,minimum_coverage_percent=None,
+                bridge_features=0,hilbert_features=0,retimed_features=0,print_order=cfg['print_order'],
+                skip_reasons={},removable_floors=0,region_results=[])
+    edits=[];records=[]; occupied={}
+    for f in features:
+        if f.role not in ('bridge','bridge infill','internal bridge'): continue
+        report['bridge_features']+=1
+        try:
+            if cancelled(): raise Cancelled('Cancelled.')
+            moves=[m for m in f.moves if segment(m) is not None]
+            if not moves: continue
+            tool=moves[0].after.tool;p=printer_settings(lines,resolved,tool);h=p['layer_height'];width=p['outer_wall_line_width']
+            target_z=moves[0].after.z;floor_z=target_z-h-cfg['peel_gap_mm']
+            if f.layer<2 or not 0<cfg['peel_gap_mm']<h: raise ValueError('Removable floor needs two lower layers and a gap smaller than layer height')
+            if not cfg['z_min_mm']<=target_z<=cfg['z_max_mm']: continue
+            if any(m.after.tool!=tool or m.after.z!=target_z or m.before.z!=target_z for m in moves): raise ValueError('Removable target changes tool or height')
+            previous_moves=[m for g in by_layer.get(f.layer-1,[]) for m in g.moves if segment(m) is not None]
+            if not previous_moves or any(abs(m.after.z-(target_z-h))>1e-4 for m in previous_moves): raise ValueError('Removable floor requires uniform layer heights')
+            base_features=by_layer.get(f.layer-2,[])
+            base_moves=[m for g in base_features for m in g.moves]
+            if not base_moves: raise ValueError('No earlier insertion point')
+            anchor=base_moves[-1];state=anchor.after
+            if state.tool!=tool or is_retracted(state) or not state.relative_e or not state.absolute_xyz or None in (state.x,state.y,state.z): raise ValueError('Insertion point has incompatible tool or motion state')
+            if any(m.after.z is None or m.after.z>floor_z for g in base_features for m in g.moves if segment(m) is not None): raise ValueError('Earlier layer rises into removable floor')
+            if abs(state.z-(target_z-2*h))>1e-4 or floor_z<=state.z: raise ValueError('No vertical clearance for removable floor')
+            support=layer_shape(base_features,width);current=layer_shape(by_layer[f.layer],width)
+            region=bridge_region([segment(m) for m in moves],current,width,p['nozzle_diameter']*cfg['arc_spacing_nozzle_ratio'],cfg['wall_overlap_mm'])
+            arcs=[];cover=[]
+            for poly in polygons(region):
+                if poly.difference(support).area<cfg['minimum_area_mm2']: raise ValueError('Removable region is too small or already supported')
+                generator=fill_polygon_wave if cfg['overhang_mode']=='wave' else fill_polygon
+                fill=generator(poly,support,cfg,p,cancelled)
+                if fill is None: raise ValueError('Removable floor has insufficient anchoring or coverage')
+                arcs.extend(fill[0]);cover.append(fill[1])
+            if not arcs: raise ValueError('No removable paths')
+            footprint=unary_union([arc.buffer(p['nozzle_diameter']/2) for arc in arcs])
+            next_material=unary_union([segment(m).buffer(width/2) for m in previous_moves])
+            if footprint.intersection(next_material).area>1e-6: raise ValueError('Removable floor overlaps model material on the intervening layer')
+            if footprint.intersection(occupied.get(f.layer-2,GeometryCollection())).area>1e-6: raise ValueError('Removable floors overlap')
+            local=dict(cfg);local['flow_multiplier']*= (h-cfg['peel_gap_mm'])/h;local['wave_flow_mm3_per_mm']*= (h-cfg['peel_gap_mm'])/h
+            lifted=replace(state,z=floor_z)
+            travel=cfg['travel_speed_mm_s']*60
+            # Vertical-only entry/exit over the known insertion point; XY travel at floor Z.
+            pre=[f'G1 Z{floor_z:.5f} F{travel:.2f}\n']
+            body=emit_arcs(arcs,lifted,lifted,local,p,support=support)
+            post=[f'G1 Z{state.z:.5f} F{travel:.2f}\n',f'G1 F{state.feed:.2f}\n',f';TYPE:{base_features[-1].role}\n']
+            edits.append((anchor.index+1,pre+body+post));occupied[f.layer-2]=occupied.get(f.layer-2,GeometryCollection()).union(footprint)
+            records.append((f.layer-2,floor_z,tool,cfg['overhang_mode'],(),current))
+            report['region_results'].append(dict(layer=f.layer+1,tool=tool,status='removable floor',area_mm2=round(region.area,2),coverage_percent=round(min(cover),1)))
+            report['replaced_features']+=1;report['removable_floors']+=1;report['generated_arcs']+=len(arcs)
+            report['minimum_coverage_percent']=min(cover+[report['minimum_coverage_percent'] or 100])
+        except ValueError as error:
+            report['region_results'].append(dict(layer=f.layer+1,status='kept',reason=str(error)))
+            reason=str(error);report['skipped_features']+=1;report['skip_reasons'][reason]=report['skip_reasons'].get(reason,0)+1
+    if not edits: return text,report
+    for index,body in sorted(edits,key=lambda item:item[0],reverse=True): lines[index:index]=body
+    lines=''.join(lines).splitlines(keepends=True)
+    if cfg['upper_slowdown_layers']: lines,report['retimed_features']=slowdown_above_support(lines,cfg,cancelled,resolved)
+    report['time_change_s']=update_time_estimates(text.splitlines(keepends=True),lines)
+    try:
+        report['preview']=export_preview(records,cfg,lines,cancelled)
+        enrich_preview(report,lines,cfg,resolved,cancelled)
+    except Cancelled:
+        raise
+    except Exception:
+        report['preview_error']='Support was generated, but its UI snapshot is unavailable.'
+    return MARKER+VERSION+'\n'+gallery_header(cfg,text)+''.join(lines),report
+
+
+UI_TEMPLATE = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n<title>Arc Overhang</title><style>:root{color-scheme:light dark;font:14px/1.5 "Segoe UI",system-ui,sans-serif;--bg:light-dark(#f6f5f0,#161c1b);--panel:light-dark(#fffefa,#1f2725);--ink:light-dark(#1c3230,#e1e9e5);--muted:light-dark(#63726b,#a4b4aa);--line:light-dark(#dce2d9,#39443d);--soft:light-dark(#f0f3ec,#29332b);--accent:light-dark(#19645a,#8ed4bb);--accent-ink:light-dark(#fffefa,#14281e);--warm:light-dark(#9d5c2b,#e8b780);--shadow:0 3px 16px #102e2110}\nhtml[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orca-theme=light],html[data-theme=light]{color-scheme:light}\n*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.55}a{color:var(--accent)}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}[hidden]{display:none!important}.sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}\n.app-shell{max-width:1320px;margin:auto;padding:28px 34px 0}.app-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:24px}.identity{display:flex;align-items:center;gap:12px}.brand{width:42px;height:42px;color:var(--accent)}h1{font-size:23px;letter-spacing:-.7px;line-height:1.3;margin:0;font-weight:650}.version{font:11px/1.5 ui-monospace,monospace;letter-spacing:0;color:var(--muted);vertical-align:middle;margin-left:8px}.eyebrow{font-size:12px;margin:2px 0 0;color:var(--muted)}.local-badge{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;white-space:nowrap}.local-badge>span{width:6px;height:6px;background:var(--accent);border-radius:50%}.view-nav{display:flex;gap:26px;border-bottom:1px solid var(--line)}.view-nav button{border:0;border-bottom:2px solid transparent;background:none;padding:12px 0;margin-bottom:-1px;color:var(--muted);font-weight:600}.view-nav button[aria-current=page]{color:var(--accent);border-color:var(--accent)}.context-note{font-size:11px;color:var(--muted);margin:10px 0 0}.section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:30px 0 22px}.kicker{font-size:10px;letter-spacing:1.7px;font-weight:700;color:var(--muted);margin:0 0 6px}h2{font-size:30px;line-height:1.2;letter-spacing:-1px;font-weight:600;margin:0 0 8px}.section-heading p:not(.kicker){color:var(--muted);margin:0}h3{font-size:16px;letter-spacing:-.25px;margin:0;font-weight:650}h4{font-size:18px;letter-spacing:-.4px;margin:8px 0}p{margin:0 0 12px}.enable-switch{display:flex;gap:12px;align-items:center;font-size:12px;white-space:nowrap}input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px;cursor:pointer}input[role=switch]{appearance:none;background:var(--line);border-radius:30px;width:40px;height:23px;position:relative;border:1px solid transparent}input[role=switch]::before{content:"";position:absolute;width:17px;height:17px;background:var(--panel);border-radius:50%;left:2px;top:2px;transition:transform .16s}input[role=switch]:checked{background:var(--accent)}input[role=switch]:checked::before{transform:translateX(17px)}\n.overview-grid{display:grid;grid-template-columns:minmax(0,1fr) 328px;gap:22px;align-items:start}.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);overflow:hidden}.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:20px 22px}.panel-heading .kicker{font-size:9px}.layer-picker{max-width:50%;font-size:11px}.layer-picker select{font-size:11px;padding:7px;max-width:100%}.plot{position:relative;min-height:360px;background:radial-gradient(ellipse at 50% 70%,var(--soft),transparent 68%)}#export-drawing{display:block;width:100%;height:360px}#export-paths polyline{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}#export-outlines polyline{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4;opacity:.7;vector-effect:non-scaling-stroke}.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:25px;max-width:450px;margin:auto}.empty-state svg{width:180px;height:110px;color:var(--accent);opacity:.6}.empty-state p{color:var(--muted);font-size:12px;max-width:300px}.text-button{background:none;border:0;padding:5px 0;color:var(--accent);font-size:12px;font-weight:650}.text-button span{padding-left:6px}.plot-caption{display:flex;gap:15px;align-items:center;flex-wrap:wrap;padding:10px 22px 18px;font-size:10px;color:var(--muted)}.plot-caption>span{display:inline-flex;gap:5px;align-items:center}.plot-caption>span:last-child{margin-left:auto}.legend-line{display:inline-block;width:14px;height:2px;background:var(--accent)}.legend-line.outline{height:0;background:none;border-top:1px dashed var(--muted)}.export-stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);padding:18px 0}.export-stats>div{text-align:center;border-right:1px solid var(--line)}.export-stats>div:last-child{border:0}.export-stats span{display:block;font-size:24px;line-height:1.1;letter-spacing:-.5px;font-weight:600}.export-stats small{display:block;font-size:10px;color:var(--muted);margin-top:5px}.report-summary{font-size:11px;color:var(--muted);padding:0 22px 14px;margin:0}.report-details{margin:0 22px 18px;font-size:12px}.report-details summary{cursor:pointer;color:var(--accent)}.report-details li{margin-top:7px}\n.setup-panel{padding:20px}.step-heading{display:flex;align-items:flex-start;gap:11px;margin-bottom:15px}.step-heading>span{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex-shrink:0;font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:50%;color:var(--accent)}.step-heading p{font-size:11px;color:var(--muted);margin:3px 0 0}.mode-select{font-weight:600;width:100%}.mode-note{font-size:11px;color:var(--muted);margin:10px 0 16px}.quick-fields{border-top:1px solid var(--line)}.field{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;align-items:center;padding:15px 0;border-bottom:1px solid var(--line)}.field>label{font-weight:600;font-size:12px}.field-help{font-size:11px;color:var(--muted);margin:6px 0 0}.field .field-help{grid-column:1/-1}.number-control{display:flex;align-items:center;gap:7px;white-space:nowrap}.number-control>span{font-size:10px;color:var(--muted);min-width:25px}.number-control input{width:82px;padding:8px 8px;font-variant-numeric:tabular-nums}select,input[type=number],textarea{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:9px 10px}select{max-width:100%}input[aria-invalid=true]{border-color:var(--warm);outline-color:var(--warm)}.decision-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}.decision{padding:20px 22px}.decision>select{width:100%;font-size:12px}.sequence{display:flex;align-items:center;gap:6px;padding:0;list-style:none;margin:14px 0 0;font-size:10px;color:var(--muted)}.sequence li{display:flex;align-items:center;gap:6px}.sequence li:not(:last-child)::after{content:"→";color:var(--warm)}.inline-note{font-size:11px;color:var(--warm);background:var(--soft);padding:10px 14px;margin:0 20px;border-radius:6px}.decision .inline-note{margin:10px 0 0}\n.settings-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:14px 0;overflow:hidden}.settings-group>summary{cursor:pointer;padding:18px 22px;font-size:15px;font-weight:600;list-style-position:inside}.settings-group>summary small{display:block;padding-left:18px;font-size:11px;color:var(--muted);font-weight:400;margin-top:3px}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px;padding:0 22px 15px}.field-grid .field:nth-last-child(-n+2){border-bottom:0}.import-area,.guide-text{padding:0 22px 22px;font-size:12px;color:var(--muted)}textarea{width:100%;display:block;margin:8px 0 12px;font:12px/1.5 ui-monospace,monospace}.guide-panel #guide-drawing{width:100%;max-height:330px;display:block;color:var(--ink)}#guide-drawing text{fill:var(--muted);font:12px "Segoe UI",sans-serif}#guide-paths path{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round}.guide-copy{border-top:1px solid var(--line);padding:20px 24px;display:grid;grid-template-columns:1fr auto;column-gap:30px}.guide-copy h4,.guide-copy p{grid-column:1}.guide-copy p{font-size:12px;color:var(--muted);max-width:630px}.mini-measure{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;justify-content:center;border-left:1px solid var(--line);padding-left:25px}.mini-measure span{font-size:11px;color:var(--muted)}.mini-measure strong{font-size:19px;font-weight:500}.guide-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin:28px 0}.guide-steps article>span{display:inline-block;font:14px ui-monospace,monospace;color:var(--warm);border-bottom:1px solid var(--warm);margin-bottom:12px;padding-right:16px}.guide-steps h3{font-size:15px;margin-bottom:8px}.guide-steps p{font-size:12px;color:var(--muted)}\n.save-bar{position:sticky;bottom:12px;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:16px;margin:30px 0 0;padding:13px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 25px #102e2120}.save-state{display:flex;align-items:center;gap:9px;max-width:65%;font-size:12px;color:var(--muted)}.state-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}.save-actions{display:flex;gap:9px;flex-shrink:0}.primary,.secondary{padding:10px 17px;border-radius:7px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--panel)}.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.primary span{padding-left:13px}.secondary:hover{background:var(--soft)}.app-footer{display:flex;justify-content:space-between;gap:15px;padding:17px 2px 22px;font-size:10px;color:var(--muted)}\n@media(max-width:1000px){.app-shell{padding:20px 22px 0}.overview-grid{grid-template-columns:minmax(0,1fr) 295px;gap:16px}.decision-grid{gap:16px}.panel-heading{padding:17px}.setup-panel{padding:17px}h2{font-size:26px}.plot-caption>span:last-child{margin-left:0}}@media(max-width:760px){.app-shell{padding:18px 16px 0}.overview-grid,.decision-grid{grid-template-columns:1fr}.app-header{gap:10px}.app-header>.local-badge{display:none}.section-heading{align-items:flex-start;flex-direction:column;margin-top:24px}.enable-switch{align-self:flex-end}.field-grid{grid-template-columns:1fr}.field-grid .field{border-bottom:1px solid var(--line)}.field-grid .field:last-child{border:0}.quick-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.quick-fields .field{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.quick-fields .number-control input{width:74px}.quick-fields .field-help{margin:0}.guide-steps{grid-template-columns:1fr;gap:10px}.guide-copy{display:block}.mini-measure{border:0;border-top:1px solid var(--line);padding:14px 0 0}.save-bar{bottom:8px;flex-wrap:wrap}.save-state{max-width:100%;font-size:11px}.save-actions{margin-left:auto}.app-footer{flex-direction:column;gap:4px}.plot,#export-drawing{min-height:280px;height:280px}h2{font-size:25px}}@media(max-width:440px){.quick-fields{grid-template-columns:1fr}.quick-fields .field{display:grid;grid-template-columns:1fr auto}.quick-fields .field-help{grid-column:1/-1}.number-control input{width:84px}.view-nav{gap:23px}.view-nav button{font-size:12px}.layer-picker{max-width:55%}.panel-heading h3{font-size:14px}.guide-panel .panel-heading>.local-badge{font-size:9px}.guide-copy h4{font-size:17px}.sequence{flex-wrap:wrap}.app-shell{padding:14px 12px 0}}@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}\n\n.plot-caption .text-button{font-size:10px;padding:0}.plot-caption .text-button:disabled{cursor:default}\n\n.preview-pickers{display:flex;gap:10px;max-width:65%;min-width:0}.preview-pickers label{display:grid;gap:4px;font-size:10px;color:var(--muted);min-width:0}.preview-pickers select{max-width:100%;font-size:11px;padding:7px}.preview-controls{border-top:1px solid var(--line);padding:14px 22px}.preview-layer-nav,.preview-playback,.preview-playback-info{display:flex;align-items:center;gap:10px;min-width:0}.preview-layer-nav{margin-bottom:12px;font-size:11px;color:var(--muted)}.preview-controls input[type=range]{flex:1;min-width:45px;width:100%;accent-color:var(--accent)}.preview-controls button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--accent);font-size:11px}.preview-controls button:disabled{opacity:.4;cursor:default}.preview-playback label{display:flex;align-items:center;gap:5px;font-size:10px}.preview-playback select{font-size:11px;padding:5px;width:65px}.preview-playback-info{justify-content:space-between;flex-wrap:wrap;margin-top:12px;color:var(--muted);font-size:10px}.preview-playback-info label{display:flex;gap:5px;align-items:center}.preview-playback-info input{accent-color:var(--accent)}#preview-motion-note{font-size:10px;color:var(--muted);margin:8px 0 0}#preview-travels polyline{fill:none;stroke:var(--muted);stroke-dasharray:3 4;stroke-width:1;vector-effect:non-scaling-stroke}#preview-nozzle{fill:#d78037;stroke:var(--panel);stroke-width:1.5;vector-effect:non-scaling-stroke}#export-paths polyline.active{stroke:#d78037}\n@media(max-width:760px){.export-panel .panel-heading{flex-wrap:wrap}.preview-pickers{width:100%;max-width:100%}.preview-pickers label{flex:1}.preview-controls{padding:12px 16px}.preview-playback{gap:6px;flex-wrap:wrap}.preview-playback input[type=range]{min-width:80px}.preview-playback label{margin-left:auto}}\n.workbench-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 20px;border-top:1px solid var(--line)}.workbench-toolbar label{font-size:11px;display:flex;gap:6px;align-items:center}.workbench-toolbar select{font-size:11px;padding:6px}.workbench-toolbar button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px;font-size:11px}.path-filters{display:flex;gap:7px 12px;flex-wrap:wrap;padding:8px 20px}.path-filters label{font-size:10px;display:flex;align-items:center;gap:4px;cursor:pointer}.path-filters i{width:10px;height:3px;display:inline-block}.path-filters input{accent-color:var(--accent)}.workbench-hint{font-size:11px;color:var(--muted);padding:0 20px;margin:8px 0}#preview-context polyline,#preview-previous polyline{fill:none;stroke-width:1;vector-effect:non-scaling-stroke;opacity:.65}#preview-previous polyline{stroke-dasharray:3 3;opacity:.3}#export-drawing{touch-action:none;cursor:grab}#export-drawing:active{cursor:grabbing}.parameter-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0}.parameter-guide article{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}.parameter-guide svg{width:100%;height:120px}.parameter-guide p{font-size:12px;color:var(--muted)}.setup-stack #suggestion-tool{width:100%;margin:10px 0}.setup-stack #apply-suggestion{margin-top:12px}@media(max-width:760px){.parameter-guide{grid-template-columns:1fr}.workbench-toolbar{padding:12px}.path-filters{padding:8px 12px}}\n.region-table-wrap{overflow:auto}.region-table-wrap table{width:100%;border-collapse:collapse;font-size:11px}.region-table-wrap th,.region-table-wrap td{padding:8px;text-align:left;border-bottom:1px solid var(--line)}\n\n#export-paths polyline.active{stroke:#d78037!important}\n</style></head>\n<body><div class="app-shell">\n<header class="app-header"><div class="identity"><svg class="brand" viewBox="0 0 40 40" aria-hidden="true"><path d="M7 31V9h9v22M19 31a12 12 0 0 1 12-12M19 24a5 5 0 0 1 5-5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/></svg><div><h1>Arc Overhang <span class="version">__VERSION__</span></h1><p class="eyebrow">Overhang support, made visible.</p></div></div><span class="local-badge"><span></span> Local · open source</span></header>\n<nav class="view-nav" aria-label="Plugin workspace"><button type="button" data-view="overview" aria-current="page">Overview</button><button type="button" data-view="tuning">Fine tuning</button><button type="button" data-view="guide">How it works</button></nav>\n<p class="context-note">__CONTEXT__</p>\n<main id="settings">\n<section id="view-overview" class="app-view" aria-label="Overview">\n<div class="section-heading"><div><p class="kicker">THE WORKBENCH</p><h2>Shape your overhang support.</h2><p>Choose how the overhang is filled. Slice your model, then inspect the Arcs.</p></div><label class="enable-switch"><span>Enable processing</span><input id="enabled" type="checkbox" role="switch"></label></div>\n<p id="processing-note" class="inline-note" hidden>Processing is disabled. You can adjust settings, then enable and save them before slicing.</p>\n<div class="overview-grid">\n<section __PREVIEW_ATTRIBUTES__ class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">SLICE PREVIEW</p><h3 id="preview-heading">Your generated support</h3></div><div class="preview-pickers"><label>Layer<select id="preview-layer" disabled><option>Slice a model first</option></select></label><label>Overhang<select id="preview-region" disabled><option>No regions</option></select></label></div></div>\n<div class="workbench-toolbar"><label>Display<select id="preview-scope"><option value="region">Selected support</option><option value="layer">Full layer playback</option></select></label><label>View<select id="preview-view"><option value="2d">2D plan</option><option value="3d">3D orthographic</option></select></label><button type="button" id="preview-home">Reset view</button><label><input id="preview-context-toggle" type="checkbox" checked> Layer context</label><label><input id="preview-previous-toggle" type="checkbox"> Previous layer</label></div>\n<div id="preview-filters" class="path-filters" aria-label="Visible path types"></div><p id="preview-camera-help" class="workbench-hint">Scroll to zoom · drag to pan. In 3D: drag to orbit, Shift-drag to pan. Keyboard: arrows, +/−, Home.</p>\n<div id="preview-warning" class="inline-note" hidden></div>\n<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Support paths for the sliced model"><g id="preview-previous"></g><g id="preview-context"></g><g id="export-outlines"></g><g id="preview-travels"></g><g id="export-paths"></g><g id="preview-head"><circle id="preview-nozzle" hidden></circle></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4 id="preview-empty-title">Slice your model to see its Arcs.</h4><p id="preview-empty-message">Enable Arc Overhang in your process settings, then click Slice plate. The preview appears automatically when calculation finishes.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>\n<div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">Support paths for your sliced model.</span></div>\n<div class="preview-controls" aria-label="Layer and print playback">\n<div class="preview-layer-nav"><button type="button" id="preview-prev" disabled aria-label="Previous overhang">←</button><label for="preview-layer-range">Layer</label><input id="preview-layer-range" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Layer with Arc or Wave overhangs"><button type="button" id="preview-next" disabled aria-label="Next overhang">→</button></div>\n<div class="preview-playback"><button type="button" id="preview-play" disabled aria-label="Play print animation">Play</button><button type="button" id="preview-reset" disabled>Restart</button><label class="sr-only" for="preview-progress">Print progress within selected overhang</label><input type="range" id="preview-progress" min="0" max="1000" value="1000" step="1" disabled><label>Speed<select id="preview-speed"><option value="1">1×</option><option value="5">5×</option><option value="20" selected>20×</option><option value="100">100×</option></select></label></div>\n<div class="preview-playback-info"><label><input id="preview-show-travel" type="checkbox"> Show travel moves</label><output id="preview-progress-label" aria-live="off">No toolpaths loaded</output></div><p id="preview-motion-note">Selected overhang only · toolpath time estimate, without acceleration.</p>\n</div>\n<p id="preview-area" class="workbench-hint"></p><div class="export-stats" aria-label="Slice preview summary"><div><span id="stat-regions">—</span><small>regions replaced</small></div><div><span id="stat-paths">—</span><small>support paths</small></div><div><span id="stat-hilbert">—</span><small>Hilbert regions</small></div></div>\n<p id="preview-time" class="workbench-hint"></p><details id="region-diagnostics" class="report-details" hidden><summary>Region results by layer</summary><div class="region-table-wrap"><table><thead><tr><th>Layer</th><th>Result</th><th>Area / reason</th></tr></thead><tbody id="region-results"></tbody></table></div></details><p id="last-report" class="report-summary" role="status">Slice a model to generate the preview.</p><details id="report-details" class="report-details" hidden><summary>Why regions were kept</summary><ul id="skip-list"></ul></details></section>\n<aside class="setup-stack" aria-label="Essential settings"><section class="panel setup-panel"><h3>Material starting points</h3><p class="field-help">Suggestions from the sliced profile. Review with a small test print; they are not calibrated presets.</p><label for="suggestion-tool">Profile used</label><select id="suggestion-tool"><option>No slice profile yet</option></select><p id="suggestion-note" class="field-help"></p><button type="button" id="apply-suggestion" class="secondary" disabled>Apply to draft</button></section><section class="panel setup-panel"><div class="step-heading"><span>01</span><div><h3>Choose your path</h3><p>One overhang, two approaches.</p></div></div><label for="overhang_mode" class="sr-only">Overhang mode</label><select id="overhang_mode" class="mode-select"><option value="arc">Concentric Arcs</option><option value="wave">Wave fronts · experimental</option></select><p id="mode-note" class="mode-note"></p><div data-mode="arc" class="quick-fields">__ARC_QUICK__</div><div data-mode="wave" class="quick-fields" hidden>__WAVE_QUICK__</div><div class="quick-fields">__ANCHOR_QUICK__</div><button type="button" class="text-button" id="open-tuning">All settings <span aria-hidden="true">↗</span></button></section></aside>\n</div>\n<div class="decision-grid"><section class="panel decision"><div class="step-heading"><span>02</span><div><h3>Decide the sequence</h3><p>Where support sits in the layer.</p></div></div><label for="print_order" class="sr-only">Print order</label><select id="print_order"><option value="layer_tail">Our previous order · default</option><option value="slicer">Keep slicer order</option></select><ol id="sequence" class="sequence"><li>Walls + infill</li><li>Arcs / Waves</li><li>Overhang walls</li></ol><p id="sequence-note" class="field-help">Applied within each layer and tool section.</p></section>\n<section class="panel decision"><div class="step-heading"><span>03</span><div><h3>The layer above</h3><p>Choose its internal solid infill.</p></div></div><label for="next_layer_pattern" class="sr-only">Infill on next layer</label><select id="next_layer_pattern"><option value="slicer">Keep slicer pattern · default</option><option value="hilbert">Hilbert curve · slower, experimental</option></select><p class="field-help">Hilbert applies only to eligible internal solid infill directly above generated support. Top surfaces, bridges and sparse infill stay as sliced.</p><p id="floor-note" class="inline-note" hidden>Wave floor Hilbert is also enabled in Fine tuning. It can affect more than one layer.</p></section></div>\n</section>\n<section id="view-tuning" class="app-view" aria-label="Fine tuning" hidden><div class="section-heading"><div><p class="kicker">FINE TUNING</p><h2>A little more control.</h2><p>Your existing values are preserved, including settings for the other mode.</p></div></div>\n<details class="settings-group" data-mode="arc" open><summary><span>Arc behaviour</span><small>Shape, flow &amp; cooling time</small></summary><div class="field-grid">__ARC__</div></details>\n<details class="settings-group" data-mode="wave" open hidden><summary><span>Wave behaviour</span><small>Path shape, travel &amp; anchoring</small></summary><div class="field-grid">__WAVE__</div></details>\n<details class="settings-group" data-mode="wave" hidden><summary><span>Above the Waves</span><small>Floor layers, Hilbert &amp; cooling</small></summary><div class="field-grid">__FLOOR__</div></details>\n<p class="inline-note">Removable floors and adaptive printing are experimental. A removable floor keeps the original model paths and is inserted only when lower-layer clearance and anchoring can be established. Ineligible areas stay unchanged with a reason in the preview.</p><details class="settings-group"><summary><span>Shared controls</span><small>Eligibility, travel, retraction &amp; limits</small></summary><div class="field-grid">__SHARED__</div></details>\n<details class="settings-group" data-mode="wave" hidden><summary><span>Import a Wave profile</span><small>Paste values; review before saving</small></summary><div class="import-area"><p>Paste WaveOverhangs <code>wave_overhang_*</code> settings, a profile JSON, or its <code>WAVE_OVERHANG_CONFIG</code> comment. Only recognised Wave options are imported. Printer and filament profiles stay in Orca.</p><label for="import_text">Profile values</label><textarea id="import_text" rows="5" placeholder="; wave_overhang_line_spacing = 0.35" spellcheck="false"></textarea><button id="import" class="secondary" type="button">Import pasted values</button></div></details>\n</section>\n<section id="view-guide" class="app-view" aria-label="How it works" hidden><div class="section-heading"><div><p class="kicker">UNDERSTAND THE PATH</p><h2>From supported edge to open space.</h2><p>A visual explanation of the selected method. This drawing is a concept, not your model.</p></div></div><section class="panel guide-panel"><div class="panel-heading"><h3 id="guide-heading">Concentric Arcs</h3><span class="local-badge">Concept illustration</span></div><svg id="guide-drawing" viewBox="0 0 640 270" role="img" aria-label="Concept drawing of generated support"><defs><pattern id="support-hatch" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M0 10L10 0" stroke="currentColor" opacity=".15"/></pattern><clipPath id="guide-clip"><rect x="188" y="26" width="400" height="204" rx="8"/></clipPath></defs><rect x="42" y="26" width="146" height="204" rx="8" fill="url(#support-hatch)" stroke="currentColor" opacity=".6"/><rect x="188" y="26" width="400" height="204" rx="8" fill="none" stroke="currentColor" stroke-dasharray="5 7" opacity=".25"/><g id="guide-paths" clip-path="url(#guide-clip)"></g><text x="42" y="255">Supported area</text><text x="384" y="255">Overhang area</text></svg><div class="guide-copy"><h4 id="guide-title">Connected paths, built outwards.</h4><p id="guide-note"></p><div class="mini-measure"><span>Current spacing</span><strong id="spacing-readout">0.95 × nozzle</strong></div></div></section>\n<div id="parameter-guide" class="parameter-guide"></div><div class="guide-steps"><article><span>1</span><h3>Enable the pipeline</h3><p>Select Arc Overhang in Orca\'s process pipeline settings. Enabling this switch alone does not select the pipeline for your preset.</p></article><article><span>2</span><h3>Slice your model</h3><p>Only suitable unsupported Bridge regions are replaced. If Orca uses extra overhang walls instead of bridges, that area stays unchanged.</p></article><article><span>3</span><h3>Inspect the Arcs</h3><p>Open the Arc Overhang tab to inspect the generated support. Choose a region to see its layer and tool.</p></article></div>\n<details class="settings-group"><summary><span>When no support appears</span><small>What to check</small></summary><div class="guide-text"><p>Check that the pipeline is selected and that the sliced model includes unsupported Bridge or Internal Bridge paths. A supported bridge above infill is intentionally retained.</p><p>The default minimum area is 50 mm². Small, unanchored or insufficiently covered regions remain as sliced. Read the preview\'s skipped reasons on Overview.</p><p>For counterbore models, partially bridged strips may already be supported. Check Orca\'s counterbore setting if you expected a different result.</p></div></details>\n</section>\n</main>\n<div class="save-bar"><div class="save-state"><span class="state-dot" aria-hidden="true"></span><span id="status" role="status" aria-live="polite">Loading settings…</span></div><div class="save-actions"><button id="refresh" type="button" class="secondary">Reload saved</button><button id="save" type="button" class="primary">Save settings <span aria-hidden="true">↗</span></button></div></div>\n<footer class="app-footer"><span>GPL-3.0 · runs locally · __VERSION__</span><span>Arc concept: McCulloch · Wachenschwan · Kelsch. Contributions: persano.</span></footer>\n</div><script>__BRIDGE__\nconst defaults = __DEFAULTS__;\nconst IMPORT = __IMPORT__;\nconst ALIASES = __ALIASES__;\nconst fields = Object.keys(defaults);\nconst $ = id => document.getElementById(id);\nconst all = selector => Array.from(document.querySelectorAll?.(selector) || []);\nconst status = $(\'status\');\nlet previewRevision = null, previewPollBusy = false;\nlet draft = null, ready = false, savingUI = false, lastReport = null, showWholeLayer = false;\nfunction text(id, value) { const el=$(id); if(el) el.textContent=value; }\nfunction collect() {\n  const values={};\n  for(const key of fields) {\n    const el=$(key); if(!el) continue;\n    values[key]=typeof defaults[key]===\'boolean\'?el.checked:(typeof defaults[key]===\'string\'?el.value:Number(el.value));\n  }\n  return values;\n}\nfunction selectView(name) {\n  for(const view of all(\'.app-view\')) view.hidden=view.id!==\'view-\'+name;\n  for(const button of all(\'[data-view]\')) {\n    if(button.dataset.view===name) button.setAttribute(\'aria-current\',\'page\');\n    else button.removeAttribute(\'aria-current\');\n  }\n  if(name===\'guide\') renderGuide();\n}\nfunction renderState() {\n  const disabled=$(\'processing-note\'); if(disabled) disabled.hidden=!!$(\'enabled\')?.checked;\n  const wave=$(\'overhang_mode\')?.value===\'wave\';\n  for(const section of all(\'[data-mode]\')) section.hidden=section.dataset.mode!==(wave?\'wave\':\'arc\');\n  text(\'mode-note\',wave?\'Offset fronts grow from the supported edge. Wave mode is experimental.\':\'Concentric paths connect to the previous layer and extend into the overhang.\');\n  const removable=$(\'support_mode\')?.value===\'removable\';\n  for(const key of [\'print_order\',\'next_layer_pattern\'])if($(key))$(key).disabled=readonly()||removable;\n  const slicer=$(\'print_order\')?.value===\'slicer\';\n  const labels=removable?[\'Lower layer\',\'Removable floor\',\'Original model paths\']:slicer?[\'Slicer sequence\',\'Bridge → support\',\'Early overhang walls follow\']:[\'Walls + infill\',wave?\'Waves\':\'Arcs\',\'Overhang walls\'];\n  all(\'#sequence li\').forEach((el,index)=>{el.textContent=labels[index];});\n  text(\'sequence-note\',removable?\'Experimental floor inserted earlier when space permits. The original model paths and infill pattern are retained.\':slicer?\'Normal walls and infill stay in their sliced positions. Early Overhang walls follow the support.\':\'The previous order is kept within each layer and tool section.\');\n  const note=$(\'floor-note\'); if(note) note.hidden=!(wave && $(\'wave_floor_use_hilbert\')?.checked);\n  renderGuide(); renderPreviewWarning(); renderParameterGuide();\n}\nfunction renderGuide() {\n  const group=$(\'guide-paths\'); if(!group) return;\n  const wave=$(\'overhang_mode\')?.value===\'wave\';\n  const raw=Number($(wave?\'wave_line_spacing_mm\':\'arc_spacing_nozzle_ratio\')?.value);\n  const spacing=Number.isFinite(raw)?Math.max(.05,Math.min(1.5,raw)):0.4;\n  const count=Math.max(8,Math.min(30,Math.round(13/spacing)));\n  while(group.firstChild) group.removeChild(group.firstChild);\n  for(let i=0;i<count;i++) {\n    const path=document.createElementNS(\'http://www.w3.org/2000/svg\',\'path\');\n    const step=400/count, x=193+i*step;\n    path.setAttribute(\'d\',wave?`M${x} 32 C${x+25} 83 ${x+25} 173 ${x} 224`:`M190 ${224-i*2} Q${190+i*4} ${32-i*1.2} ${Math.min(588,205+i*step)} 32`);\n    group.appendChild(path);\n  }\n  text(\'guide-heading\',wave?\'Wave fronts\':\'Concentric Arcs\');\n  text(\'guide-title\',wave?\'A front that grows from support.\':\'Connected paths, built outwards.\');\n  text(\'guide-note\',wave?\'Each front grows from supported material. Flow, spacing and cooling affect adhesion; this drawing explains the pattern and does not predict print quality.\':\'The first path starts on existing support. Later paths connect to material already laid down. The actual geometry is calculated from the Bridge regions of your sliced model.\');\n  text(\'spacing-readout\',wave?`${raw===0?\'Nozzle ratio\':Number.isFinite(raw)?raw:\'—\'}${raw===0?\'\':\' mm\'}`:`${Number.isFinite(raw)?raw:\'—\'} × nozzle`);\n}\nfunction renderPreviewWarning() {\n  const el=$(\'preview-warning\'); if(!el) return;\n  const snapshot=lastReport?.preview, values=collect();\n  const different=snapshot?.settings && fields.some(key=>snapshot.settings[key]!==undefined && snapshot.settings[key]!==values[key]);\n  el.hidden=!different;\n  el.textContent=different?\'Settings changed. Save and slice again to update the preview.\':\'\';\n}\nlet activeRegion=null, previewScene=null, playbackTime=0, playbackFrame=null, lastFrameTime=null;\nlet regionRequest=0, selectedRegionId=null, previewLayerKeys=[];\nconst regionKey=region=>`${region.layer}:${region.z}`;\nfunction previewRegions() { return lastReport?.preview?.layers||[]; }\nfunction stopPlayback() {\n  if(playbackFrame!==null && typeof cancelAnimationFrame===\'function\') cancelAnimationFrame(playbackFrame);\n  playbackFrame=null;lastFrameTime=null;\n  text(\'preview-play\',\'Play\');$(\'preview-play\')?.setAttribute(\'aria-label\',\'Play print animation\');\n}\nfunction playbackEnabled(enabled) {\n  for(const id of [\'preview-play\',\'preview-reset\',\'preview-progress\']) if($(id)) $(id).disabled=!enabled;\n}\nfunction clearDrawing() {\n  for(const id of [\'export-paths\',\'export-outlines\',\'preview-travels\',\'preview-context\',\'preview-previous\']) $(id)?.replaceChildren();\n  $(\'preview-nozzle\')?.setAttribute(\'hidden\',\'\');\n}\nfunction fillRegionChoices(layerKey, preferred=null) {\n  const select=$(\'preview-region\');if(!select) return;\n  const regions=previewRegions().filter(region=>regionKey(region)===layerKey);\n  select.replaceChildren();\n  for(const region of regions) {\n    const option=document.createElement(\'option\');option.value=String(region.id);\n    option.textContent=`Overhang ${region.id+1} · T${region.tool} · ${region.path_count??region.paths?.length??0} paths`;\n    select.appendChild(option);\n  }\n  select.disabled=!regions.length;\n  select.value=String(regions.some(region=>region.id===preferred)?preferred:regions[0]?.id??\'\');\n  const slider=$(\'preview-layer-range\');if(slider) slider.value=String(Math.max(0,previewLayerKeys.indexOf(layerKey)));\n  loadPreviewRegion(Number(select.value));\n}\nfunction populatePreviewChoices() {\n  const select=$(\'preview-layer\');if(!select) return;\n  const regions=previewRegions();\n  previewLayerKeys=[...new Set(regions.map(regionKey))].sort((a,b)=>Number(a.split(\':\')[1])-Number(b.split(\':\')[1])||Number(a.split(\':\')[0])-Number(b.split(\':\')[0]));\n  const previous=regions.find(region=>region.id===selectedRegionId);\n  select.replaceChildren();\n  for(const key of previewLayerKeys) {\n    const region=regions.find(item=>regionKey(item)===key), option=document.createElement(\'option\');\n    option.value=key;option.textContent=`Layer ${region.layer} · Z ${region.z} mm`;select.appendChild(option);\n  }\n  select.disabled=!regions.length;\n  if(!regions.length) {\n    const option=document.createElement(\'option\');option.textContent=\'No overhang layers\';select.appendChild(option);\n  } else select.value=previous?regionKey(previous):previewLayerKeys[0];\n  const slider=$(\'preview-layer-range\');if(slider){slider.max=String(Math.max(0,previewLayerKeys.length-1));slider.disabled=previewLayerKeys.length<2;}\n  fillRegionChoices(select.value,previous?.id);\n}\nasync function loadPreviewRegion(id) {\n  stopPlayback();const token=++regionRequest,revision=previewRevision;\n  activeRegion=null;previewScene=null;clearDrawing();playbackEnabled(false);\n  const regions=previewRegions(),entry=regions.find(region=>region.id===id);\n  selectedRegionId=entry?.id??null;\n  const position=regions.indexOf(entry);\n  if($(\'preview-prev\')) $(\'preview-prev\').disabled=position<=0;\n  if($(\'preview-next\')) $(\'preview-next\').disabled=position<0||position>=regions.length-1;\n  if($(\'preview-empty\')) $(\'preview-empty\').hidden=!!entry;\n  if($(\'preview-fit\')) $(\'preview-fit\').disabled=!entry;\n  if(!entry) {text(\'preview-progress-label\',\'No toolpaths loaded\');return;}\n  text(\'preview-caption\',\'Loading overhang…\');\n  try {\n    const region=entry.paths?entry:(await settingsBridge.getRegion(id,revision)).region;\n    if(token!==regionRequest || revision!==previewRevision) return;\n    activeRegion=region;playbackTime=Number(displayRegion()?.duration)||0;\n    renderSnapshot();\n  } catch(error) {\n    if(token===regionRequest) text(\'preview-caption\',error.message||\'Could not load this overhang.\');\n  }\n}\nfunction moveRegion(direction) {\n  const regions=previewRegions(),index=regions.findIndex(region=>region.id===selectedRegionId);\n  const next=regions[index+direction];if(!next)return;\n  $(\'preview-layer\').value=regionKey(next);fillRegionChoices(regionKey(next),next.id);\n}\nfunction makePolyline(group,line) {\n  const poly=document.createElementNS(\'http://www.w3.org/2000/svg\',\'polyline\');\n  poly.setAttribute(\'points\',line.map(point=>projectPoint(point).join(\',\')).join(\' \'));group.appendChild(poly);return poly;\n}\nfunction renderSnapshot() {\n  const region=displayRegion(),canvas=$(\'export-drawing\');if(!canvas)return;\n  clearDrawing();\n  if(!region){canvas.setAttribute(\'viewBox\',\'0 0 480 340\');return;}\n  const showTravel=!!$(\'preview-show-travel\')?.checked;\n  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;\n  function include(point){point=projectPoint(point);if(!point||!Number.isFinite(point[0])||!Number.isFinite(point[1]))return;minX=Math.min(minX,point[0]);maxX=Math.max(maxX,point[0]);minY=Math.min(minY,point[1]);maxY=Math.max(maxY,point[1]);}\n  for(const line of region.paths) for(const point of line) include(point);\n  if(showWholeLayer) for(const line of region.outlines||[]) for(const point of line)include(point);\n  if(showTravel) for(const motion of region.motions||[]) {include(motion);include(motion.slice(3));}\n  if(!Number.isFinite(minX))return;\n  if(showWholeLayer || $(\'preview-view\')?.value===\'3d\') for(const path of visibleContextPaths()) for(const point of path.points) include(point);\n  const span=Math.max(maxX-minX,maxY-minY,1),pad=span*.12;\n  canvas.setAttribute(\'viewBox\',`${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);\n  for(const id of [\'export-outlines\',\'export-paths\',\'preview-travels\',\'preview-head\',\'preview-context\',\'preview-previous\']) $(id)?.setAttribute(\'transform\',`translate(0 ${minY+maxY}) scale(1 -1)`);\n  for(const line of region.outlines||[]) makePolyline($(\'export-outlines\'),line);\n  for(const path of visibleContextPaths()) { const node=makePolyline($(path.previous?\'preview-previous\':\'preview-context\'),path.points);node.style.stroke=path.color; }\n  const nodes=region.paths.map((line,i)=>{const node=makePolyline($(\'export-paths\'),line);node.dataset.role=region.roles?.[i]||\'support\';if(region.roles)node.style.stroke=pathColors[node.dataset.role];return node;});\n  const ends=[],pathEnds=region.paths.map(()=>0),travels=[];let duration=0;\n  for(const [index,motion] of (region.motions||[]).entries()) {\n    duration+=Math.max(0,motion[6]);ends.push(duration);\n    if(motion[7]===1) pathEnds[motion[8]]=duration;\n    if(showTravel&&motion[7]===0) travels.push({index,node:makePolyline($(\'preview-travels\'),[motion.slice(0,3),motion.slice(3,6)])});\n  }\n  previewScene={region,nodes,ends,pathEnds,travels,duration,fullPoints:region.paths.map(line=>line.map(p=>projectPoint(p).join(\',\')).join(\' \')),states:nodes.map(()=>null)};\n  $(\'preview-nozzle\')?.setAttribute(\'r\',String(span*.009));\n  playbackTime=Math.min(playbackTime,duration);playbackEnabled(duration>0);\n  text(\'preview-caption\',`Overhang ${region.id+1} · Layer ${region.layer} · Z ${region.z} mm · T${region.tool} · ${region.mode===\'wave\'?\'Wave\':\'Arc\'}`);\n  renderPlayback(); renderRegionStats();\n}\nfunction clockText(seconds){const n=Math.max(0,Math.floor(seconds));return `${Math.floor(n/60)}:${String(n%60).padStart(2,\'0\')}`;}\nfunction renderPlayback() {\n  if(!activeRegion||!previewScene)return;\n  const {ends,pathEnds,nodes,travels,duration,fullPoints,states}=previewScene,motions=previewScene.region.motions||[];\n  let low=0,high=ends.length;\n  while(low<high){const middle=(low+high)>>1;if(ends[middle]<=playbackTime)low=middle+1;else high=middle;}\n  const index=Math.min(low,motions.length-1),motion=motions[index];\n  const start=index>0?ends[index-1]:0,ratio=motion?Math.max(0,Math.min(1,(playbackTime-start)/Math.max(motion[6],1e-12))):0;\n  const position=motion?motion.slice(0,3).map((value,axis)=>value+(motion[axis+3]-value)*ratio):null;\n  let printed=0;\n  nodes.forEach((node,path)=>{\n    const complete=pathEnds[path]<=playbackTime;\n    const partial=motion&&ratio>0&&motion[7]===1&&motion[8]===path&&!complete;\n    const state=complete?\'complete\':partial?\'active\':\'future\';\n    if(states[path]!==state){node.toggleAttribute(\'hidden\',state===\'future\'||!pathVisible(node.dataset.role));node.classList.toggle(\'active\',state===\'active\');if(complete)node.setAttribute(\'points\',fullPoints[path]);states[path]=state;}\n    if(complete)printed++;\n    else if(partial)node.setAttribute(\'points\',[...previewScene.region.paths[path].slice(0,motion[9]),position].map(p=>projectPoint(p).join(\',\')).join(\' \'));\n  });\n  for(const travel of travels){travel.node.toggleAttribute(\'hidden\',travel.index>index);if(travel.index===index&&motion[7]===0)travel.node.setAttribute(\'points\',[projectPoint(motion.slice(0,3)),projectPoint(position)].map(p=>p.join(\',\')).join(\' \'));else {const m=motions[travel.index];travel.node.setAttribute(\'points\',[projectPoint(m.slice(0,3)),projectPoint(m.slice(3,6))].map(p=>p.join(\',\')).join(\' \'));}}\n  const nozzle=$(\'preview-nozzle\');if(nozzle&&position){nozzle.removeAttribute(\'hidden\');const point=projectPoint(position);nozzle.setAttribute(\'cx\',point[0]);nozzle.setAttribute(\'cy\',point[1]);}\n  if($(\'preview-progress\'))$(\'preview-progress\').value=String(duration?Math.round(playbackTime/duration*1000):1000);\n  const state=playbackTime>=duration?\'Complete\':motion?.[7]===1?\'Printing\':motion?.[7]===0?\'Travel\':\'Retract / wait\';\n  text(\'preview-progress-label\',`${clockText(playbackTime)} / ${clockText(duration)} · ${printed}/${nodes.length} paths · ${state}${position?\' · Z \'+position[2].toFixed(2)+\' mm\':\'\'}`);\n}\nfunction playbackTick(timestamp) {\n  if(!previewScene){stopPlayback();return;}\n  if(lastFrameTime!==null)playbackTime=Math.min(previewScene.duration,playbackTime+Math.max(0,timestamp-lastFrameTime)/1000*Number($(\'preview-speed\')?.value||20));\n  lastFrameTime=timestamp;renderPlayback();\n  if(playbackTime>=previewScene.duration){stopPlayback();return;}\n  playbackFrame=requestAnimationFrame(playbackTick);\n}\nfunction togglePlayback() {\n  if(playbackFrame!==null){stopPlayback();return;}\n  if(!previewScene||!previewScene.duration)return;\n  if(playbackTime>=previewScene.duration)playbackTime=0;\n  text(\'preview-play\',\'Pause\');$(\'preview-play\').setAttribute(\'aria-label\',\'Pause print animation\');\n  lastFrameTime=null;renderPlayback();playbackFrame=requestAnimationFrame(playbackTick);\n}\nfunction renderReport(report) {\n  lastReport=report || null;\n  text(\'preview-area\',\'\');text(\'preview-time\',\'\');\n  const valid=report && !report.error;\n  text(\'stat-regions\',valid?report.replaced_features:\'—\');\n  text(\'stat-paths\',valid?report.generated_arcs:\'—\');\n  text(\'stat-hilbert\',valid?(report.hilbert_features||0):\'—\');\n  text(\'last-report\',!report?\'Slice a model to generate the preview.\':report.error?\'Preview: \'+report.error:`Preview: ${report.replaced_features} regions replaced, ${report.generated_arcs} support paths, ${report.skipped_features} skipped.${report.preview_error?\' \'+report.preview_error:\'\'}`);\n  const reasons=Object.entries(report?.skip_reasons||{}), details=$(\'report-details\'),list=$(\'skip-list\');\n  if(details) details.hidden=!reasons.length;\n  if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement(\'li\'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }\n  populatePreviewChoices(); renderPreviewWarning(); renderSuggestions();\n}\nfunction remember() { draft=collect(); status.textContent=\'Unsaved changes.\'; renderState(); }\nfunction readonly() { return window.orca.getContext ? !!window.orca.getContext().readOnly : false; }\nasync function initialize(discard=false) {\n  try {\n    let saved=await settingsBridge.getConfig(); if(typeof saved===\'string\') saved=JSON.parse(saved);\n    if(discard===true) draft=null;\n    const values={...defaults,...(saved||{}),...(draft||{})};\n    for(const key of fields) {\n      const el=$(key); if(!el) continue;\n      if(typeof defaults[key]===\'boolean\') el.checked=values[key]; else el.value=values[key];\n      el.disabled=readonly(); el.removeAttribute?.(\'aria-invalid\');\n    }\n    ready=true; renderState();\n    status.textContent=readonly()?\'This preset is read-only.\':draft?\'Unsaved changes.\':\'Settings loaded.\';\n  } catch(error) { status.textContent=\'Could not load settings: \'+error.message; }\n}\nfunction invalid(key,message) {\n  const el=$(key); el?.setAttribute?.(\'aria-invalid\',\'true\');\n  if(el?.closest) {\n    selectView(\'tuning\');\n    const overview=el.closest(\'#view-overview\'); if(overview) selectView(\'overview\');\n    let parent=el.parentElement;\n    while(parent) { if(parent.tagName===\'DETAILS\') parent.open=true; if(parent.dataset?.mode) parent.hidden=false; parent=parent.parentElement; }\n    el.focus();\n  }\n  status.textContent=message;\n}\n$(\'save\').onclick=async()=>{\n  if(!ready) { status.textContent=\'Wait for settings to load.\'; return; }\n  if(readonly()) { status.textContent=\'This preset is read-only.\'; return; }\n  if(savingUI) return;\n  const values=collect();\n  for(const key of fields) {\n    $(key)?.removeAttribute?.(\'aria-invalid\');\n    if(typeof values[key]===\'number\' && (!Number.isFinite(values[key]) || $(key)?.value===\'\')) { invalid(key,\'Please enter a valid number for \'+key+\'.\'); return; }\n    if($(key)?.checkValidity && !$(key).checkValidity()) { invalid(key,$(key).validationMessage); return; }\n  }\n  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s) { invalid(\'minimum_arc_speed_mm_s\',\'Minimum speed must not exceed maximum arc speed.\'); return; }\n  if(values.z_min_mm>values.z_max_mm) { invalid(\'z_min_mm\',\'Invalid Z range.\'); return; }\n  savingUI=true; $(\'save\').disabled=true; status.textContent=\'Saving…\';\n  try {\n    const result=await settingsBridge.saveConfig(values);\n    if(result===false) status.textContent=\'Save failed.\';\n    else { draft=null; status.textContent=result?.preset_override_active?\'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.\':\'Saved.\'; }\n  } catch(error) {\n    const key=fields.find(key=>error.message.startsWith(key+\' \'));\n    if(key) invalid(key,\'Save failed: \'+error.message);\n    else status.textContent=\'Save failed: \'+error.message;\n  }\n  finally { savingUI=false; $(\'save\').disabled=false; renderPreviewWarning(); }\n};\nfunction importProfile(text) {\n  const marker={},explicit={},prefixed=new Set(),ignored=[];\n  for(const line of text.split(/\\r?\\n/)) {\n    if(line.includes(\'WAVE_OVERHANG_CONFIG\')) for(const m of line.matchAll(/(\\w+)=(\\S+)/g)) marker[ALIASES[m[1]]||m[1]]=m[2];\n    for(const m of line.matchAll(/wave_overhang_(\\w+?)["\']?\\s*[:=]\\s*["\']?([^\\s"\',;]+)/g)) { explicit[m[1]]=m[2]; prefixed.add(m[1]); }\n  }\n  const found={...marker,...explicit},values={overhang_mode:\'wave\'};\n  for(const [key,raw] of Object.entries(found)) {\n    const spec=IMPORT[key];\n    if(!spec) { if(prefixed.has(key)&&![\'min_angle\',\'spacing_mode\',\'seam_mode\',\'debug_gcode\',\'outer_perimeters\'].includes(key)) ignored.push(\'wave_overhang_\'+key); continue; }\n    const [target,kind]=spec,number=Number(raw);\n    if(kind===\'text\') { if([\'smart\',\'zigzag\',\'monotonic\'].includes(raw.toLowerCase())) values[target]=raw.toLowerCase(); else ignored.push(\'wave_overhang_\'+key); }\n    else if(kind===\'bool\') { if([\'0\',\'1\',\'true\',\'false\'].includes(raw.toLowerCase())) values[target]=[\'1\',\'true\'].includes(raw.toLowerCase()); else ignored.push(\'wave_overhang_\'+key); }\n    else if(!Number.isFinite(number)) ignored.push(\'wave_overhang_\'+key);\n    else if(kind===\'fan\') { values[target[0]]=number>=0; values[target[1]]=Math.max(0,number); }\n    else values[target]=number;\n  }\n  return {values,ignored};\n}\n$(\'import\').onclick=()=>{\n  if(readonly()) { status.textContent=\'This preset is read-only.\'; return; }\n  const {values,ignored}=importProfile($(\'import_text\').value||\'\');\n  const count=Object.keys(values).length-1;\n  if(!count) { status.textContent=\'No wave_overhang_ settings found in the pasted text.\'; return; }\n  for(const [key,value] of Object.entries(values)) { const el=$(key); if(!el) continue; if(typeof value===\'boolean\') el.checked=value; else el.value=value; }\n  remember(); $(\'import_text\').value=\'\';\n  status.textContent=`Imported ${count} settings; press Save to keep them.`+(ignored.length?\' No equivalent for: \'+ignored.join(\', \')+\'.\':\'\');\n};\n$(\'refresh\').onclick=()=>initialize(true);\n$(\'settings\').addEventListener(\'input\',event=>{if(fields.includes(event.target.id)) remember();});\n$(\'settings\').addEventListener(\'change\',event=>{if(fields.includes(event.target.id)) remember();});\nfor(const button of all(\'[data-view]\')) button.onclick=()=>selectView(button.dataset.view);\nif($(\'open-guide\')) $(\'open-guide\').onclick=()=>selectView(\'guide\');\nif($(\'open-tuning\')) $(\'open-tuning\').onclick=()=>selectView(\'tuning\');\nif($(\'preview-layer\')) $(\'preview-layer\').onchange=()=>fillRegionChoices($(\'preview-layer\').value);\nif($(\'preview-region\')) $(\'preview-region\').onchange=()=>loadPreviewRegion(Number($(\'preview-region\').value));\nif($(\'preview-layer-range\')) $(\'preview-layer-range\').oninput=()=>{$(\'preview-layer\').value=previewLayerKeys[Number($(\'preview-layer-range\').value)];fillRegionChoices($(\'preview-layer\').value);};\nif($(\'preview-prev\')) $(\'preview-prev\').onclick=()=>moveRegion(-1);\nif($(\'preview-next\')) $(\'preview-next\').onclick=()=>moveRegion(1);\nif($(\'preview-play\')) $(\'preview-play\').onclick=togglePlayback;\nif($(\'preview-reset\')) $(\'preview-reset\').onclick=()=>{stopPlayback();playbackTime=0;renderPlayback();};\nif($(\'preview-progress\')) $(\'preview-progress\').oninput=()=>{stopPlayback();playbackTime=Number($(\'preview-progress\').value)/1000*(previewScene?.duration||0);renderPlayback();};\nif($(\'preview-show-travel\')) $(\'preview-show-travel\').onchange=()=>renderSnapshot();\nif($(\'preview-fit\')) $(\'preview-fit\').onclick=()=>{showWholeLayer=!showWholeLayer; $(\'preview-fit\').setAttribute(\'aria-pressed\',String(showWholeLayer)); $(\'preview-fit\').textContent=showWholeLayer?\'Fit support\':\'Show whole layer\'; renderSnapshot();};\ndocument.addEventListener(\'visibilitychange\',()=>{stopPlayback();if(!document.hidden) initialize();});\ninitialize();\n\nfunction renderSliceState(state) {\n  const messages={waiting:\'Slice a model to generate the preview.\',slicing:\'Slicing your model…\',\n    calculating:\'Calculating Arc/Wave paths…\',stale:\'Model or settings changed. Slice again to update the preview.\',\n    cancelled:\'Slicing stopped. Slice again to generate a preview.\',failed:\'Preview unavailable. Check the message below.\',\n    unavailable:\'No preview is available for this slice. Slice the model again.\',disabled:\'Enable Arc Overhang and slice your model.\'};\n  text(\'preview-empty-title\',state===\'ready\'?\'No eligible overhangs\':state===\'calculating\'?\'Building your preview\':state===\'slicing\'?\'Slicing your model\':\'Slice preview\');\n  text(\'preview-empty-message\',messages[state] || \'The current slice contains no eligible Arc/Wave regions. Check the region details below.\');\n  if(messages[state]) {\n    text(\'preview-caption\',messages[state]);\n    text(\'last-report\',lastReport?.error?\'Preview: \'+lastReport.error:messages[state]);\n  } else if(state===\'ready\' && !(lastReport?.preview?.layers||[]).length) {\n    text(\'preview-caption\',\'No eligible Arc/Wave regions in this slice.\');\n  }\n}\nasync function pollSlicePreview() {\n  if(previewPollBusy || document.hidden || !settingsBridge.getPreview) return;\n  previewPollBusy=true;\n  try {\n    const response=await settingsBridge.getPreview();\n    if(response.changed) {\n      previewRevision=response.revision;\n      renderReport(response.last_report);\n      renderSliceState(response.state);\n    }\n  } catch(error) { /* The configuration connection reports host failures separately. */ }\n  finally { previewPollBusy=false; }\n}\nif(typeof setInterval===\'function\') setInterval(pollSlicePreview,1500);\n\n// Own local projection and explanatory drawings. No renderer or network dependencies.\nconst pathColors={support:\'#208369\',outer:\'#d08735\',inner:\'#a79c3d\',overhang:\'#b75c75\',bridge:\'#627eb0\',infill:\'#89949c\',solid:\'#9b79b0\',surface:\'#659d9c\',gap:\'#b5907b\',brim:\'#72974b\',other:\'#81888e\'};\nconst pathNames={support:\'Arcs / Waves\',outer:\'Outer walls\',inner:\'Inner walls\',overhang:\'Overhang walls\',bridge:\'Bridges\',infill:\'Sparse infill\',solid:\'Solid infill\',surface:\'Surfaces\',gap:\'Gap fill\',brim:\'Brim / skirt\',other:\'Other\'};\nlet cameraYaw=-.55,cameraPitch=.65;\nconst hiddenRoles=new Set();\nfunction pathVisible(role){return !hiddenRoles.has(role||\'support\');}\nfunction projectPoint(point){\n  if(!point)return [NaN,NaN];\n  const [x,y]=point,z=point[2]??activeRegion?.z??0;\n  if($(\'preview-view\')?.value!==\'3d\')return [x,y];\n  return [x*Math.cos(cameraYaw)-y*Math.sin(cameraYaw),(x*Math.sin(cameraYaw)+y*Math.cos(cameraYaw))*Math.sin(cameraPitch)-z*Math.cos(cameraPitch)];\n}\nfunction layerContext(){return activeRegion?.context||lastReport?.preview?.contexts?.[String(activeRegion?.layer)];}\nfunction displayRegion(){\n  if(!activeRegion)return null;\n  const context=layerContext();\n  if($(\'preview-scope\')?.value===\'layer\'&&context)return {...activeRegion,...context};\n  return activeRegion;\n}\nfunction visibleContextPaths(){\n  const context=layerContext();if(!context)return [];\n  const result=[];\n  if($(\'preview-context-toggle\')?.checked&&$(\'preview-scope\')?.value!==\'layer\'){\n    context.paths.forEach((points,i)=>{const role=context.roles[i];if(role!==\'support\'&&pathVisible(role))result.push({points,color:pathColors[role]||pathColors.other});});\n  }\n  if($(\'preview-previous-toggle\')?.checked)for(const points of context.previous||[])result.push({points,previous:true,color:\'#87919a\'});\n  return result;\n}\nfunction renderRegionStats(){\n  const r=activeRegion;if(!r)return;\n  const coverage=r.coverage_percent==null?\'\':` · Minimum generated coverage ${Number(r.coverage_percent).toFixed(1)}%`;\n  text(\'preview-area\',`${r.path_count??r.paths.length} support paths${r.deposited_area_mm2==null?\'\':` · Deposited footprint ${r.deposited_area_mm2} mm²`}${coverage}`);\n  text(\'preview-time\',lastReport?.time_change_s==null?\'\':`Estimated print-time change: ${lastReport.time_change_s<0?\'−\':\'+\'}${clockText(Math.abs(lastReport.time_change_s))}`);\n  text(\'preview-motion-note\',($(\'preview-scope\')?.value===\'layer\'&&layerContext()?\'Full selected layer\':\'Selected overhang\')+\' · movement time estimate, without acceleration or heater waits.\');\n}\nfunction renderSuggestions(){\n  const table=$(\'region-results\');if(table){table.replaceChildren();for(const result of lastReport?.region_results||[]){const row=document.createElement(\'tr\');for(const value of [result.layer,result.status,result.reason||`${result.area_mm2} mm² · ${result.coverage_percent}% coverage`]){const cell=document.createElement(\'td\');cell.textContent=value;row.appendChild(cell);}table.appendChild(row);}}\n  if($(\'region-diagnostics\'))$(\'region-diagnostics\').hidden=!(lastReport?.region_results?.length);\n  const select=$(\'suggestion-tool\');if(!select)return;\n  const previous=select.value;select.replaceChildren();\n  for(const item of lastReport?.preview?.suggestions||[]){const option=document.createElement(\'option\');option.value=String(item.tool);option.textContent=`T${item.tool} · ${item.material}`;select.appendChild(option);}\n  if([...select.options].some(option=>option.value===previous))select.value=previous;\n  showSuggestion();\n}\nfunction showSuggestion(){\n  const suggestion=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$(\'suggestion-tool\')?.value);\n  if($(\'apply-suggestion\'))$(\'apply-suggestion\').disabled=!suggestion||readonly();\n  text(\'suggestion-note\',suggestion?`${suggestion.nozzle} mm nozzle · ${suggestion.layer_height} mm layer. Suggested ${suggestion.values.arc_speed_mm_s} mm/s, fan ${suggestion.values.support_fan_percent}%, gap ${suggestion.values.peel_gap_mm} mm. These are shared plugin settings; review every tool in a multi-material print.`:\'Slice with generated support to read the active material profile.\');\n}\nfunction renderParameterGuide(){\n  const root=$(\'parameter-guide\');if(!root)return;\n  const overlap=Number($(\'wall_overlap_mm\')?.value||0),spacing=Number($(\'arc_spacing_nozzle_ratio\')?.value||.95);\n  const gap=Number($(\'peel_gap_mm\')?.value||.1),slow=Number($(\'upper_speed_percent\')?.value||50);\n  const cards=[\n    [\'Inner wall overlap\',`Reach into inner walls: ${overlap} mm. The outer model boundary remains the limit.`, \'overlap\'],\n    [\'Path spacing\',`Arc spacing is ${spacing} × nozzle diameter. Smaller spacing means more paths.`, \'spacing\'],\n    [\'Removable floor\',`Vertical separation: ${gap} mm. A clear lower-layer insertion is required; otherwise this region is kept unchanged.`, \'gap\'],\n    [\'Layers above support\',`Inside the generated footprint: ${slow}% of the original feed. Outside: original feed.`, \'slow\'],\n    [\'Print sequence\',$(\'print_order\')?.value===\'slicer\'?\'Support follows the sliced Bridge position. Earlier Overhang walls follow support.\':\'Normal walls and infill → Arcs/Waves → Overhang walls, within each tool section.\', \'order\']\n  ];\n  root.replaceChildren();\n  for(const [title,copy,kind] of cards){\n    const card=document.createElement(\'article\'),heading=document.createElement(\'h3\'),note=document.createElement(\'p\');heading.textContent=title;note.textContent=copy;\n    const svg=document.createElementNS(\'http://www.w3.org/2000/svg\',\'svg\');svg.setAttribute(\'viewBox\',\'0 0 300 105\');svg.setAttribute(\'role\',\'img\');svg.setAttribute(\'aria-label\',title+\' concept\');\n    function line(points,color,width=3){const path=document.createElementNS(svg.namespaceURI,\'polyline\');path.setAttribute(\'points\',points);path.setAttribute(\'fill\',\'none\');path.setAttribute(\'stroke\',color);path.setAttribute(\'stroke-width\',width);svg.appendChild(path);}\n    if(kind===\'overlap\'){for(let x=65;x<=125;x+=20)line(`${x},15 ${x},90`,\'#89949c\',5);for(let y=25;y<=85;y+=20)line(`${125-Math.min(100,overlap*45)},${y} 265,${y}`,\'#208369\');}\n    if(kind===\'spacing\'){const step=Math.max(5,Math.min(25,spacing*18));for(let x=40;x<265;x+=step)line(`${x},90 ${x+18},60 ${x},20`,\'#208369\');}\n    if(kind===\'gap\'){line(\'35,90 35,30 110,30\',\'#89949c\',10);line(\'110,30 270,30\',\'#89949c\',6);line(`95,${40+Math.min(35,gap*110)} 270,${40+Math.min(35,gap*110)}`,\'#208369\',5);}\n    if(kind===\'slow\'){line(\'25,60 100,60\',\'#89949c\',4);line(\'100,60 220,60\',\'#208369\',4);line(\'220,60 280,60\',\'#89949c\',4);for(let x=110;x<220;x+=Math.max(5,slow/4))line(`${x},48 ${x},72`,\'#208369\',2);}\n    if(kind===\'order\'){for(let i=0;i<3;i++){const x=35+i*95;line(`${x},30 ${x+45},30 ${x+45},80 ${x},80 ${x},30`,[\'#89949c\',\'#208369\',\'#b75c75\'][i],3);if(i<2)line(`${x+52},55 ${x+85},55 ${x+77},47`,\'#d08735\',2);}}\n    const button=document.createElement(\'button\');button.type=\'button\';button.className=\'text-button\';button.textContent=\'Replay explanation\';button.onclick=()=>{if(!window.matchMedia?.(\'(prefers-reduced-motion: reduce)\').matches)svg.animate?.([{opacity:.15},{opacity:1}],{duration:650});};\n    card.append(heading,svg,note,button);root.appendChild(card);\n  }\n}\nif($(\'preview-filters\'))for(const [role,name] of Object.entries(pathNames)){\n  const label=document.createElement(\'label\'),input=document.createElement(\'input\'),swatch=document.createElement(\'i\');input.type=\'checkbox\';input.checked=true;input.dataset.role=role;input.setAttribute(\'aria-label\',name);swatch.style.background=pathColors[role];label.append(input,swatch,document.createTextNode(name));$(\'preview-filters\').appendChild(label);\n  input.onchange=()=>{if(input.checked)hiddenRoles.delete(role);else hiddenRoles.add(role);renderSnapshot();};\n}\nfor(const id of [\'preview-view\',\'preview-context-toggle\',\'preview-previous-toggle\'])if($(id))$(id).onchange=()=>renderSnapshot();\nif($(\'preview-scope\'))$(\'preview-scope\').onchange=()=>{stopPlayback();playbackTime=displayRegion()?.duration||0;renderSnapshot();};\nif($(\'preview-home\'))$(\'preview-home\').onclick=()=>{cameraYaw=-.55;cameraPitch=.65;renderSnapshot();};\nif($(\'suggestion-tool\'))$(\'suggestion-tool\').onchange=showSuggestion;\nif($(\'apply-suggestion\'))$(\'apply-suggestion\').onclick=()=>{\n  if(readonly())return;\n  const item=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$(\'suggestion-tool\').value);if(!item)return;\n  for(const [key,value] of Object.entries(item.values)){const el=$(key);if(!el)continue;if(typeof value===\'boolean\')el.checked=value;else el.value=value;}\n  remember();status.textContent=\'Starting points applied to draft. Review all tools and save before slicing.\';\n};\nif($(\'export-drawing\')){\n  const svg=$(\'export-drawing\');let drag=null;\n  svg.setAttribute(\'tabindex\',\'0\');\n  svg.addEventListener(\'keydown\',event=>{\n    if(!activeRegion||![\'ArrowLeft\',\'ArrowRight\',\'ArrowUp\',\'ArrowDown\',\'Home\',\'+\',\'-\'].includes(event.key))return;\n    event.preventDefault();\n    if(event.key===\'Home\'){cameraYaw=-.55;cameraPitch=.65;renderSnapshot();return;}\n    const dx=event.key===\'ArrowLeft\'?-1:event.key===\'ArrowRight\'?1:0,dy=event.key===\'ArrowUp\'?-1:event.key===\'ArrowDown\'?1:0;\n    if($(\'preview-view\').value===\'3d\'&&(dx||dy)){cameraYaw+=dx*.1;cameraPitch=Math.max(.15,Math.min(1.5,cameraPitch+dy*.1));renderSnapshot();return;}\n    const b=svg.getAttribute(\'viewBox\').split(\' \').map(Number),scale=event.key===\'+\'?.9:event.key===\'-\'?1.1:1;\n    if(b[2]*scale<.1||b[2]*scale>100000)return;\n    svg.setAttribute(\'viewBox\',`${b[0]+b[2]*dx*.05+b[2]*(1-scale)/2} ${b[1]+b[3]*dy*.05+b[3]*(1-scale)/2} ${b[2]*scale} ${b[3]*scale}`);\n  });\n  svg.addEventListener(\'wheel\',event=>{if(!activeRegion)return;event.preventDefault();const box=svg.getAttribute(\'viewBox\').split(\' \').map(Number),scale=event.deltaY>0?1.12:.89;if(box[2]*scale<.1||box[2]*scale>100000)return;svg.setAttribute(\'viewBox\',`${box[0]+box[2]*(1-scale)/2} ${box[1]+box[3]*(1-scale)/2} ${box[2]*scale} ${box[3]*scale}`);},{passive:false});\n  svg.addEventListener(\'pointerdown\',event=>{if(!activeRegion)return;drag={x:event.clientX,y:event.clientY};svg.setPointerCapture(event.pointerId);});\n  svg.addEventListener(\'pointermove\',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;drag={x:event.clientX,y:event.clientY};if($(\'preview-view\').value===\'3d\'&&!event.shiftKey){cameraYaw+=dx*.008;cameraPitch=Math.max(.15,Math.min(1.5,cameraPitch+dy*.008));renderSnapshot();}else{const b=svg.getAttribute(\'viewBox\').split(\' \').map(Number),rect=svg.getBoundingClientRect();svg.setAttribute(\'viewBox\',`${b[0]-dx*b[2]/rect.width} ${b[1]-dy*b[3]/rect.height} ${b[2]} ${b[3]}`);}});\n  svg.addEventListener(\'pointerup\',()=>drag=null);svg.addEventListener(\'pointercancel\',()=>drag=null);\n}\n</script></body></html>\n'
+
+VERSION = "0.4.0"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
+    "support_mode": "integrated",
+    "peel_gap_mm": 0.1,
+    "upper_slowdown_layers": 0,
+    "upper_speed_percent": 50.0,
+    "adaptive_paths": False,
+    "path_cooling_s": 0.0,
+    "support_acceleration_mm_s2": 0.0,
+    "support_fan_percent": 0.0,
+    "support_fan_override": False,
+    "initial_path_count": 0,
+    "initial_flow_percent": 100.0,
+    "initial_fan_percent": 70.0,
+    "far_speed_percent": 100.0,
+    "edge_coast_mm": 0.0,
+    "wipe_mm": 0.0,
+    "connected_travel_mm": 0.0,
     "next_layer_pattern": "slicer",
     "print_order": "layer_tail",
     "overhang_mode": "arc",
@@ -293,11 +684,11 @@ DEFAULTS = {
     "z_min_mm": 0.0,
     "z_max_mm": 10000.0,
 }
-CHOICES = {"print_order": ("layer_tail", "slicer"), "next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
+CHOICES = {"support_mode": ("integrated", "removable"), "print_order": ("layer_tail", "slicer"), "next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
            "wave_pattern": ("smart", "zigzag", "monotonic")}
 CONFIG_KEYS = ("nozzle_diameter", "filament_diameter", "outer_wall_line_width",
                "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e",
-               "filament_max_volumetric_speed")
+               "filament_max_volumetric_speed", "filament_type", "fan_max_speed")
 NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 WORD = re.compile(r"([A-Z])\s*(" + NUMBER + r")", re.I)
 
@@ -374,6 +765,21 @@ def configuration(overrides=None):
         raise ValueError("max_centers must be an integer from 1 to 10000.")
     if result["z_min_mm"] > result["z_max_mm"]:
         raise ValueError("z_min_mm exceeds z_max_mm.")
+    for key in ("upper_slowdown_layers", "initial_path_count"):
+        if int(result[key]) != result[key] or result[key] > 20:
+            raise ValueError(key + " must be a whole number from 0 to 20.")
+    for key in ("upper_speed_percent", "far_speed_percent"):
+        if not 1 <= result[key] <= 100:
+            raise ValueError(key + " must be between 1 and 100.")
+    for key in ("support_fan_percent", "initial_fan_percent"):
+        if result[key] > 100:
+            raise ValueError(key + " must be between 0 and 100.")
+    if not 50 <= result["initial_flow_percent"] <= 150:
+        raise ValueError("initial_flow_percent must be between 50 and 150.")
+    for key, limit in (("path_cooling_s", 60), ("peel_gap_mm", 0.5), ("edge_coast_mm", 1), ("wipe_mm", 5),
+                       ("connected_travel_mm", 1), ("support_acceleration_mm_s2", 2000)):
+        if result[key] > limit:
+            raise ValueError(key + " exceeds its supported limit.")
     return result
 
 def scalar(value, key, tool_index=0):
@@ -736,6 +1142,8 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     candidates = [getStartPtOnLS(startline, params)]
     ls_parts = [startline] if startline.geom_type == "LineString" else [g for g in startline.geoms if g.geom_type == "LineString"]
     candidates.extend(ls.interpolate(f, normalized=True) for ls in ls_parts for f in (0.25, 0.5, 0.75))
+    if cfg["adaptive_paths"]:
+        candidates.sort(key=lambda pt: (-support.intersection(pt.buffer(printer["nozzle_diameter"] * 3)).area, pt.x, pt.y))
     remaining = poly
     initial = []
     for pt in candidates:
@@ -792,7 +1200,7 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     anchored = anchor_arc_paths(lines, support, arc_width, printer["outer_wall_line_width"])
     if anchored is None:
         return None
-    return anchored, coverage
+    return adaptive_order(anchored, support, printer["nozzle_diameter"], cancelled) if cfg["adaptive_paths"] else anchored, coverage
 
 def _parts(geom, kind):
     return [g for g in shapely.get_parts(geom) if g.geom_type == kind and not g.is_empty]
@@ -1223,7 +1631,7 @@ def fill_polygon_wave(poly, support, cfg, printer, cancelled):
     coverage = 100 * covered.area / poly.area
     if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
         return None
-    return anchored, coverage
+    return adaptive_order(anchored, support, printer["nozzle_diameter"], cancelled) if cfg["adaptive_paths"] else anchored, coverage
 
 
 def fan_override(lines, index, percent, auxiliary=False):
@@ -1315,7 +1723,7 @@ def retime_feature(feature, lines, speed_for):
 def is_retracted(state):
     return state.retracted > 1e-5 or state.firmware_retracted
 
-def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), post=()):
+def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), post=(), support=None):
     if is_retracted(before) or is_retracted(after):
         raise UnsupportedGCode(
             f"Bridge region starts or ends with unrecovered retraction "
@@ -1324,6 +1732,10 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), pos
     restore = restore_state or after
     if is_retracted(restore):
         raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
+    if any((cfg["adaptive_paths"], cfg["support_acceleration_mm_s2"], cfg["support_fan_override"],
+            cfg["initial_path_count"], cfg["edge_coast_mm"], cfg["wipe_mm"], cfg["connected_travel_mm"],
+            cfg["far_speed_percent"] != 100, cfg["path_cooling_s"])):
+        return emit_refined_arcs(arcs, before, after, cfg, printer, restore, pre, post, support)
     wave = cfg["overhang_mode"] == "wave"
     if wave:
         e_per_mm = cfg["wave_flow_mm3_per_mm"] / (math.pi * (printer["filament_diameter"] / 2) ** 2) * printer["filament_flow_ratio"]
@@ -1770,46 +2182,103 @@ def gallery_header(cfg, text=""):
             + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
                        for key, value in fields) + gallery_print_profile(text) + "\n")
 
-def export_preview(records, cfg):
-    """Bounded, simplified snapshot for the local UI; never used to generate G-code."""
-    layers, used = [], 0
-    limited = False
-    for layer, z, tool, mode, paths, contour in records:
-        if len(layers) >= 8 or used >= 10000:
-            limited = True
-            break
-        entry = {"layer": layer + 1, "z": round(z, 4), "tool": tool,
-                 "mode": mode, "paths": [], "outlines": []}
-        for line in paths:
-            if len(entry["paths"]) >= 240 or used >= 10000:
-                limited = True
+def export_preview(records, cfg, lines, cancelled=lambda: False):
+    """Read every generated block in final print order. Geometry never changes output."""
+    spans, start = [], None
+    for index, line in enumerate(lines):
+        if line.strip() == MARKER + "BEGIN":
+            start = index
+        elif line.strip() == MARKER + "END" and start is not None:
+            spans.append((start, index + 1))
+            start = None
+    if not spans:
+        return {"schema": 2, "layers": [], "limited": False, "settings": dict(cfg)}
+    # Keep only moves inside generated blocks, including their actual approach/return state.
+    block_moves = [{} for _ in spans]
+    block = 0
+    for feature in parse(lines, cancelled):
+        for move in feature.moves:
+            while block < len(spans) and move.index >= spans[block][1]:
+                block += 1
+            if block == len(spans):
                 break
-            coords = list(line.simplify(0.04, preserve_topology=False).coords)
-            if len(coords) > 96:
-                coords = [coords[round(i * (len(coords) - 1) / 95)] for i in range(96)]
-                limited = True
-            if used + len(coords) > 10000:
-                limited = True
-                break
-            entry["paths"].append([[round(x, 4), round(y, 4)] for x, y in coords])
-            used += len(coords)
-        outline_budget = 1024
-        for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
-            for ring in [poly.exterior, *poly.interiors]:
-                coords = list(ring.coords)
-                if len(coords) > outline_budget:
-                    limited = True
-                    continue
-                entry["outlines"].append([[round(x, 4), round(y, 4)] for x, y in coords])
-                outline_budget -= len(coords)
-        if entry["paths"]:
-            layers.append(entry)
-    return {"schema": 1, "layers": layers, "limited": limited, "settings": dict(cfg)}
+            if move.index > spans[block][0]:
+                block_moves[block][move.index] = (feature.layer, move)
+    contours = {(layer + 1, tool): contour for layer, z, tool, mode, paths, contour in records}
+    entries = []
+    for region_id, ((start, end), moves) in enumerate(zip(spans, block_moves)):
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        entry = {"id": region_id, "mode": cfg["overhang_mode"], "paths": [], "outlines": [], "motions": []}
+        active_path = None
+        position = None
+        total = 0.0
+        for index in range(start + 1, end):
+            if lines[index].startswith("; Arc "):
+                active_path = None
+            item = moves.get(index)
+            if item is None:
+                cmd, words = command(lines[index])
+                if cmd == "G4" and position is not None:
+                    seconds = max(0.0, words.get("S", words.get("P", 0) / 1000))
+                    if seconds:
+                        entry["motions"].append([*position, *position, seconds, 2, -1, -1])
+                        total += seconds
+                continue
+            layer, move = item
+            before, after = move.before, move.after
+            origin = [before.x, before.y, before.z]
+            target = [after.x, after.y, after.z]
+            if any(v is None or not math.isfinite(v) for v in origin + target):
+                continue
+            distance = math.dist(origin, target)
+            if distance <= 1e-9 and abs(move.delta_e) <= 1e-9:
+                continue
+            kind = 1 if distance > 1e-9 and move.delta_e > 0 else (0 if distance > 1e-9 else 2)
+            seconds = (distance if distance > 1e-9 else abs(move.delta_e)) / max(after.feed / 60, 1e-9)
+            path_id = vertex = -1
+            if kind == 1:
+                if active_path is None:
+                    active_path = len(entry["paths"])
+                    entry["paths"].append([origin[:2]])
+                entry["paths"][active_path].append(target[:2])
+                path_id = active_path
+                vertex = len(entry["paths"][active_path]) - 1
+                entry.update(layer=layer + 1, z=round(after.z, 5), tool=after.tool)
+            else:
+                active_path = None
+            # xyz from/to, nominal duration, kind (travel/print/pause), path, vertex.
+            entry["motions"].append([*origin, *target, seconds, kind, path_id, vertex])
+            total += seconds
+            position = target
+        if not entry["paths"]:
+            continue
+        contour = contours.get((entry["layer"], entry["tool"]))
+        if contour is not None:
+            for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
+                for ring in (poly.exterior, *poly.interiors):
+                    entry["outlines"].append([[round(x, 5), round(y, 5)] for x, y in ring.coords])
+        entry["duration"] = total
+        entry["path_count"] = len(entry["paths"])
+        entries.append(entry)
+    return {"schema": 2, "layers": entries, "limited": False, "settings": dict(cfg)}
+
+
+def preview_catalog(report):
+    """Small region index; the page requests full geometry for one region at a time."""
+    if not report or "preview" not in report:
+        return report
+    preview = report["preview"]
+    return {**report, "preview": {**{k: v for k, v in preview.items() if k != "contexts"}, "layers": [
+        {key: value for key, value in region.items() if key not in ("paths", "outlines", "motions")}
+        for region in preview["layers"]]}}
 
 
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
-    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "print_order": cfg["print_order"], "skip_reasons": {}}
+    if cfg["support_mode"] == "removable" and cfg["enabled"] and MARKER not in text:
+        return process_removable(text, cfg, resolved, cancelled)
+    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "print_order": cfg["print_order"], "skip_reasons": {}, "region_results": []}
     if not cfg["enabled"] or MARKER in text:
         return text, report
     lines = text.splitlines(keepends=True)
@@ -1819,6 +2288,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     def skipped(reason):
         report["skipped_features"] += 1
         report["skip_reasons"][reason] = report["skip_reasons"].get(reason, 0) + 1
+        report["region_results"].append({"layer": feature.layer+1, "status": "kept", "reason": reason})
     if not bridges:
         return text, report
     printer_by_tool = {}
@@ -1900,12 +2370,11 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
         accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M204"]
         pre = [*pre, *accel]
-        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
+        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post, support=support)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
                            if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
-        if len(preview_records) < 8:
-            preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], arcs, current))
+        preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], (), current))
         for k in range(1, hilbert_layers + 1):
             hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
         if wave_mode:
@@ -1913,6 +2382,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             speed = cfg["wave_speed_mm_s"]
             layer_delta[feature.layer] = layer_delta.get(feature.layer, 0.0) + sum(a.length for a in arcs) / speed \
                 - sum(move_time(m) for m in feature.moves)
+        report["region_results"].append({"layer": feature.layer+1, "tool": tool_index, "status": "generated",
+                                         "area_mm2": round(region.area,2), "coverage_percent": round(min(coverages),1)})
         report["replaced_features"] += 1
         report["generated_arcs"] += len(arcs)
         previous = report["minimum_coverage_percent"]
@@ -2007,12 +2478,19 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         report["skipped_features"] += report["replaced_features"]
         report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = report["retimed_features"] = 0
         report["minimum_coverage_percent"] = None
+        for result in report["region_results"]:
+            if result["status"] == "generated": result.update(status="kept", reason="Unsafe scheduling: " + str(error))
         return text, report
     lines = "".join(lines).splitlines(keepends=True)
+    if cfg["upper_slowdown_layers"]:
+        lines, count = slowdown_above_support(lines, cfg, cancelled, resolved)
+        report["retimed_features"] += count
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     try:
-        report["preview"] = export_preview(preview_records, cfg)
-        report["preview"]["limited"] |= report["replaced_features"] > len(report["preview"]["layers"])
+        report["preview"] = export_preview(preview_records, cfg, lines, cancelled)
+        enrich_preview(report, lines, cfg, resolved, cancelled)
+    except Cancelled:
+        raise
     except Exception:
         # A presentation failure must not turn a successful G-code export into
         # a failed print export. Do not log geometry or source paths here.
@@ -2223,6 +2701,22 @@ def config_page(as_tab=False):
         ("wave_floor_aux_fan_override", "Floor: aux fan speed override", "bool"),
         ("wave_floor_aux_fan_percent", "Floor: aux fan speed", "%"),
         (None, "Both modes", ""),
+        ("support_mode", "Support mode", "select"),
+        ("peel_gap_mm", "Removable floor: vertical gap (experimental)", "mm"),
+        ("upper_slowdown_layers", "Slow layers above support (0 = off)", "Layers"),
+        ("upper_speed_percent", "Speed over support", "%"),
+        ("adaptive_paths", "Prefer strong anchors and connected branches", "bool"),
+        ("support_acceleration_mm_s2", "Support acceleration (0 = unchanged)", "mm/s2"),
+        ("support_fan_override", "Override support cooling", "bool"),
+        ("support_fan_percent", "Support fan", "%"),
+        ("initial_path_count", "Initial paths with separate flow and cooling", "Count"),
+        ("initial_flow_percent", "Initial path flow", "%"),
+        ("initial_fan_percent", "Initial path fan", "%"),
+        ("far_speed_percent", "Speed furthest from the first support path", "%"),
+        ("path_cooling_s", "Minimum time per support path (0 = off)", "s"),
+        ("edge_coast_mm", "Coast at free path ends (0 = off)", "mm"),
+        ("wipe_mm", "Wipe along last path before travel (0 = off)", "mm"),
+        ("connected_travel_mm", "Skip retract for connected paths (0 = off)", "mm"),
         ("z_hop_mm", "Z hop between arcs/waves (0 = off)", "mm"),
         ("max_edge_gap_mm", "Maximum edge gap", "mm"),
         ("minimum_area_mm2", "Minimum overhang area", "mm2"),
@@ -2327,9 +2821,13 @@ const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
     const report=response.last_report;
+    previewRevision=response.revision;
     renderReport(report);
+    renderSliceState(response.state);
     return response.config;
   },
+  getPreview:()=>requestSettings('preview',{revision:previewRevision}),
+  getRegion:(id,revision)=>requestSettings('region',{id,revision}),
   saveConfig:config=>requestSettings('save',config)
 };
 """
@@ -2337,7 +2835,8 @@ const settingsBridge = {
                if as_tab else "Settings belong to this Orca plugin configuration. Save your process preset after editing.")
     return (page.replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT))
             .replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("__VERSION__", VERSION)
-            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge))
+            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge)
+            .replace("__PREVIEW_ATTRIBUTES__", "" if as_tab else "hidden"))
 
 
 
@@ -2351,6 +2850,29 @@ except ModuleNotFoundError as error:
 
 _pipeline_capability = None
 _last_report = None
+_preview_revision = 0
+_preview_state = "waiting"
+_preview_generation = 0
+
+
+def publish_preview(report, state="ready"):
+    global _last_report, _preview_revision, _preview_state
+    _last_report = report
+    _preview_state = state
+    _preview_revision += 1
+
+
+def preview_file(path, config, resolved=None, cancelled=lambda: False):
+    """Calculate support from Orca's completed slice without modifying its file."""
+    original = Path(path).read_bytes()
+    if original[:2] == b"PK" or b"\0" in original[:1024]:
+        raise UnsupportedGCode("The slice preview requires text G-code.")
+    text = (original[3:] if original.startswith(b"\xef\xbb\xbf") else original).decode("utf-8")
+    if MARKER in text:
+        return None  # A later host event must not replace a processed preview with an empty one.
+    _, report = process_text(text, config, resolved, cancelled)
+    return report
+
 
 if orca is not None:
     class ArcOverhangCapability(orca.slicing.SlicingPipelineCapabilityBase):
@@ -2369,22 +2891,83 @@ if orca is not None:
             return True
         def get_config_ui(self):
             return config_page()
+        def invalidate_preview(self):
+            global _preview_generation
+            _preview_generation += 1
+            publish_preview(None, "stale")
+
+        def on_lifecycle_event(self, event, ctx):
+            global _preview_generation
+            events = getattr(orca, "LifecycleEvent", None)
+            if events is None:
+                return
+            def is_event(name):
+                return event == getattr(events, name, None)
+            if is_event("SliceStarted"):
+                _preview_generation += 1
+                self._slice_resolved = None
+                publish_preview(None, "slicing")
+                return
+            if any(is_event(name) for name in ("NewProject", "ProjectOpened", "ProjectClosed",
+                    "ObjectAdded", "ObjectDeleted", "ObjectTransformed", "ObjectChanged",
+                    "PlateSelected", "PlateDeleted", "PresetSelected", "PresetSaved")):
+                _preview_generation += 1
+                publish_preview(None, "stale")
+                return
+            codes = getattr(orca, "LifecycleEvtCode", None)
+            success = codes is not None and ctx.code == codes.Ok
+            if is_event("SlicingJobComplete") and not success:
+                _preview_generation += 1
+                publish_preview(None, "cancelled")
+                return
+            if not is_event("GCodeExportFinished"):
+                return
+            if not success:
+                publish_preview(None, "failed")
+                return
+            # Orca closes and renames the internal slice file before this event.
+            # Its msg is the output path for successful GCodeExportFinished events.
+            path = getattr(ctx, "msg", "")
+            if not isinstance(path, str) or not path or "\n" in path:
+                publish_preview(None, "unavailable")
+                return
+            generation = _preview_generation
+            try:
+                cfg = configuration(json.loads(self.get_config() or "{}"))
+                if not cfg["enabled"]:
+                    publish_preview(None, "disabled")
+                    return
+                publish_preview(None, "calculating")
+                report = preview_file(path, cfg, getattr(self, "_slice_resolved", None),
+                                      lambda: generation != _preview_generation)
+                if generation == _preview_generation and report is not None:
+                    publish_preview(report)
+                elif generation == _preview_generation:
+                    publish_preview(None, "unavailable")
+            except Cancelled:
+                pass
+            except Exception as error:
+                if generation == _preview_generation:
+                    publish_preview({"error": str(error)}, "failed")
+
         def execute(self, ctx):
             global _last_report
             if ctx.step != orca.slicing.Step.psGCodePostProcess:
+                if hasattr(ctx, "config_value"):
+                    self._slice_resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 return orca.ExecutionResult.skipped("Arc Overhang runs at psGCodePostProcess.")
             try:
                 cfg = json.loads(self.get_config() or "{}")
                 resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 report = process_file(ctx.gcode_path, cfg, resolved, ctx.cancelled)
-                _last_report = dict(report)
+                publish_preview(dict(report))
                 message = f"Arc Overhang: {report['replaced_features']} features, {report['generated_arcs']} arcs, {report['skipped_features']} skipped."
                 print(message)
                 return orca.ExecutionResult.success(message, json.dumps({k: v for k, v in report.items() if k != "preview"}))
             except Cancelled:
                 return orca.ExecutionResult.skipped("Arc Overhang cancelled; G-code unchanged.")
             except Exception as error:
-                _last_report = {"error":str(error)}
+                publish_preview({"error":str(error)}, "failed")
                 return orca.ExecutionResult.failure(orca.PluginResult.FatalError, "Arc Overhang: " + str(error))
 
 
@@ -2404,16 +2987,37 @@ if orca is not None:
                 if capability is None:
                     raise RuntimeError("Arc Overhang processing is not loaded. Enable both plugin capabilities.")
                 action = data.get("action")
-                if action not in ("read", "save"):
+                if action not in ("read", "save", "preview", "region"):
                     raise ValueError("Unknown request.")
+                if action == "region":
+                    query = data.get("config") or {}
+                    if query.get("revision") != _preview_revision:
+                        raise ValueError("The slice changed. Loading the new preview.")
+                    region_id = query.get("id")
+                    regions = (_last_report or {}).get("preview", {}).get("layers", [])
+                    region = next((item for item in regions if item["id"] == region_id), None)
+                    if region is None:
+                        raise ValueError("The selected overhang is no longer available.")
+                    self.post_message({"request_id": request_id, "ok": True, "revision": _preview_revision, "region": {**region, "context": (_last_report or {}).get("preview", {}).get("contexts", {}).get(str(region["layer"]))}})
+                    return
+                if action == "preview":
+                    previous = data.get("config") or {}
+                    revision = _preview_revision
+                    response = {"request_id": request_id, "ok": True, "revision": revision,
+                                "state": _preview_state, "changed": previous.get("revision") != revision}
+                    if response["changed"]:
+                        response["last_report"] = preview_catalog(_last_report)
+                    self.post_message(response)
+                    return
                 if action == "save":
                     requested = configuration(data.get("config"))
                     if not isinstance(data.get("config"), dict):
                         raise ValueError("Settings must be a JSON object.")
                     if not capability.save_config(json.dumps(requested)):
                         raise RuntimeError("Could not save settings.")
+                    capability.invalidate_preview()
                 effective = configuration(json.loads(capability.get_config() or "{}"))
-                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":_last_report}
+                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":preview_catalog(_last_report), "revision":_preview_revision, "state":_preview_state}
                 if action == "save":
                     response["preset_override_active"] = effective != requested
                 self.post_message(response)

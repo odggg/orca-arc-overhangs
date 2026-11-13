@@ -1,12 +1,17 @@
 # Arc Overhang for OrcaSlicer 2.5
 
-Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.3.2 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
+Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsch, Nicolai Wachenschwan and Steven McCulloch. Current package version: 0.4.0 with the fixes recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## Install and use
 
-Use [orca_arc_overhang-0.3.2-py3-none-any.whl](dist/orca_arc_overhang-0.3.2-py3-none-any.whl) or [the 0.3.2 ZIP](Arc_Overhang_OrcaSlicer_2.5_v0.3.2.zip). The stable single-file plugin is [dist/arc_overhang.py](dist/arc_overhang.py). German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
+Use [orca_arc_overhang-0.4.0-py3-none-any.whl](dist/orca_arc_overhang-0.4.0-py3-none-any.whl) or [the 0.4.0 ZIP](Arc_Overhang_OrcaSlicer_2.5_v0.4.0.zip). The single-file plugin is [dist/arc_overhang.py](dist/arc_overhang.py). German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
 
-The plugin edits G-code during export. The slicing preview does not show the change: reopen the exported file to inspect it.
+The preview calculates support automatically when Orca finishes slicing. Open the Arc Overhang tab to inspect the result; no manual file export is required for this view. Final G-code processing still runs through the configured pipeline. Native Orca GUI validation and physical print testing remain outstanding; see VALIDATION.md.
+
+Version 0.4.0 also includes full-layer playback and filters, a 3D orthographic
+view, per-region diagnostics, material starting points, local slowdown and opt-in
+experimental print strategies. See [Workbench extensions](docs/WORKBENCH.md) for
+controls, safety checks and known limits. New print strategies are opt-in and experimental.
 
 ## Required Orca settings (both modes)
 
@@ -15,15 +20,21 @@ The plugin only replaces extrusions Orca labels Bridge or Internal Bridge. If Or
 ## The graphical workbench
 
 - **Overview** shows essential settings, print order, next-layer infill and a local
-  2D snapshot of generated support from the last export.
+  2D snapshot of generated support from the completed slice.
 - **Fine tuning** groups all advanced controls and shows the selected mode's
   settings without dropping values for the other mode.
 - **How it works** explains the method with an original schematic. It is separate
   from the actual export snapshot.
 - Saving waits for Orca's acknowledgement. A snapshot is marked when settings
-  differ from its export. The view does not claim to follow unsaved model edits.
+  differ from the slice. Model edits invalidate the preview until the model is sliced again.
 - Light/dark themes, keyboard focus, a narrow layout and a sticky save bar are
   included. No remote fonts, licence checks or network calls are added.
+
+The preview includes layer/overhang selection and Play/Pause, Restart,
+a progress slider, playback speed, nozzle position and optional travel paths. All
+generated regions remain selectable; geometry loads one region at a time. Motion
+follows the final generated G-code, with estimated timing. This feature is in the
+preview development branch and still needs an in-app slice test before release.
 
 All UI code and graphics were created for this project. See [UX design notes](docs/UX_DESIGN.md).
 

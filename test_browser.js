@@ -14,12 +14,21 @@ const {chromium}=require('playwright');
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(/^https?:/.test(r.url())) network.push(r.url());});
   await page.addInitScript(({defaults,report})=>{
-   window.__config={...defaults};window.__report=report;window.__saved=[];window.__readonly=false;
+   window.__config={...defaults};window.__report=report;window.__saved=[];window.__readonly=false;window.__revision=1;window.__state="ready";window.__catalogOnly=false;window.__regionRequests=[];window.__regionDelay=0;
    let receive;
    window.orca={onMessage:cb=>{receive=cb;},getContext:()=>({readOnly:window.__readonly}),
     postMessage:request=>queueMicrotask(()=>{
      if(request.action==='save') { window.__config={...request.config};window.__saved.push({...request.config}); }
-     receive({request_id:request.request_id,ok:true,config:window.__config,last_report:window.__report});
+     if(request.action==='region') {
+       window.__regionRequests.push(request.config.id);
+       const response={request_id:request.request_id,ok:true,revision:window.__revision,
+         region:(()=>{const r=window.__report.preview.layers.find(region=>region.id===request.config.id);return {...r,context:window.__report.preview.contexts?.[String(r.layer)]};})()};
+       setTimeout(()=>receive(response),request.config.id===0?window.__regionDelay:0);return;
+     }
+     const catalog=window.__catalogOnly&&window.__report?.preview?{...window.__report,preview:{...window.__report.preview,
+       contexts:undefined,layers:window.__report.preview.layers.map(({paths,outlines,motions,...index})=>index)}}:window.__report;
+     receive({request_id:request.request_id,ok:true,config:window.__config,last_report:catalog,
+       revision:window.__revision,state:window.__state,changed:request.config?.revision!==window.__revision});
     })};
   },{defaults,report});
   await page.goto(pathToFileURL(path.resolve('tab-preview.html')).href);
@@ -35,7 +44,53 @@ const {chromium}=require('playwright');
   assert.notEqual(await page.locator('#export-drawing').getAttribute('viewBox'),fit);
   await page.locator('#preview-fit').click();
   assert.equal(await page.locator('#export-drawing').getAttribute('viewBox'),fit);
+  assert((await page.locator('#preview-context polyline').count())>0);
+  await page.locator('#preview-context-toggle').uncheck();assert.equal(await page.locator('#preview-context polyline').count(),0);await page.locator('#preview-context-toggle').check();
+  await page.locator('#preview-previous-toggle').check();assert((await page.locator('#preview-previous polyline').count())>0);
+  await page.locator('#preview-scope').selectOption('layer');
+  const layerPaths=await page.locator('#export-paths polyline').count();assert(layerPaths>61);
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#preview-progress').inputValue(),'1000');
+  const plan=await page.locator('#export-paths polyline').first().getAttribute('points');
+  await page.locator('#preview-view').selectOption('3d');assert.notEqual(await page.locator('#export-paths polyline').first().getAttribute('points'),plan);
+  const beforeOrbit=await page.locator('#export-paths polyline').first().getAttribute('points');
+  await page.locator('#export-drawing').focus();await page.keyboard.press('ArrowRight');
+  assert.notEqual(await page.locator('#export-paths polyline').first().getAttribute('points'),beforeOrbit);
+  await page.keyboard.press('Home');
+  await page.locator('#preview-filters input[data-role="outer"]').uncheck();assert.equal(await page.locator('#export-paths polyline[data-role="outer"]:not([hidden])').count(),0);
+  await page.locator('#preview-filters input[data-role="outer"]').check();assert((await page.locator('#export-paths polyline[data-role="outer"]:not([hidden])').count())>0);
+  await page.locator('#preview-reset').click();assert.equal(await page.locator('#export-paths polyline:not([hidden])').count(),0);
+  await page.locator('#preview-progress').evaluate(el=>{el.value='500';el.dispatchEvent(new Event('input'));});
+  await page.screenshot({path:'evidence/workbench-3d.png',fullPage:true});
+  await page.locator('#preview-view').selectOption('2d');await page.locator('#preview-scope').selectOption('region');await page.locator('#preview-previous-toggle').uncheck();
+  assert.equal(await page.locator('#export-paths polyline').count(),61);
+  assert((await page.locator('#preview-area').textContent()).includes('mm²'));
+  await page.locator('#apply-suggestion').click();assert((await page.locator('#status').textContent()).includes('draft'));
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#parameter-guide article').count(),5);
   await page.screenshot({path:'evidence/ui-overview.png',fullPage:true});
+  await page.locator('#preview-reset').click();
+  assert.equal(await page.locator('#export-paths polyline:not([hidden])').count(),0);
+  assert.equal(await page.locator('#preview-progress').inputValue(),'0');
+  await page.locator('#preview-progress').evaluate(el=>{el.value='350';el.dispatchEvent(new Event('input'));});
+  const visiblePaths=await page.locator('#export-paths polyline:not([hidden])').count();
+  assert(visiblePaths>0&&visiblePaths<61);
+  assert((await page.locator('#export-paths polyline.active').count())<=1);
+  await page.locator('#preview-show-travel').check();
+  assert((await page.locator('#preview-travels polyline').count())>0);
+  assert.equal(await page.locator('#preview-nozzle').getAttribute('hidden'),null);
+  await page.locator('#preview-speed').selectOption('100');
+  const progressBefore=Number(await page.locator('#preview-progress').inputValue());
+  await page.locator('#preview-play').click();await page.waitForTimeout(300);
+  await page.locator('#preview-play').click();
+  const paused=await page.locator('#preview-progress').inputValue();
+  assert(Number(paused)>progressBefore);
+  await page.waitForTimeout(200);assert.equal(await page.locator('#preview-progress').inputValue(),paused);
+  await page.screenshot({path:'evidence/ui-playback.png',fullPage:true});
+  await page.locator('#preview-progress').evaluate(el=>{el.value='1000';el.dispatchEvent(new Event('input'));});
+  assert.equal(await page.locator('#export-paths polyline:not([hidden])').count(),61);
+  await page.locator('#preview-show-travel').uncheck();
+
   await page.locator('#enabled').uncheck();
   assert.equal(await page.locator('#processing-note').isVisible(),true);
   await page.locator('#enabled').check();
@@ -75,6 +130,63 @@ const {chromium}=require('playwright');
   await page.waitForTimeout(100);assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3');
   await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
   assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'2');
+  // Slice events refresh only preview data; unsaved settings are preserved.
+  await page.locator('#wave_speed_mm_s').fill('3.25');
+  await page.evaluate(()=>{window.__revision++;window.__state='slicing';window.__report=null;});
+  await page.getByText('Slicing your model…',{exact:true}).first().waitFor();
+  assert.equal(await page.locator('#export-paths polyline').count(),0);
+  assert.equal(await page.locator('#preview-area').textContent(),'');
+  assert.equal(await page.locator('#preview-time').textContent(),'');
+  assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3.25');
+  await page.evaluate(report=>{window.__revision++;window.__state='ready';window.__report=report;},report);
+  await page.waitForFunction(()=>document.querySelectorAll('#export-paths polyline').length===61);
+  assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3.25');
+  assert(!/export/i.test(await page.locator('body').innerText()),'No manual export step in the UI');
+  // Twelve overhangs on four layers: only requested region geometry is transferred.
+  await page.evaluate(report=>{
+    const layers=Array.from({length:12},(_,id)=>{
+      const region=structuredClone(report.preview.layers[0]);region.id=id;region.layer=2+Math.floor(id/3);
+      region.z=Number((region.layer*.2).toFixed(2));region.tool=id%2;
+      for(const m of region.motions){m[2]=region.z;m[5]=region.z;}
+      return region;
+    });
+    window.__report={...report,preview:{...report.preview,layers}};window.__catalogOnly=true;
+    window.__revision++;window.__state='ready';window.__regionRequests=[];
+  },report);
+  await page.waitForFunction(()=>document.querySelector('#preview-layer').options.length===4);
+  await page.waitForFunction(()=>document.querySelector('#preview-region').options.length===3);
+  await page.waitForFunction(()=>window.__regionRequests.length===1);
+  await page.locator('#preview-layer').selectOption('5:1');
+  await page.waitForFunction(()=>document.querySelector('#preview-caption').textContent.startsWith('Overhang 10'));
+  await page.locator('#preview-region').selectOption('11');
+  await page.waitForFunction(()=>document.querySelector('#preview-caption').textContent.startsWith('Overhang 12'));
+  assert.equal(await page.locator('#preview-next').isDisabled(),true);
+  assert((await page.locator('#preview-caption').textContent()).includes('T1'));
+  await page.locator('#preview-prev').click();
+  await page.waitForFunction(()=>document.querySelector('#preview-caption').textContent.startsWith('Overhang 11'));
+  // A late response for a previously selected region cannot replace the current region.
+  await page.evaluate(()=>{window.__regionDelay=300;});
+  await page.locator('#preview-layer').selectOption('2:0.4');
+  await page.locator('#preview-layer').selectOption('5:1');
+  await page.waitForTimeout(450);
+  assert((await page.locator('#preview-caption').textContent()).startsWith('Overhang 10'));
+  await page.locator('#preview-progress').evaluate(el=>{el.value='999';el.dispatchEvent(new Event('input'));});
+  await page.locator('#preview-speed').selectOption('100');await page.locator('#preview-play').click();
+  await page.waitForFunction(()=>document.querySelector('#preview-play').textContent==='Play');
+  assert.equal(await page.locator('#preview-progress').inputValue(),'1000');
+  await page.locator('#preview-play').click();
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(100);assert.equal(await page.locator('#preview-play').textContent(),'Play');
+  await page.locator('#preview-layer-range').evaluate(el=>{el.value='1';el.dispatchEvent(new Event('input'));});
+  await page.waitForFunction(()=>document.querySelector('#preview-caption').textContent.startsWith('Overhang 4'));
+  assert.equal(await page.locator('#preview-layer').inputValue(),'3:0.6');
+  // New slicing clears geometry and stops the player.
+  await page.locator('#preview-play').click();
+  await page.evaluate(()=>{window.__revision++;window.__state='slicing';window.__report=null;});
+  await page.waitForFunction(()=>document.querySelector('#preview-play').disabled);
+  assert.equal(await page.locator('#export-paths polyline').count(),0);
+  await page.evaluate(report=>{window.__catalogOnly=false;window.__state='ready';window.__report=report;window.__revision++;},report);
+  await page.waitForFunction(()=>document.querySelectorAll('#export-paths polyline').length===61);
   // Host data is text, never HTML.
   await page.evaluate(()=>{window.__report={error:'<img src=x onerror="window.__xss=true">'};});
   await page.locator('#refresh').click();await page.waitForTimeout(100);
@@ -85,6 +197,6 @@ const {chromium}=require('playwright');
   await page.getByText('This preset is read-only.',{exact:true}).waitFor();
   assert.equal(await page.locator('#arc_speed_mm_s').isDisabled(),true);
   assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
-  console.log('Rendered UI: actual export, all settings preserved, modes/order, Hilbert conflict note, guide, light/dark, mobile, draft/reload, safe report text and read-only passed.');
+  console.log('Rendered UI: layer/region navigation, timed playback, lazy loading and stale-response protection, all settings preserved, modes/order, Hilbert conflict note, guide, light/dark, mobile, draft/reload, safe report text and read-only passed.');
  } finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

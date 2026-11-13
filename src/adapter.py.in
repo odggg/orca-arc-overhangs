@@ -1,7 +1,23 @@
-VERSION = "0.3.2"
+VERSION = "0.4.0"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,
+    "support_mode": "integrated",
+    "peel_gap_mm": 0.1,
+    "upper_slowdown_layers": 0,
+    "upper_speed_percent": 50.0,
+    "adaptive_paths": False,
+    "path_cooling_s": 0.0,
+    "support_acceleration_mm_s2": 0.0,
+    "support_fan_percent": 0.0,
+    "support_fan_override": False,
+    "initial_path_count": 0,
+    "initial_flow_percent": 100.0,
+    "initial_fan_percent": 70.0,
+    "far_speed_percent": 100.0,
+    "edge_coast_mm": 0.0,
+    "wipe_mm": 0.0,
+    "connected_travel_mm": 0.0,
     "next_layer_pattern": "slicer",
     "print_order": "layer_tail",
     "overhang_mode": "arc",
@@ -62,11 +78,11 @@ DEFAULTS = {
     "z_min_mm": 0.0,
     "z_max_mm": 10000.0,
 }
-CHOICES = {"print_order": ("layer_tail", "slicer"), "next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
+CHOICES = {"support_mode": ("integrated", "removable"), "print_order": ("layer_tail", "slicer"), "next_layer_pattern": ("slicer", "hilbert"), "overhang_mode": ("arc", "wave"),
            "wave_pattern": ("smart", "zigzag", "monotonic")}
 CONFIG_KEYS = ("nozzle_diameter", "filament_diameter", "outer_wall_line_width",
                "line_width", "layer_height", "filament_flow_ratio", "use_volumetric_e",
-               "filament_max_volumetric_speed")
+               "filament_max_volumetric_speed", "filament_type", "fan_max_speed")
 NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 WORD = re.compile(r"([A-Z])\s*(" + NUMBER + r")", re.I)
 
@@ -143,6 +159,21 @@ def configuration(overrides=None):
         raise ValueError("max_centers must be an integer from 1 to 10000.")
     if result["z_min_mm"] > result["z_max_mm"]:
         raise ValueError("z_min_mm exceeds z_max_mm.")
+    for key in ("upper_slowdown_layers", "initial_path_count"):
+        if int(result[key]) != result[key] or result[key] > 20:
+            raise ValueError(key + " must be a whole number from 0 to 20.")
+    for key in ("upper_speed_percent", "far_speed_percent"):
+        if not 1 <= result[key] <= 100:
+            raise ValueError(key + " must be between 1 and 100.")
+    for key in ("support_fan_percent", "initial_fan_percent"):
+        if result[key] > 100:
+            raise ValueError(key + " must be between 0 and 100.")
+    if not 50 <= result["initial_flow_percent"] <= 150:
+        raise ValueError("initial_flow_percent must be between 50 and 150.")
+    for key, limit in (("path_cooling_s", 60), ("peel_gap_mm", 0.5), ("edge_coast_mm", 1), ("wipe_mm", 5),
+                       ("connected_travel_mm", 1), ("support_acceleration_mm_s2", 2000)):
+        if result[key] > limit:
+            raise ValueError(key + " exceeds its supported limit.")
     return result
 
 def scalar(value, key, tool_index=0):
@@ -505,6 +536,8 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     candidates = [getStartPtOnLS(startline, params)]
     ls_parts = [startline] if startline.geom_type == "LineString" else [g for g in startline.geoms if g.geom_type == "LineString"]
     candidates.extend(ls.interpolate(f, normalized=True) for ls in ls_parts for f in (0.25, 0.5, 0.75))
+    if cfg["adaptive_paths"]:
+        candidates.sort(key=lambda pt: (-support.intersection(pt.buffer(printer["nozzle_diameter"] * 3)).area, pt.x, pt.y))
     remaining = poly
     initial = []
     for pt in candidates:
@@ -561,7 +594,7 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     anchored = anchor_arc_paths(lines, support, arc_width, printer["outer_wall_line_width"])
     if anchored is None:
         return None
-    return anchored, coverage
+    return adaptive_order(anchored, support, printer["nozzle_diameter"], cancelled) if cfg["adaptive_paths"] else anchored, coverage
 
 def _parts(geom, kind):
     return [g for g in shapely.get_parts(geom) if g.geom_type == kind and not g.is_empty]
@@ -992,7 +1025,7 @@ def fill_polygon_wave(poly, support, cfg, printer, cancelled):
     coverage = 100 * covered.area / poly.area
     if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
         return None
-    return anchored, coverage
+    return adaptive_order(anchored, support, printer["nozzle_diameter"], cancelled) if cfg["adaptive_paths"] else anchored, coverage
 
 
 def fan_override(lines, index, percent, auxiliary=False):
@@ -1084,7 +1117,7 @@ def retime_feature(feature, lines, speed_for):
 def is_retracted(state):
     return state.retracted > 1e-5 or state.firmware_retracted
 
-def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), post=()):
+def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), post=(), support=None):
     if is_retracted(before) or is_retracted(after):
         raise UnsupportedGCode(
             f"Bridge region starts or ends with unrecovered retraction "
@@ -1093,6 +1126,10 @@ def emit_arcs(arcs, before, after, cfg, printer, restore_state=None, pre=(), pos
     restore = restore_state or after
     if is_retracted(restore):
         raise UnsupportedGCode("Arc insertion point has an unrecovered retraction.")
+    if any((cfg["adaptive_paths"], cfg["support_acceleration_mm_s2"], cfg["support_fan_override"],
+            cfg["initial_path_count"], cfg["edge_coast_mm"], cfg["wipe_mm"], cfg["connected_travel_mm"],
+            cfg["far_speed_percent"] != 100, cfg["path_cooling_s"])):
+        return emit_refined_arcs(arcs, before, after, cfg, printer, restore, pre, post, support)
     wave = cfg["overhang_mode"] == "wave"
     if wave:
         e_per_mm = cfg["wave_flow_mm3_per_mm"] / (math.pi * (printer["filament_diameter"] / 2) ** 2) * printer["filament_flow_ratio"]
@@ -1539,46 +1576,103 @@ def gallery_header(cfg, text=""):
             + " ".join(f"{key}={value:g}" if isinstance(value, (int, float)) else f"{key}={value}"
                        for key, value in fields) + gallery_print_profile(text) + "\n")
 
-def export_preview(records, cfg):
-    """Bounded, simplified snapshot for the local UI; never used to generate G-code."""
-    layers, used = [], 0
-    limited = False
-    for layer, z, tool, mode, paths, contour in records:
-        if len(layers) >= 8 or used >= 10000:
-            limited = True
-            break
-        entry = {"layer": layer + 1, "z": round(z, 4), "tool": tool,
-                 "mode": mode, "paths": [], "outlines": []}
-        for line in paths:
-            if len(entry["paths"]) >= 240 or used >= 10000:
-                limited = True
+def export_preview(records, cfg, lines, cancelled=lambda: False):
+    """Read every generated block in final print order. Geometry never changes output."""
+    spans, start = [], None
+    for index, line in enumerate(lines):
+        if line.strip() == MARKER + "BEGIN":
+            start = index
+        elif line.strip() == MARKER + "END" and start is not None:
+            spans.append((start, index + 1))
+            start = None
+    if not spans:
+        return {"schema": 2, "layers": [], "limited": False, "settings": dict(cfg)}
+    # Keep only moves inside generated blocks, including their actual approach/return state.
+    block_moves = [{} for _ in spans]
+    block = 0
+    for feature in parse(lines, cancelled):
+        for move in feature.moves:
+            while block < len(spans) and move.index >= spans[block][1]:
+                block += 1
+            if block == len(spans):
                 break
-            coords = list(line.simplify(0.04, preserve_topology=False).coords)
-            if len(coords) > 96:
-                coords = [coords[round(i * (len(coords) - 1) / 95)] for i in range(96)]
-                limited = True
-            if used + len(coords) > 10000:
-                limited = True
-                break
-            entry["paths"].append([[round(x, 4), round(y, 4)] for x, y in coords])
-            used += len(coords)
-        outline_budget = 1024
-        for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
-            for ring in [poly.exterior, *poly.interiors]:
-                coords = list(ring.coords)
-                if len(coords) > outline_budget:
-                    limited = True
-                    continue
-                entry["outlines"].append([[round(x, 4), round(y, 4)] for x, y in coords])
-                outline_budget -= len(coords)
-        if entry["paths"]:
-            layers.append(entry)
-    return {"schema": 1, "layers": layers, "limited": limited, "settings": dict(cfg)}
+            if move.index > spans[block][0]:
+                block_moves[block][move.index] = (feature.layer, move)
+    contours = {(layer + 1, tool): contour for layer, z, tool, mode, paths, contour in records}
+    entries = []
+    for region_id, ((start, end), moves) in enumerate(zip(spans, block_moves)):
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        entry = {"id": region_id, "mode": cfg["overhang_mode"], "paths": [], "outlines": [], "motions": []}
+        active_path = None
+        position = None
+        total = 0.0
+        for index in range(start + 1, end):
+            if lines[index].startswith("; Arc "):
+                active_path = None
+            item = moves.get(index)
+            if item is None:
+                cmd, words = command(lines[index])
+                if cmd == "G4" and position is not None:
+                    seconds = max(0.0, words.get("S", words.get("P", 0) / 1000))
+                    if seconds:
+                        entry["motions"].append([*position, *position, seconds, 2, -1, -1])
+                        total += seconds
+                continue
+            layer, move = item
+            before, after = move.before, move.after
+            origin = [before.x, before.y, before.z]
+            target = [after.x, after.y, after.z]
+            if any(v is None or not math.isfinite(v) for v in origin + target):
+                continue
+            distance = math.dist(origin, target)
+            if distance <= 1e-9 and abs(move.delta_e) <= 1e-9:
+                continue
+            kind = 1 if distance > 1e-9 and move.delta_e > 0 else (0 if distance > 1e-9 else 2)
+            seconds = (distance if distance > 1e-9 else abs(move.delta_e)) / max(after.feed / 60, 1e-9)
+            path_id = vertex = -1
+            if kind == 1:
+                if active_path is None:
+                    active_path = len(entry["paths"])
+                    entry["paths"].append([origin[:2]])
+                entry["paths"][active_path].append(target[:2])
+                path_id = active_path
+                vertex = len(entry["paths"][active_path]) - 1
+                entry.update(layer=layer + 1, z=round(after.z, 5), tool=after.tool)
+            else:
+                active_path = None
+            # xyz from/to, nominal duration, kind (travel/print/pause), path, vertex.
+            entry["motions"].append([*origin, *target, seconds, kind, path_id, vertex])
+            total += seconds
+            position = target
+        if not entry["paths"]:
+            continue
+        contour = contours.get((entry["layer"], entry["tool"]))
+        if contour is not None:
+            for poly in polygons(contour.simplify(0.04, preserve_topology=True)):
+                for ring in (poly.exterior, *poly.interiors):
+                    entry["outlines"].append([[round(x, 5), round(y, 5)] for x, y in ring.coords])
+        entry["duration"] = total
+        entry["path_count"] = len(entry["paths"])
+        entries.append(entry)
+    return {"schema": 2, "layers": entries, "limited": False, "settings": dict(cfg)}
+
+
+def preview_catalog(report):
+    """Small region index; the page requests full geometry for one region at a time."""
+    if not report or "preview" not in report:
+        return report
+    preview = report["preview"]
+    return {**report, "preview": {**{k: v for k, v in preview.items() if k != "contexts"}, "layers": [
+        {key: value for key, value in region.items() if key not in ("paths", "outlines", "motions")}
+        for region in preview["layers"]]}}
 
 
 def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     cfg = configuration(overrides)
-    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "print_order": cfg["print_order"], "skip_reasons": {}}
+    if cfg["support_mode"] == "removable" and cfg["enabled"] and MARKER not in text:
+        return process_removable(text, cfg, resolved, cancelled)
+    report = {"replaced_features": 0, "generated_arcs": 0, "skipped_features": 0, "minimum_coverage_percent": None, "bridge_features": 0, "hilbert_features": 0, "retimed_features": 0, "print_order": cfg["print_order"], "skip_reasons": {}, "region_results": []}
     if not cfg["enabled"] or MARKER in text:
         return text, report
     lines = text.splitlines(keepends=True)
@@ -1588,6 +1682,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     def skipped(reason):
         report["skipped_features"] += 1
         report["skip_reasons"][reason] = report["skip_reasons"].get(reason, 0) + 1
+        report["region_results"].append({"layer": feature.layer+1, "status": "kept", "reason": reason})
     if not bridges:
         return text, report
     printer_by_tool = {}
@@ -1669,12 +1764,11 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
         accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M204"]
         pre = [*pre, *accel]
-        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post)
+        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post, support=support)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
                            if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
-        if len(preview_records) < 8:
-            preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], arcs, current))
+        preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], (), current))
         for k in range(1, hilbert_layers + 1):
             hilbert_targets.setdefault((feature.layer + k, tool_index), []).append((k, region))
         if wave_mode:
@@ -1682,6 +1776,8 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             speed = cfg["wave_speed_mm_s"]
             layer_delta[feature.layer] = layer_delta.get(feature.layer, 0.0) + sum(a.length for a in arcs) / speed \
                 - sum(move_time(m) for m in feature.moves)
+        report["region_results"].append({"layer": feature.layer+1, "tool": tool_index, "status": "generated",
+                                         "area_mm2": round(region.area,2), "coverage_percent": round(min(coverages),1)})
         report["replaced_features"] += 1
         report["generated_arcs"] += len(arcs)
         previous = report["minimum_coverage_percent"]
@@ -1776,12 +1872,19 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         report["skipped_features"] += report["replaced_features"]
         report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = report["retimed_features"] = 0
         report["minimum_coverage_percent"] = None
+        for result in report["region_results"]:
+            if result["status"] == "generated": result.update(status="kept", reason="Unsafe scheduling: " + str(error))
         return text, report
     lines = "".join(lines).splitlines(keepends=True)
+    if cfg["upper_slowdown_layers"]:
+        lines, count = slowdown_above_support(lines, cfg, cancelled, resolved)
+        report["retimed_features"] += count
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     try:
-        report["preview"] = export_preview(preview_records, cfg)
-        report["preview"]["limited"] |= report["replaced_features"] > len(report["preview"]["layers"])
+        report["preview"] = export_preview(preview_records, cfg, lines, cancelled)
+        enrich_preview(report, lines, cfg, resolved, cancelled)
+    except Cancelled:
+        raise
     except Exception:
         # A presentation failure must not turn a successful G-code export into
         # a failed print export. Do not log geometry or source paths here.
@@ -1992,6 +2095,22 @@ def config_page(as_tab=False):
         ("wave_floor_aux_fan_override", "Floor: aux fan speed override", "bool"),
         ("wave_floor_aux_fan_percent", "Floor: aux fan speed", "%"),
         (None, "Both modes", ""),
+        ("support_mode", "Support mode", "select"),
+        ("peel_gap_mm", "Removable floor: vertical gap (experimental)", "mm"),
+        ("upper_slowdown_layers", "Slow layers above support (0 = off)", "Layers"),
+        ("upper_speed_percent", "Speed over support", "%"),
+        ("adaptive_paths", "Prefer strong anchors and connected branches", "bool"),
+        ("support_acceleration_mm_s2", "Support acceleration (0 = unchanged)", "mm/s2"),
+        ("support_fan_override", "Override support cooling", "bool"),
+        ("support_fan_percent", "Support fan", "%"),
+        ("initial_path_count", "Initial paths with separate flow and cooling", "Count"),
+        ("initial_flow_percent", "Initial path flow", "%"),
+        ("initial_fan_percent", "Initial path fan", "%"),
+        ("far_speed_percent", "Speed furthest from the first support path", "%"),
+        ("path_cooling_s", "Minimum time per support path (0 = off)", "s"),
+        ("edge_coast_mm", "Coast at free path ends (0 = off)", "mm"),
+        ("wipe_mm", "Wipe along last path before travel (0 = off)", "mm"),
+        ("connected_travel_mm", "Skip retract for connected paths (0 = off)", "mm"),
         ("z_hop_mm", "Z hop between arcs/waves (0 = off)", "mm"),
         ("max_edge_gap_mm", "Maximum edge gap", "mm"),
         ("minimum_area_mm2", "Minimum overhang area", "mm2"),
@@ -2096,9 +2215,13 @@ const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
     const report=response.last_report;
+    previewRevision=response.revision;
     renderReport(report);
+    renderSliceState(response.state);
     return response.config;
   },
+  getPreview:()=>requestSettings('preview',{revision:previewRevision}),
+  getRegion:(id,revision)=>requestSettings('region',{id,revision}),
   saveConfig:config=>requestSettings('save',config)
 };
 """
@@ -2106,7 +2229,8 @@ const settingsBridge = {
                if as_tab else "Settings belong to this Orca plugin configuration. Save your process preset after editing.")
     return (page.replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT))
             .replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("__VERSION__", VERSION)
-            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge))
+            .replace("__CONTEXT__", context).replace("__BRIDGE__", bridge)
+            .replace("__PREVIEW_ATTRIBUTES__", "" if as_tab else "hidden"))
 
 
 
@@ -2120,6 +2244,29 @@ except ModuleNotFoundError as error:
 
 _pipeline_capability = None
 _last_report = None
+_preview_revision = 0
+_preview_state = "waiting"
+_preview_generation = 0
+
+
+def publish_preview(report, state="ready"):
+    global _last_report, _preview_revision, _preview_state
+    _last_report = report
+    _preview_state = state
+    _preview_revision += 1
+
+
+def preview_file(path, config, resolved=None, cancelled=lambda: False):
+    """Calculate support from Orca's completed slice without modifying its file."""
+    original = Path(path).read_bytes()
+    if original[:2] == b"PK" or b"\0" in original[:1024]:
+        raise UnsupportedGCode("The slice preview requires text G-code.")
+    text = (original[3:] if original.startswith(b"\xef\xbb\xbf") else original).decode("utf-8")
+    if MARKER in text:
+        return None  # A later host event must not replace a processed preview with an empty one.
+    _, report = process_text(text, config, resolved, cancelled)
+    return report
+
 
 if orca is not None:
     class ArcOverhangCapability(orca.slicing.SlicingPipelineCapabilityBase):
@@ -2138,22 +2285,83 @@ if orca is not None:
             return True
         def get_config_ui(self):
             return config_page()
+        def invalidate_preview(self):
+            global _preview_generation
+            _preview_generation += 1
+            publish_preview(None, "stale")
+
+        def on_lifecycle_event(self, event, ctx):
+            global _preview_generation
+            events = getattr(orca, "LifecycleEvent", None)
+            if events is None:
+                return
+            def is_event(name):
+                return event == getattr(events, name, None)
+            if is_event("SliceStarted"):
+                _preview_generation += 1
+                self._slice_resolved = None
+                publish_preview(None, "slicing")
+                return
+            if any(is_event(name) for name in ("NewProject", "ProjectOpened", "ProjectClosed",
+                    "ObjectAdded", "ObjectDeleted", "ObjectTransformed", "ObjectChanged",
+                    "PlateSelected", "PlateDeleted", "PresetSelected", "PresetSaved")):
+                _preview_generation += 1
+                publish_preview(None, "stale")
+                return
+            codes = getattr(orca, "LifecycleEvtCode", None)
+            success = codes is not None and ctx.code == codes.Ok
+            if is_event("SlicingJobComplete") and not success:
+                _preview_generation += 1
+                publish_preview(None, "cancelled")
+                return
+            if not is_event("GCodeExportFinished"):
+                return
+            if not success:
+                publish_preview(None, "failed")
+                return
+            # Orca closes and renames the internal slice file before this event.
+            # Its msg is the output path for successful GCodeExportFinished events.
+            path = getattr(ctx, "msg", "")
+            if not isinstance(path, str) or not path or "\n" in path:
+                publish_preview(None, "unavailable")
+                return
+            generation = _preview_generation
+            try:
+                cfg = configuration(json.loads(self.get_config() or "{}"))
+                if not cfg["enabled"]:
+                    publish_preview(None, "disabled")
+                    return
+                publish_preview(None, "calculating")
+                report = preview_file(path, cfg, getattr(self, "_slice_resolved", None),
+                                      lambda: generation != _preview_generation)
+                if generation == _preview_generation and report is not None:
+                    publish_preview(report)
+                elif generation == _preview_generation:
+                    publish_preview(None, "unavailable")
+            except Cancelled:
+                pass
+            except Exception as error:
+                if generation == _preview_generation:
+                    publish_preview({"error": str(error)}, "failed")
+
         def execute(self, ctx):
             global _last_report
             if ctx.step != orca.slicing.Step.psGCodePostProcess:
+                if hasattr(ctx, "config_value"):
+                    self._slice_resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 return orca.ExecutionResult.skipped("Arc Overhang runs at psGCodePostProcess.")
             try:
                 cfg = json.loads(self.get_config() or "{}")
                 resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 report = process_file(ctx.gcode_path, cfg, resolved, ctx.cancelled)
-                _last_report = dict(report)
+                publish_preview(dict(report))
                 message = f"Arc Overhang: {report['replaced_features']} features, {report['generated_arcs']} arcs, {report['skipped_features']} skipped."
                 print(message)
                 return orca.ExecutionResult.success(message, json.dumps({k: v for k, v in report.items() if k != "preview"}))
             except Cancelled:
                 return orca.ExecutionResult.skipped("Arc Overhang cancelled; G-code unchanged.")
             except Exception as error:
-                _last_report = {"error":str(error)}
+                publish_preview({"error":str(error)}, "failed")
                 return orca.ExecutionResult.failure(orca.PluginResult.FatalError, "Arc Overhang: " + str(error))
 
 
@@ -2173,16 +2381,37 @@ if orca is not None:
                 if capability is None:
                     raise RuntimeError("Arc Overhang processing is not loaded. Enable both plugin capabilities.")
                 action = data.get("action")
-                if action not in ("read", "save"):
+                if action not in ("read", "save", "preview", "region"):
                     raise ValueError("Unknown request.")
+                if action == "region":
+                    query = data.get("config") or {}
+                    if query.get("revision") != _preview_revision:
+                        raise ValueError("The slice changed. Loading the new preview.")
+                    region_id = query.get("id")
+                    regions = (_last_report or {}).get("preview", {}).get("layers", [])
+                    region = next((item for item in regions if item["id"] == region_id), None)
+                    if region is None:
+                        raise ValueError("The selected overhang is no longer available.")
+                    self.post_message({"request_id": request_id, "ok": True, "revision": _preview_revision, "region": {**region, "context": (_last_report or {}).get("preview", {}).get("contexts", {}).get(str(region["layer"]))}})
+                    return
+                if action == "preview":
+                    previous = data.get("config") or {}
+                    revision = _preview_revision
+                    response = {"request_id": request_id, "ok": True, "revision": revision,
+                                "state": _preview_state, "changed": previous.get("revision") != revision}
+                    if response["changed"]:
+                        response["last_report"] = preview_catalog(_last_report)
+                    self.post_message(response)
+                    return
                 if action == "save":
                     requested = configuration(data.get("config"))
                     if not isinstance(data.get("config"), dict):
                         raise ValueError("Settings must be a JSON object.")
                     if not capability.save_config(json.dumps(requested)):
                         raise RuntimeError("Could not save settings.")
+                    capability.invalidate_preview()
                 effective = configuration(json.loads(capability.get_config() or "{}"))
-                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":_last_report}
+                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":preview_catalog(_last_report), "revision":_preview_revision, "state":_preview_state}
                 if action == "save":
                     response["preset_override_active"] = effective != requested
                 self.post_message(response)

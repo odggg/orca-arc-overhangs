@@ -2,15 +2,9 @@
 
 ## Intent
 
-A readable, local configuration workspace for the existing Arc/Wave engine.
-The user's reference was the public Arc Overhang Pro listing:
-https://cloud.orcaslicer.com/app/plugins/plugin-hub/3c638cc4-a84d-4c4d-8de9-e80f696e9b10
-
-Its published screenshots were viewed for general usability principles. No plugin
-package was downloaded, no plugin source was used, and no image, logo, animation,
-copy or design asset was imported. This project's layout, typography, colour system,
-SVG drawings, interaction logic and export-preview renderer were written here.
-Reference images remain outside the public project in ignored local evidence.
+A local workbench for configuring, inspecting and explaining Arc/Wave toolpaths.
+The interface uses project-authored HTML, CSS and SVG illustrations with no remote
+assets or rendering dependencies. Printer behavior and display settings are separate.
 
 ## Information hierarchy
 
@@ -25,9 +19,10 @@ controls. Existing GPL licensing and contributor attribution are preserved.
 ## Truthful graphical feedback
 
 The exported-support view uses the engine's generated paths and layer outlines;
-it is not a fabricated model or a live simulation. Snapshots are bounded to eight
-regions, 240 displayed paths per region and 10,000 support points overall, with
-separate contour limits. The display may simplify geometry; G-code is unchanged.
+it is not a fabricated model or a live simulation. The development layer player indexes all generated regions and loads geometry for
+one selected region at a time. It extracts support motions after final scheduling
+and animates their actual order. Layer outlines are simplified for context. See
+[AUTOMATIC_PREVIEW.md](AUTOMATIC_PREVIEW.md) for playback and validation details.
 
 A snapshot keeps its source settings so a mismatch can be shown after edits.
 There is no unsupported claim that the tab detects model or project changes.
@@ -37,7 +32,7 @@ Geometry stays in the local in-memory report and is omitted from pipeline logs.
 
 ## Input and save behaviour
 
-All 60 controls are rendered once. Mode changes hide irrelevant groups without
+All existing controls and new workbench settings are rendered once. Mode changes hide irrelevant groups without
 resetting them. Unsaved edits survive focus changes in this view; Reload saved
 explicitly discards them. No persistent cross-preset draft is restored.
 Save waits for the actual host acknowledgement. The existing preset/global scope
