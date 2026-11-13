@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Import copied Wave settings from gallery pages.
+- Explain which text to copy when a profile import contains no Wave settings.
+
 ## 0.4.1 - 2026-11-13
 
 - Layer controls, playback and path filters now sit in translucent, collapsible overlays.

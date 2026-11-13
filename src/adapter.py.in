@@ -1966,13 +1966,49 @@ WAVE_MARKER_ALIASES = {
     "corner_spacing": "line_spacing_corner", "corner_taper": "corner_taper_distance",
     "corner_angle": "corner_angle_threshold", "end_retract": "end_retract_length", "nozzle_temp_override": "nozzle_temp",
 }
+# Labels of the rendered "Wave settings" list on a waveoverhangs.com gallery entry, mapped to
+# WAVE_OVERHANG_CONFIG key names. "Wave perimeters" has no plugin equivalent and is left out.
+WAVE_GALLERY_LABELS = {
+    "line spacing": "line_spacing", "wave flow": "flow_mm3_per_mm", "print speed": "print_speed",
+    "travel speed": "travel_speed", "fan speed": "fan_speed", "floor layers": "floor_layers",
+    "replace bridges": "instead_of_bridges",
+}
+
+def gallery_wave_values(text):
+    """Read the rendered "Wave settings" section of a gallery entry (label lines, value below or after)."""
+    values = {}
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        label = line.replace("*", "").strip()
+        match = next((key for name, key in WAVE_GALLERY_LABELS.items() if label.lower() == name), None)
+        value = lines[index + 1] if match is not None and index + 1 < len(lines) else ""
+        if match is None:  # "Print speed: 2 mm/s" or "Print speed 2 mm/s" on one line
+            for name, key in WAVE_GALLERY_LABELS.items():
+                if label.lower().startswith(name):
+                    match = key
+                    value = label.split(":", 1)[1] if ":" in label else label[len(name):]
+                    break
+        if match is None:
+            continue
+        token = value.replace("\\.", ".").replace("*", "").strip().lstrip(":").strip().split()
+        token = token[0] if token else ""
+        if token.lower() in ("yes", "no"):
+            token = "1" if token.lower() == "yes" else "0"
+        else:
+            try:
+                float(token)
+            except ValueError:  # "-", a missing value or an unreadable unit
+                continue
+        values[match] = token
+    return values
 
 def import_wave_profile(text):
-    """Read WaveOverhangs settings from G-code comments, a profile/JSON or a gallery config line.
+    """Read WaveOverhangs settings from G-code comments, a profile/JSON or a gallery entry.
 
     Returns (plugin settings, names that have no plugin equivalent)."""
     marker, found = {}, {}
     prefixed = set()
+    gallery = gallery_wave_values(text)
     for line in text.splitlines():
         if "WAVE_OVERHANG_CONFIG" in line:
             for key, value in re.findall(r"(\w+)=(\S+)", line):
@@ -1980,7 +2016,7 @@ def import_wave_profile(text):
         for key, value in re.findall(r"wave_overhang_(\w+?)[\"']?\s*[:=]\s*[\"']?([^\s\"',;]+)", line):
             found[key] = value
             prefixed.add(key)
-    found = {**marker, **found}  # explicit wave_overhang_ lines beat the one-line summary
+    found = {**gallery, **marker, **found}  # gallery < debug header < explicit wave_overhang_ lines
     values, ignored = {"overhang_mode": "wave"}, []
     for key, raw in found.items():
         if key not in WAVE_IMPORT:

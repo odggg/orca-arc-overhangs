@@ -79,6 +79,31 @@ const tick=()=>new Promise(setImmediate);
  assert.equal(elements.overhang_mode.value,'wave');
  assert.equal(elements.import_text.value,'','import box is cleared');
  assert.match(elements.status.textContent,/wave_overhang_unknown_thing/);
+ // gallery entry "Wave settings" section (labels with values on the next line)
+ elements.import_text.value=`### Wave settings
+Wave perimeters
+: -
+Line spacing
+: 0\\.35 mm
+Wave flow
+: 0.15 mm³/mm
+Print speed: 2 mm/s
+Fan speed
+: 100 %
+Replace bridges
+: no`;
+ elements.import.onclick();
+ assert.equal(elements.wave_line_spacing_mm.value,0.35);
+ assert.equal(elements.wave_flow_mm3_per_mm.value,0.15);
+ assert.equal(elements.wave_speed_mm_s.value,2);
+ assert.equal(elements.wave_fan_override.checked,true);
+ assert.equal(elements.wave_fan_percent.value,100);
+ assert.equal(elements.wave_instead_of_bridges.checked,false);
+ // config block of a print sliced by the plugin itself: no wave keys, specific message
+ elements.import_text.value='; plugins = "orca_arc_overhang-0.3.0-py3-none-any;;Arc Overhang"\n; layer_height = 0.2';
+ elements.import.onclick();
+ assert.match(elements.status.textContent,/debug header/);
+ assert.equal(elements.import_text.value,'; plugins = "orca_arc_overhang-0.3.0-py3-none-any;;Arc Overhang"\n; layer_height = 0.2','failed import keeps the pasted text');
  visibility();
  await tick();
  assert.equal(elements.wave_line_spacing_mm.value,0.35,'draft must survive refocus');

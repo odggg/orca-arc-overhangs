@@ -309,13 +309,30 @@ async function saveSettings(automatic=false){
 }
 $('save').onclick=()=>saveSettings();
 if($('preview-reslice'))$('preview-reslice').onclick=async()=>{if(await saveSettings())renderPreviewWarning();};
+// Rendered "Wave settings" labels of a waveoverhangs.com gallery entry -> WAVE_OVERHANG_CONFIG keys.
+// "Wave perimeters" has no plugin equivalent and is left out.
+const GALLERY={'line spacing':'line_spacing','wave flow':'flow_mm3_per_mm','print speed':'print_speed','travel speed':'travel_speed','fan speed':'fan_speed','floor layers':'floor_layers','replace bridges':'instead_of_bridges'};
 function importProfile(text) {
-  const marker={},explicit={},prefixed=new Set(),ignored=[];
-  for(const line of text.split(/\r?\n/)) {
+  const marker={},explicit={},prefixed=new Set(),ignored=[],gallery={};
+  const lines=text.split(/\r?\n/);
+  for(let i=0;i<lines.length;i++) {
+    const line=lines[i];
     if(line.includes('WAVE_OVERHANG_CONFIG')) for(const m of line.matchAll(/(\w+)=(\S+)/g)) marker[ALIASES[m[1]]||m[1]]=m[2];
     for(const m of line.matchAll(/wave_overhang_(\w+?)["']?\s*[:=]\s*["']?([^\s"',;]+)/g)) { explicit[m[1]]=m[2]; prefixed.add(m[1]); }
+    const label=line.replace(/\*/g,'').trim();
+    let key=GALLERY[label.toLowerCase()],value='';
+    if(key) value=lines[i+1]||''; // value on the line below
+    else { // "Print speed: 2 mm/s" or "Print speed 2 mm/s" on one line
+      for(const name of Object.keys(GALLERY)) {
+        if(label.toLowerCase().startsWith(name)) { key=GALLERY[name]; value=label.includes(':')?label.split(':').slice(1).join(':'):label.slice(name.length); break; }
+      }
+    }
+    if(!key) continue;
+    const token=(value.replace(/\\\./g,'.').replace(/\*/g,'').replace(/^\s*:\s*/,'').trim().split(/\s+/)[0]||'').toLowerCase();
+    if(token==='yes'||token==='no') gallery[key]=token==='yes'?'1':'0';
+    else if(token!==''&&Number.isFinite(Number(token))) gallery[key]=token;
   }
-  const found={...marker,...explicit},values={overhang_mode:'wave'};
+  const found={...gallery,...marker,...explicit},values={overhang_mode:'wave'};
   for(const [key,raw] of Object.entries(found)) {
     const spec=IMPORT[key];
     if(!spec) { if(prefixed.has(key)&&!['min_angle','spacing_mode','seam_mode','debug_gcode','outer_perimeters'].includes(key)) ignored.push('wave_overhang_'+key); continue; }
@@ -330,9 +347,15 @@ function importProfile(text) {
 }
 $('import').onclick=()=>{
   if(readonly()) { status.textContent='This preset is read-only.'; return; }
-  const {values,ignored}=importProfile($('import_text').value||'');
+  const text=$('import_text').value||'';
+  const {values,ignored}=importProfile(text);
   const count=Object.keys(values).length-1;
-  if(!count) { status.textContent='No wave_overhang_ settings found in the pasted text.'; return; }
+  if(!count) {
+    status.textContent=/orca_arc_overhang/.test(text) ?
+      'The config block of a print sliced by this plugin carries no wave settings (the plugin writes them only to the debug header). Paste the "View WaveOverhangs debug header" text instead.' :
+      'No wave settings found in the pasted text. Paste a waveoverhangs.com entry (its "Wave settings" section), a WAVE_OVERHANG_CONFIG line, or wave_overhang_ lines.';
+    return;
+  }
   for(const [key,value] of Object.entries(values)) { const el=$(key); if(!el) continue; if(typeof value==='boolean') el.checked=value; else el.value=value; }
   remember(); $('import_text').value='';
   status.textContent=(settingsBridge.canSync===true?`Imported ${count} settings; applying to the active process…`:`Imported ${count} settings; press Save to keep them.`)+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
