@@ -1,7 +1,7 @@
-# Workbench extensions (development)
+# Workbench extensions — 0.4.0
 
 All print-affecting additions are opt-in. Existing profiles retain their current
-output. No release is implied by this development branch.
+output. New print strategies are experimental.
 
 ## Inspect a slice
 
@@ -89,7 +89,7 @@ it does not remove wall material to force a floor into place. Gap, adhesion and
 peelability are not physically validated. Cancellation propagates without writing
 partial output. UI snapshot failure does not invalidate successfully generated code.
 
-## Validation before release
+## Validation and remaining limits
 
 Automated tests cover layer roles, curves, previous-layer context, bounded metadata,
 profile/tool selection, feed splitting and extrusion conservation, state restoration,

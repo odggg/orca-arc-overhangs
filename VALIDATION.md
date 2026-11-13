@@ -1,3 +1,23 @@
+# Release validation — 0.4.0 (2026-11-13)
+
+111 Python tests, rendered browser checks, native configuration-bridge checks,
+restricted-file-access execution and universal-wheel/source-package validation
+passed for this implementation. The 0.4.0 version and package are rechecked during
+release preparation. Existing default toolpaths retain their version-normalized
+regression baselines.
+
+Coverage includes complete layer/region navigation, final-path animation, 2D/3D
+views, filters, stale responses, material draft suggestions, local feed splitting,
+extrusion conservation, tool boundaries, optional path strategies and conservative
+removable-floor insertion/rejection.
+
+Native Orca GUI slicing and physical print validation are still outstanding.
+Material starting points are heuristic. Removable floors need clear undercut
+space and can reject ordinary overhangs whose walls intersect the proposed floor.
+All new print strategies are opt-in. See docs/WORKBENCH.md for precise limits.
+
+## Earlier validation records
+
 # Release validation - 0.3.2 (2026-11-12)
 
 Publishing automation only: 14 standard-library tests cover release asset selection,

@@ -1,4 +1,4 @@
-# Automatic slice preview (development)
+# Automatic slice preview — 0.4.0
 
 The Arc Overhang tab no longer asks the user to export a file. Its sequence is:
 enable the pipeline, slice the plate, inspect the generated support in the tab.
@@ -28,7 +28,7 @@ refresh without discarding an unsaved setting and checks that no visible UI text
 requests an export. Existing 70 engine tests and native configuration-bridge tests
 pass. The installed Orca binary contains the required lifecycle symbols.
 
-Still required before release: an actual GUI slice with the plugin installed on
+Still outstanding: an actual GUI slice with the plugin installed on
 the supported Orca build, including any file-access permission behavior and timing.
 The computer-control helper failed to start during development, so this host test
 is not claimed. The layer player now includes every generated Arc/Wave block; the previous

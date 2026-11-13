@@ -1,11 +1,18 @@
-# Arc Overhang 0.3.2
+# Arc Overhang 0.4.0
 
-- Added automatic publishing from GitHub releases to Orca Cloud using secure, short-lived GitHub credentials. No stored Orca Cloud API key is required.
-- Publish one universal **any WHL**, with the version and changelog taken directly from the GitHub release.
-- Validate the package checksum, embedded version and wheel integrity before uploading.
-- Added a manual release-package check and documentation for the publishing workflow.
-- Added 14 publishing regression tests.
+- Automatic preview after slicing: no manual export is needed to inspect generated support.
+- Browse every Arc/Wave region by layer, height and tool, with previous/next navigation.
+- Play, pause, restart and scrub the actual print sequence for a selected region or the entire layer, with adjustable speed and optional travel paths.
+- Inspect full-layer context and the previous layer in 2D or an interactive 3D orthographic view; filter individual path types.
+- View region areas, generation coverage, deposited footprints, estimated time changes and reasons for skipped regions.
+- New parameter illustrations and material-based starting points that can be applied to a settings draft.
+- Optional local slowdown above generated support, preserving extrusion and restoring normal feed outside the affected area.
+- Optional stronger-anchor/branch ordering, support acceleration, initial flow and cooling, distance-based speed, minimum path time, endpoint coasting, curved wipes and short supported connectors.
+- Experimental removable floors retain the original model paths and reject insufficient clearance, conflicting tools and intervening-layer collisions.
+- Improved stale-preview handling and full-layer playback reset. Existing print defaults remain unchanged.
 
-Print behavior, print-order options, settings and the graphical workbench are unchanged from 0.3.1.
+Validation: 111 Python tests plus browser, configuration-bridge, file-access and package checks. Native Orca GUI slicing and physical print tests remain outstanding. New print strategies are opt-in; removable floors currently require clear undercut space. Material suggestions are starting points, not calibrated profiles.
 
-Thanks to **@persano** for the contributed print-order and Hilbert fixes, optional Wave mode and further improvements included in earlier releases.
+Only the universal py3-none-any WHL is attached. GitHub publishing uploads this same file to Orca Cloud automatically.
+
+Thanks to @persano for the contributed print-order and Hilbert fixes, Wave mode and other improvements included in earlier releases. Arc concept and integration credits: Steven McCulloch, Nicolai Wachenschwan and Kelsch.
