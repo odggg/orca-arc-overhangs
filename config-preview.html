@@ -214,7 +214,7 @@ async function loadPreviewRegion(id) {
   try {
     const region=entry.paths?entry:(await settingsBridge.getRegion(id,revision)).region;
     if(token!==regionRequest || revision!==previewRevision) return;
-    activeRegion=region;playbackTime=Number(region.duration)||0;
+    activeRegion=region;playbackTime=Number(displayRegion()?.duration)||0;
     renderSnapshot();
   } catch(error) {
     if(token===regionRequest) text('preview-caption',error.message||'Could not load this overhang.');
@@ -299,6 +299,7 @@ function togglePlayback() {
 }
 function renderReport(report) {
   lastReport=report || null;
+  text('preview-area','');text('preview-time','');
   const valid=report && !report.error;
   text('stat-regions',valid?report.replaced_features:'—');
   text('stat-paths',valid?report.generated_arcs:'—');
