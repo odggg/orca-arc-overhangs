@@ -57,6 +57,24 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(s['material'],'PETG-CF');self.assertEqual(s['nozzle'],.6)
         self.assertEqual(s['values']['support_fan_percent'],25)
         self.assertLess(s['values']['arc_speed_mm_s'],1)
+    def test_manual_material_uses_real_material_cooling_without_changing_profile(self):
+        source=fixture().splitlines()+['; filament_type = ASA','; fan_max_speed = 30']
+        resolved={'filament_type':['ASA'],'nozzle_diameter':[.4]}
+        before=list(source)
+        s=a.profile_suggestions(source,resolved,0)
+        self.assertEqual(s['material'],'ASA')
+        self.assertEqual(s['values']['support_fan_percent'],30)
+        self.assertEqual(s['materials']['PLA']['support_fan_percent'],100)
+        self.assertGreater(s['materials']['PLA']['arc_speed_mm_s'],s['values']['arc_speed_mm_s'])
+        self.assertEqual(source,before)
+        self.assertEqual(resolved,{'filament_type':['ASA'],'nozzle_diameter':[.4]})
+        self.assertFalse(any('chamber' in key or 'filament_type' in key for key in s['materials']['PLA']))
+    def test_manual_material_keeps_tool_nozzle_and_volumetric_limits(self):
+        s=a.profile_suggestions(fixture().splitlines(),{'nozzle_diameter':[.4,.6],
+            'filament_type':['PLA','ASA'],'filament_max_volumetric_speed':[10,.1]},1)
+        self.assertEqual(s['nozzle'],.6)
+        for values in s['materials'].values():
+            self.assertLess(values['arc_speed_mm_s'],1)
     def test_removable_rejects_insufficient_space_without_modifying_source(self):
         source=fixture();out,report=a.process_text(source,{'support_mode':'removable'})
         self.assertEqual(source,out);self.assertTrue(report['skip_reasons'])

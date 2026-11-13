@@ -58,6 +58,52 @@ class SlicePreviewTests(unittest.TestCase):
         self.ctx=types.SimpleNamespace(code='ok',msg=str(self.file),id='model',name='test')
         self.state=self.cap.on_lifecycle_event.__globals__
     def fire(self,name): self.cap.on_lifecycle_event(getattr(self.events,name),self.ctx)
+    def test_registration_requests_only_model_cache_reads(self):
+        calls=[]
+        self.host.request_permissions=lambda **kwargs:calls.append(kwargs)
+        self.ns['ArcOverhangPlugin']().register_capabilities()
+        expected=(Path(tempfile.gettempdir()).resolve()/'orcaslicer_model').as_posix()+'/*'
+        self.assertEqual(calls,[{'fs_read':[expected]}])
+    def test_older_host_without_declaration_api_can_load(self):
+        self.ns['ArcOverhangPlugin']().register_capabilities()
+    def deny_preview(self):
+        with patch.object(Path,'read_bytes',side_effect=PermissionError('audit permission required')):
+            self.fire('GCodeExportFinished')
+        self.assertEqual(self.state['_preview_state'],'permission')
+        return self.state['_preview_revision']
+    def test_permission_retry_reads_only_host_path_and_preserves_file(self):
+        revision=self.deny_preview()
+        self.page.on_message({'action':'retry_preview','request_id':1,
+                              'config':{'revision':revision,'path':'untrusted.gcode'}})
+        self.assertTrue(self.page.message['ok'])
+        self.assertEqual(self.page.message['state'],'ready')
+        self.assertGreater(self.page.message['last_report']['generated_arcs'],0)
+        self.assertEqual(self.file.read_bytes(),self.original)
+        self.assertIsNone(self.cap._pending_preview)
+    def test_permission_poll_does_not_retry_or_prompt(self):
+        revision=self.deny_preview()
+        with patch.object(Path,'read_bytes') as reader:
+            for i in range(3):
+                self.page.on_message({'action':'preview','request_id':i,'config':{'revision':revision}})
+            reader.assert_not_called()
+        self.assertEqual(self.state['_preview_state'],'permission')
+    def test_retry_denied_again_stays_actionable(self):
+        revision=self.deny_preview()
+        with patch.object(Path,'read_bytes',side_effect=PermissionError('denied')):
+            self.page.on_message({'action':'retry_preview','request_id':1,'config':{'revision':revision}})
+        self.assertTrue(self.page.message['ok'])
+        self.assertEqual(self.page.message['state'],'permission')
+    def test_changed_model_or_settings_cannot_retry_old_slice(self):
+        revision=self.deny_preview()
+        self.fire('ObjectChanged')
+        self.page.on_message({'action':'retry_preview','request_id':1,'config':{'revision':revision}})
+        self.assertFalse(self.page.message['ok'])
+        self.assertEqual(self.state['_preview_state'],'stale')
+        revision=self.deny_preview()
+        self.cap.config='{"arc_speed_mm_s":14.2}'
+        self.page.on_message({'action':'retry_preview','request_id':2,'config':{'revision':revision}})
+        self.assertFalse(self.page.message['ok'])
+        self.assertEqual(self.state['_preview_state'],'stale')
     def test_successful_slice_populates_preview_without_changing_gcode(self):
         self.fire('SliceStarted');self.fire('GCodeExportFinished')
         self.assertEqual(self.state['_preview_state'],'ready')
