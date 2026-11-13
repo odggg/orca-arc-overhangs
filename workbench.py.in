@@ -1,0 +1,373 @@
+"""Local workbench geometry, display data and opt-in print strategies."""
+
+def adaptive_order(paths, support, width, cancelled=lambda: False):
+    """Choose only paths attached to already deposited material; prefer connected branches."""
+    remaining = list(paths)
+    result = []
+    printed = support.buffer(width * .05)
+    last = None
+    while remaining:
+        if cancelled(): raise Cancelled('Cancelled.')
+        eligible = [(i, path) for i, path in enumerate(remaining)
+                    if Point(path.coords[0]).distance(printed) <= width * .55]
+        if not eligible:
+            # Preserve the engine's dependency order if no candidate can be proven attached.
+            result.extend(remaining)
+            break
+        def score(item):
+            _, path = item
+            anchor = path.intersection(printed.buffer(width * .5)).length
+            connected = path.distance(last) <= width if last is not None else False
+            return (not connected, -anchor, path.length, item[0])
+        index, path = min(eligible, key=score)
+        remaining.pop(index)
+        result.append(path)
+        printed = printed.union(path.buffer(width * .5))
+        last = path
+    return result
+
+
+def emit_refined_arcs(arcs, before, after, cfg, printer, restore, pre, post, support=None):
+    wave = cfg['overhang_mode'] == 'wave'
+    diameter = printer['nozzle_diameter']
+    volume = cfg['wave_flow_mm3_per_mm'] if wave else math.pi * (diameter / 2) ** 2 * cfg['flow_multiplier']
+    e_ratio = volume / (math.pi * (printer['filament_diameter'] / 2) ** 2) * printer['filament_flow_ratio']
+    speed = cfg['wave_speed_mm_s'] if wave else cfg['arc_speed_mm_s']
+    travel = (cfg['wave_travel_speed_mm_s'] if wave else cfg['travel_speed_mm_s']) * 60
+    retract = cfg['wave_end_retract_mm'] if wave and cfg['wave_end_retract_mm'] else cfg['retract_length_mm']
+    retract_feed = cfg['retract_speed_mm_s'] * 60
+    z, hop = before.z, cfg['z_hop_mm']
+    modal = dict(before.modal)
+    # Resolve against wrappers as well as the incoming state.
+    for line in pre:
+        cmd, words = command(line)
+        if cmd == 'M106':
+            channel = int(words.get('P', 0))
+            modal[f'fan:{channel}'] = line
+        elif cmd == 'M204':
+            modal['acceleration'] = line
+    out = [MARKER + 'BEGIN\n', ';TYPE:Bridge\n', *pre]
+    acceleration = modal.get('acceleration')
+    if cfg['support_acceleration_mm_s2'] and acceleration:
+        out.append(f"M204 S{cfg['support_acceleration_mm_s2']:g}\n")
+    fan_key = next((key for key in ('fan:0', 'fan:1') if key in modal), None)
+    old_fan = modal.get(fan_key)
+    def fan(percent):
+        if fan_key:
+            out.append(f"M106 P{fan_key.split(':')[1]} S{round(percent*2.55)}\n")
+    last_path = None
+    printed = GeometryCollection()
+    def retract_travel(coords, allow_connected=False):
+        nonlocal last_path
+        connected = (allow_connected and last_path is not None and cfg['connected_travel_mm'] > 0
+                     and math.dist(last_path.coords[-1], coords) <= cfg['connected_travel_mm']
+                     and printed.buffer(diameter * .25).covers(LineString([last_path.coords[-1], coords])))
+        if not connected:
+            if retract:
+                out.append(f'G1 E{-retract:.7f} F{retract_feed:.2f}\n')
+            if last_path is not None and cfg['wipe_mm']:
+                end = last_path.length
+                # Follow the existing curve backwards, never a shortcut across it.
+                points = list(last_path.coords)
+                distance = 0.0
+                for a, b in zip(reversed(points[1:]), reversed(points[:-1])):
+                    length = math.dist(a, b)
+                    remain = min(length, cfg['wipe_mm'] - distance)
+                    if remain <= 0: break
+                    ratio = remain / max(length, 1e-12)
+                    x, y = (a[j] + (b[j] - a[j]) * ratio for j in (0, 1))
+                    out.append(f'G1 X{x:.5f} Y{y:.5f} F{travel:.2f}\n')
+                    distance += remain
+            if hop: out.append(f'G1 Z{z+hop:.5f} F{travel:.2f}\n')
+        out.append(f'G1 X{coords[0]:.5f} Y{coords[1]:.5f} F{travel:.2f}\n')
+        if not connected:
+            if hop: out.append(f'G1 Z{z:.5f} F{travel:.2f}\n')
+            if retract: out.append(f'G1 E{retract:.7f} F{retract_feed:.2f}\n')
+    distances=[arc.distance(arcs[0]) for arc in arcs] if arcs else []
+    furthest=max(distances,default=0)
+    for i, arc in enumerate(arcs):
+        initial = i < cfg['initial_path_count']
+        flow = cfg['initial_flow_percent'] / 100 if initial else 1.0
+        if initial: fan(cfg['initial_fan_percent'])
+        elif cfg['support_fan_override']: fan(cfg['support_fan_percent'])
+        elif old_fan: out.append(old_fan)
+        nominal = speed if wave else max(cfg['minimum_arc_speed_mm_s'], min(speed, arc.length / cfg['minimum_arc_time_s']))
+        nominal *= 1 - (1 - cfg['far_speed_percent'] / 100) * distances[i] / max(furthest,1e-9)
+        if printer.get('max_volumetric_speed'):
+            nominal = min(nominal, printer['max_volumetric_speed'] / (volume * flow * printer['filament_flow_ratio']))
+        coords = list(arc.coords)
+        retract_travel(coords[0], True)
+        out.append(f'; Arc {i+1}\nG1 F{nominal*60:.2f}\n')
+        # Only coast at an endpoint not close to any other path's deposited footprint.
+        end_free = support is not None and Point(coords[-1]).distance(support) > diameter*.5 and all(j == i or Point(coords[-1]).distance(other) > diameter * .6 for j, other in enumerate(arcs))
+        coast = min(cfg['edge_coast_mm'], arc.length * .1) if end_free else 0
+        cutoff, walked = arc.length - coast, 0.0
+        ink=[]
+        for a, b in zip(coords, coords[1:]):
+            length = math.dist(a, b)
+            if length <= 1e-9: continue
+            printed_length = max(0.0, min(length, cutoff - walked))
+            if 1e-9 < printed_length < length - 1e-9:
+                q = tuple(a[j] + (b[j]-a[j])*printed_length/length for j in (0,1))
+                ink.append(LineString([a,q]))
+                out.append(f'G1 X{q[0]:.5f} Y{q[1]:.5f} E{printed_length*e_ratio*flow:.7f}\n')
+                out.append(f'G1 X{b[0]:.5f} Y{b[1]:.5f}\n')
+            else:
+                if printed_length > 0: ink.append(LineString([a,b]))
+                extrusion = f' E{printed_length*e_ratio*flow:.7f}' if printed_length > 0 else ''
+                out.append(f'G1 X{b[0]:.5f} Y{b[1]:.5f}{extrusion}\n')
+            walked += length
+        cooling=max(0,cfg['path_cooling_s']-arc.length/max(nominal,1e-9))
+        if cooling: out.append(f'G4 P{math.ceil(cooling*1000)}\n')
+        last_path = arc
+        printed = printed.union(unary_union(ink).buffer(diameter*.5))
+    retract_travel((restore.x, restore.y))
+    if old_fan: out.append(old_fan)
+    if cfg['support_acceleration_mm_s2'] and acceleration: out.append(acceleration)
+    out.extend(post)
+    out.extend([f'G92 E{restore.e:.7f}\nG1 F{restore.feed:.2f}\n', MARKER+'END\n'])
+    return out
+
+
+def preview_role(role):
+    if 'overhang' in role: return 'overhang'
+    if 'outer' in role or 'external perimeter' in role: return 'outer'
+    if 'inner' in role or role == 'perimeter': return 'inner'
+    if 'bridge' in role: return 'bridge'
+    if 'sparse' in role: return 'infill'
+    if 'solid' in role: return 'solid'
+    if 'top' in role or 'bottom' in role: return 'surface'
+    if 'gap' in role: return 'gap'
+    if 'brim' in role or 'skirt' in role: return 'brim'
+    return 'other'
+
+
+def layer_contexts(lines, cancelled=lambda: False, wanted=None):
+    """Exact final layer playback, sharing one copy across all regions on a layer."""
+    features = parse(lines, cancelled)
+    generated, inside = set(), False
+    for i, line in enumerate(lines):
+        if line.strip() == MARKER+'BEGIN': inside = True
+        if inside: generated.add(i)
+        if line.strip() == MARKER+'END': inside = False
+    contexts = {}
+    for feature in features:
+        if feature.layer < 0 or wanted is not None and feature.layer+1 not in wanted: continue
+        key = str(feature.layer+1)
+        entry = contexts.setdefault(key, dict(paths=[], motions=[], roles=[], tools=[], duration=0.0))
+        active, last_role = None, None
+        moves_by_index = {move.index: move for move in feature.moves}
+        for index in range(feature.start,feature.end):
+            if index not in moves_by_index:
+                cmd, words = command(lines[index])
+                if cmd == 'G4' and entry['motions']:
+                    position=entry['motions'][-1][3:6]
+                    seconds=max(0,words.get('S',words.get('P',0)/1000))
+                    entry['motions'].append([*position,*position,seconds,2,-1,-1]);entry['duration']+=seconds
+                continue
+            move=moves_by_index[index]
+            if cancelled(): raise Cancelled('Cancelled.')
+            origin = [move.before.x, move.before.y, move.before.z]
+            target = [move.after.x, move.after.y, move.after.z]
+            if any(v is None or not math.isfinite(v) for v in origin+target): continue
+            role = 'support' if move.index in generated else preview_role(feature.role)
+            points = list(arc_polyline(move).coords) if move.command in ('G2','G3') else [origin[:2], target[:2]]
+            if points is None: points = [origin[:2], target[:2]]
+            xyz = [[float(p[0]), float(p[1]), origin[2]+(target[2]-origin[2])*i/max(1,len(points)-1)] for i,p in enumerate(points)]
+            distance = sum(math.dist(a,b) for a,b in zip(xyz,xyz[1:]))
+            if distance <= 1e-9 and abs(move.delta_e) <= 1e-9: continue
+            kind = 1 if distance > 1e-9 and move.delta_e > 0 else 0 if distance > 1e-9 else 2
+            if kind == 1 and (active is None or last_role != role or entry['paths'][active][-1] != xyz[0]):
+                active = len(entry['paths']);entry['paths'].append([xyz[0]])
+                entry['roles'].append(role);entry['tools'].append(move.after.tool)
+            if kind != 1: active = None
+            last_role = role
+            for a,b in zip(xyz,xyz[1:]):
+                seconds = (math.dist(a,b) if distance > 1e-9 else abs(move.delta_e))/max(move.after.feed/60,1e-9)
+                if kind == 1: entry['paths'][active].append(b)
+                entry['motions'].append([*a,*b,seconds,kind,active if active is not None else -1,len(entry['paths'][active])-1 if active is not None else -1])
+                entry['duration'] += seconds
+    # Context animation is movement time; stationary firmware/temperature waits aren't predicted.
+    return contexts
+
+
+def profile_suggestions(lines, resolved, tool):
+    printer = printer_settings(lines, resolved, tool)
+    raw = {}
+    for line in lines:
+        match = re.match(r'^;\s*(\w+)\s*=\s*(.*?)\s*$', line)
+        if match: raw[match[1]] = match[2]
+    raw.update({k:v for k,v in (resolved or {}).items() if v is not None})
+    material = raw.get('filament_type', 'Unknown')
+    if isinstance(material, str): material = re.split('[;,]',material)
+    if isinstance(material,(list,tuple)): material = material[tool] if tool < len(material) else 'Unknown'
+    material = str(material).strip('[]" ')
+    family = next((f for f in ('PLA','PETG','ABS','ASA','TPU','PA','PC') if material.upper().startswith(f)), 'Unknown')
+    try: fan_limit = scalar(raw.get('fan_max_speed', 100), 'fan_max_speed', tool)
+    except UnsupportedGCode: fan_limit = 100
+    if not isinstance(fan_limit, float): fan_limit = 100
+    fan_limit = max(0,min(100,fan_limit))
+    speed, fan = {'PLA':(2,100),'PETG':(1.5,80),'ABS':(1,30),'ASA':(1,30),'TPU':(.8,70),'PA':(1,30),'PC':(1,20)}.get(family,(1,50))
+    speed *= min(1.5,max(.5,printer['nozzle_diameter']/.4))
+    cap = printer['max_volumetric_speed']
+    if cap: speed = min(speed, cap/(math.pi*(printer['nozzle_diameter']/2)**2*1.35*printer['filament_flow_ratio']))
+    values = {'arc_speed_mm_s':round(speed,3), 'minimum_arc_speed_mm_s':round(min(.5,speed),3),
+              'wave_speed_mm_s':round(speed,3), 'support_fan_override':True,
+              'support_fan_percent':min(fan,fan_limit), 'peel_gap_mm':round(min(.15,printer['layer_height']*.5),3)}
+    return dict(tool=tool, material=material, family=family, nozzle=printer['nozzle_diameter'],
+                layer_height=printer['layer_height'], fan_limit=fan_limit, values=values,
+                note='Starting points for a test print, not calibrated material profiles. Review before applying.')
+
+
+def enrich_preview(report, lines, cfg, resolved, cancelled):
+    preview = report['preview']
+    wanted={r['layer'] for r in preview['layers']}
+    all_context = layer_contexts(lines, cancelled, wanted|{layer-1 for layer in wanted})
+    preview['contexts'] = {}
+    suggestions = {}
+    for region in preview['layers']:
+        layer = region['layer']; key = str(layer)
+        context = all_context.get(key, dict(paths=[],motions=[],roles=[],tools=[],duration=0))
+        previous = all_context.get(str(layer-1), {})
+        preview['contexts'][key] = {**context, 'previous':previous.get('paths',[]), 'path_count':len(context['paths'])}
+        width = printer_settings(lines,resolved,region['tool'])['nozzle_diameter']
+        deposited = unary_union([LineString(p).buffer(width*.5) for p in region['paths'] if len(p)>1])
+        region['deposited_area_mm2'] = round(deposited.area,2)
+        region['coverage_percent'] = report.get('minimum_coverage_percent')
+        if region['tool'] not in suggestions:
+            suggestions[region['tool']] = profile_suggestions(lines,resolved,region['tool'])
+    preview['suggestions'] = list(suggestions.values())
+
+
+def slowdown_above_support(lines, cfg, cancelled, resolved=None):
+    """Split extrusion at region boundaries; fitted arcs use 0.01 mm chord tolerance."""
+    features = parse(lines,cancelled)
+    inside = False; generated = set()
+    for i,line in enumerate(lines):
+        if line.strip()==MARKER+'BEGIN': inside=True
+        if inside: generated.add(i)
+        if line.strip()==MARKER+'END': inside=False
+    zones = {}
+    nozzles = {}
+    for f in features:
+        for m in f.moves:
+            line=segment(m)
+            if m.index in generated and line is not None:
+                tool=m.after.tool
+                if tool not in nozzles:
+                    nozzles[tool]=printer_settings(lines,resolved,tool)['nozzle_diameter']
+                zones.setdefault((f.layer,tool),[]).append(line.buffer(nozzles[tool]/2))
+    zones={key:unary_union(value) for key,value in zones.items()}
+    edits=[]
+    for f in features:
+        for m in f.moves:
+            if cancelled(): raise Cancelled('Cancelled.')
+            line=segment(m)
+            if line is None or m.index in generated or m.command not in ('G0','G1','G2','G3') or m.before.z != m.after.z: continue
+            matches=[geom for (layer,tool),geom in zones.items() if tool==m.after.tool and 1<=f.layer-layer<=cfg['upper_slowdown_layers']]
+            if not matches: continue
+            zone=unary_union(matches)
+            intersections=line.intersection(zone.boundary)
+            cuts=[0.0,line.length]
+            if m.command in ('G2','G3'):
+                cumulative=0
+                for a,b in zip(line.coords,list(line.coords)[1:]):
+                    cumulative+=math.dist(a,b);cuts.append(cumulative)
+            if not intersections.is_empty:
+                geometries=list(intersections.geoms) if hasattr(intersections,'geoms') else [intersections]
+                for part in geometries:
+                    if part.geom_type=='Point': cuts.append(line.project(part))
+                    elif part.geom_type=='LineString': cuts.extend(line.project(Point(p)) for p in part.coords)
+            cuts=sorted(set(round(c,10) for c in cuts))
+            if not any(zone.covers(line.interpolate((a+b)/2)) for a,b in zip(cuts,cuts[1:])): continue
+            out=[]; emitted=0
+            for i,(a,b) in enumerate(zip(cuts,cuts[1:])):
+                if b-a<1e-9: continue
+                point=line.interpolate(b)
+                slow=zone.covers(line.interpolate((a+b)/2))
+                feed=m.after.feed*(cfg['upper_speed_percent']/100 if slow else 1)
+                extrusion=m.delta_e-emitted if i==len(cuts)-2 else m.delta_e*(b-a)/line.length
+                emitted+=extrusion
+                out.append(f'G1 X{point.x:.5f} Y{point.y:.5f} E{extrusion:.9f} F{feed:.3f}\n')
+            out.append(f'G1 F{m.after.feed:.3f}\n')
+            edits.append((m.index,out))
+    for i,out in reversed(edits): lines[i:i+1]=out
+    return ''.join(lines).splitlines(keepends=True),len(edits)
+
+
+def process_removable(text, cfg, resolved, cancelled):
+    """Conservative detachable floor: insert above layer n-2, before layer n-1 exists.
+
+    The original bridge is retained. Reject unavailable space, changing tools at
+    the insertion, variable/nonplanar layers and uncertain command state.
+    """
+    lines=text.splitlines(keepends=True);features=parse(lines,cancelled)
+    by_layer={}
+    for f in features: by_layer.setdefault(f.layer,[]).append(f)
+    report=dict(replaced_features=0,generated_arcs=0,skipped_features=0,minimum_coverage_percent=None,
+                bridge_features=0,hilbert_features=0,retimed_features=0,print_order=cfg['print_order'],
+                skip_reasons={},removable_floors=0,region_results=[])
+    edits=[];records=[]; occupied={}
+    for f in features:
+        if f.role not in ('bridge','bridge infill','internal bridge'): continue
+        report['bridge_features']+=1
+        try:
+            if cancelled(): raise Cancelled('Cancelled.')
+            moves=[m for m in f.moves if segment(m) is not None]
+            if not moves: continue
+            tool=moves[0].after.tool;p=printer_settings(lines,resolved,tool);h=p['layer_height'];width=p['outer_wall_line_width']
+            target_z=moves[0].after.z;floor_z=target_z-h-cfg['peel_gap_mm']
+            if f.layer<2 or not 0<cfg['peel_gap_mm']<h: raise ValueError('Removable floor needs two lower layers and a gap smaller than layer height')
+            if not cfg['z_min_mm']<=target_z<=cfg['z_max_mm']: continue
+            if any(m.after.tool!=tool or m.after.z!=target_z or m.before.z!=target_z for m in moves): raise ValueError('Removable target changes tool or height')
+            previous_moves=[m for g in by_layer.get(f.layer-1,[]) for m in g.moves if segment(m) is not None]
+            if not previous_moves or any(abs(m.after.z-(target_z-h))>1e-4 for m in previous_moves): raise ValueError('Removable floor requires uniform layer heights')
+            base_features=by_layer.get(f.layer-2,[])
+            base_moves=[m for g in base_features for m in g.moves]
+            if not base_moves: raise ValueError('No earlier insertion point')
+            anchor=base_moves[-1];state=anchor.after
+            if state.tool!=tool or is_retracted(state) or not state.relative_e or not state.absolute_xyz or None in (state.x,state.y,state.z): raise ValueError('Insertion point has incompatible tool or motion state')
+            if any(m.after.z is None or m.after.z>floor_z for g in base_features for m in g.moves if segment(m) is not None): raise ValueError('Earlier layer rises into removable floor')
+            if abs(state.z-(target_z-2*h))>1e-4 or floor_z<=state.z: raise ValueError('No vertical clearance for removable floor')
+            support=layer_shape(base_features,width);current=layer_shape(by_layer[f.layer],width)
+            region=bridge_region([segment(m) for m in moves],current,width,p['nozzle_diameter']*cfg['arc_spacing_nozzle_ratio'],cfg['wall_overlap_mm'])
+            arcs=[];cover=[]
+            for poly in polygons(region):
+                if poly.difference(support).area<cfg['minimum_area_mm2']: raise ValueError('Removable region is too small or already supported')
+                generator=fill_polygon_wave if cfg['overhang_mode']=='wave' else fill_polygon
+                fill=generator(poly,support,cfg,p,cancelled)
+                if fill is None: raise ValueError('Removable floor has insufficient anchoring or coverage')
+                arcs.extend(fill[0]);cover.append(fill[1])
+            if not arcs: raise ValueError('No removable paths')
+            footprint=unary_union([arc.buffer(p['nozzle_diameter']/2) for arc in arcs])
+            next_material=unary_union([segment(m).buffer(width/2) for m in previous_moves])
+            if footprint.intersection(next_material).area>1e-6: raise ValueError('Removable floor overlaps model material on the intervening layer')
+            if footprint.intersection(occupied.get(f.layer-2,GeometryCollection())).area>1e-6: raise ValueError('Removable floors overlap')
+            local=dict(cfg);local['flow_multiplier']*= (h-cfg['peel_gap_mm'])/h;local['wave_flow_mm3_per_mm']*= (h-cfg['peel_gap_mm'])/h
+            lifted=replace(state,z=floor_z)
+            travel=cfg['travel_speed_mm_s']*60
+            # Vertical-only entry/exit over the known insertion point; XY travel at floor Z.
+            pre=[f'G1 Z{floor_z:.5f} F{travel:.2f}\n']
+            body=emit_arcs(arcs,lifted,lifted,local,p,support=support)
+            post=[f'G1 Z{state.z:.5f} F{travel:.2f}\n',f'G1 F{state.feed:.2f}\n',f';TYPE:{base_features[-1].role}\n']
+            edits.append((anchor.index+1,pre+body+post));occupied[f.layer-2]=occupied.get(f.layer-2,GeometryCollection()).union(footprint)
+            records.append((f.layer-2,floor_z,tool,cfg['overhang_mode'],(),current))
+            report['region_results'].append(dict(layer=f.layer+1,tool=tool,status='removable floor',area_mm2=round(region.area,2),coverage_percent=round(min(cover),1)))
+            report['replaced_features']+=1;report['removable_floors']+=1;report['generated_arcs']+=len(arcs)
+            report['minimum_coverage_percent']=min(cover+[report['minimum_coverage_percent'] or 100])
+        except ValueError as error:
+            report['region_results'].append(dict(layer=f.layer+1,status='kept',reason=str(error)))
+            reason=str(error);report['skipped_features']+=1;report['skip_reasons'][reason]=report['skip_reasons'].get(reason,0)+1
+    if not edits: return text,report
+    for index,body in sorted(edits,key=lambda item:item[0],reverse=True): lines[index:index]=body
+    lines=''.join(lines).splitlines(keepends=True)
+    if cfg['upper_slowdown_layers']: lines,report['retimed_features']=slowdown_above_support(lines,cfg,cancelled,resolved)
+    report['time_change_s']=update_time_estimates(text.splitlines(keepends=True),lines)
+    try:
+        report['preview']=export_preview(records,cfg,lines,cancelled)
+        enrich_preview(report,lines,cfg,resolved,cancelled)
+    except Cancelled:
+        raise
+    except Exception:
+        report['preview_error']='Support was generated, but its UI snapshot is unavailable.'
+    return MARKER+VERSION+'\n'+gallery_header(cfg,text)+''.join(lines),report

@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory(dir=ROOT) as folder:
    if not path.is_relative_to(allowed):
     raise PermissionError('External open denied: '+str(path))
  sys.addaudithook(audit)
+ assert 'id="export-drawing"' in a.config_page(as_tab=True)
  report=a.process_file(target)
  assert report['replaced_features']==1
  source=fixture()+"; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\nG1 E-.8 F2100\nG1 X20 Y12 F9000\nG1 E.8 F2100\n"
