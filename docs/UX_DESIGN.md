@@ -35,9 +35,19 @@ Geometry stays in the local in-memory report and is omitted from pipeline logs.
 All existing controls and new workbench settings are rendered once. Mode changes hide irrelevant groups without
 resetting them. Unsaved edits survive focus changes in this view; Reload saved
 explicitly discards them. No persistent cross-preset draft is restored.
-Save waits for the actual host acknowledgement. The existing preset/global scope
-and preset-override notice remain visible. Read-only state and validation failures
-are reported; no success is claimed on a failed save.
+The page applies valid edits after a short typing pause on hosts that expose the
+process editor; it waits for acknowledgement and polls sidebar edits back into
+idle fields. A conflicting draft is retained but blocked until reload. The native
+configuration dialog keeps its host-owned save scope. Unsupported page writes
+fail explicitly instead of silently saving global defaults. Applying through the
+process editor invalidates the old slice in Orca. Starting a slice still requires
+Orca's Slice plate action; the preview says so.
+
+Viewport overlays group path visibility, view options and layer/playback controls.
+They are translucent in either theme, collapse independently and do not intercept
+camera gestures outside their own bounds. Narrow views start with the path list
+collapsed. Full-layer playback is the default; selected-support inspection remains
+available. Pending edits and stale-slice guidance appear inside the viewport.
 
 ## Checks
 

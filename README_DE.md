@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.4.0  -  13.11.2026  -  experimentell
+Version 0.4.1  -  13.11.2026  -  experimentell
 
 Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 
@@ -8,7 +8,7 @@ auf Orcas natives Python-Pluginsystem. Grundlage ist der konzentrische
 Arc-Algorithmus von Steven McCulloch, Nicolai Wachenschwan und Kelsch.
 
 ## Installation
-1. Die Datei **orca_arc_overhang-0.4.0-py3-none-any.whl** aus dem GitHub-Release herunterladen.
+1. Die Datei **orca_arc_overhang-0.4.1-py3-none-any.whl** aus dem GitHub-Release herunterladen.
 2. In OrcaSlicer 2.5 das Menue **Plugins** oeffnen.
 3. **Install local plugin** waehlen und die heruntergeladene WHL installieren.
    Nur eine Variante des Plugins aktivieren.
@@ -68,12 +68,26 @@ Der eigentliche G-Code-Ordner wird vom Host fuer den Export freigegeben.
 Die linken Prozessbereiche **Qualitaet**, **Staerke** und weitere bleiben bestehen.
 Der Tab ersetzt keinen dieser Bereiche.
 
-Tab und Pipeline verwenden dieselbe Konfiguration. Der Tab zeigt die fuer das
-aktive Profil gueltigen Werte. Speichern im Tab setzt die globalen Vorgaben.
-Falls ein Profil eigene Plugin-Ueberschreibungen besitzt, haben diese weiterhin
-Vorrang; der Tab weist nach dem Speichern darauf hin. Solche Werte im
-Prozessprofil unter **Plugin Configuration** anpassen.
-Mit **Aktualisieren** lassen sich Werte nach einem Profilwechsel neu laden.
+Tab und Pipeline verwenden die Einstellungen des aktiven Prozessprofils.
+Auf Orca-Versionen mit `orca.host.preset.process.update` werden gültige Änderungen
+im Tab nach einer kurzen Schreibpause angewendet. Änderungen in der Sidebar
+erscheinen automatisch im Tab. Orcas regulärer Änderungsweg aktualisiert die
+Sidebar und macht den bisherigen Slice ungültig; globale Vorgaben werden dabei
+nicht verändert. Bei einem Profilwechsel oder widersprüchlichen Änderungen muss
+vor dem Anwenden neu geladen werden.
+
+Fehlt diese Schnittstelle in der installierten Orca-Version, meldet der Tab das
+und schreibt keine globalen Vorgaben als vermeintliche Profiländerung. Dann
+**Plugin Configuration** in der Sidebar verwenden. Ein direkter Start von
+**Slice plate** ist über die öffentliche Plugin-Schnittstelle nicht verfügbar.
+Die Vorschau zeigt deshalb den nötigen Schritt in Orca ausdrücklich an.
+
+Die Vorschau öffnet standardmäßig die ganze ausgewählte Schicht mit Wänden,
+Infill und Support. Bahnfilter, Ansichtsoptionen sowie Ebenen- und Druckverlauf
+liegen als halbtransparente, einklappbare Overlays im Bild. 2D, 3D und einzelne
+Overhangs bleiben auswählbar. Native Orca-Tests dieser neuen Synchronisierung
+stehen noch aus; die automatische Anbindung ist bisher mit einem Host-Modell
+und anhand von Orcas Quellcode geprüft.
 
 Die Pipeline muss einmal im Prozessprofil ausgewaehlt werden. Danach kann
 die normale Bedienung ueber den neuen Tab erfolgen. Nur den Tab zu aktivieren

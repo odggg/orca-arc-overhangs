@@ -30,5 +30,5 @@ jobs:
       - run: pnpm test:ui
       - uses: actions/upload-artifact@v4
         with:
-          name: arc-overhang-v0.4.0
-          path: Arc_Overhang_OrcaSlicer_2.5_v0.4.0.zip
+          name: arc-overhang-v0.4.1
+          path: Arc_Overhang_OrcaSlicer_2.5_v0.4.1.zip

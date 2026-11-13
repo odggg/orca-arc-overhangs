@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.1 - 2026-11-13
+
+- Layer controls, playback and path filters now sit in translucent, collapsible overlays.
+- The preview opens the whole layer, including walls and infill.
+- Tab and sidebar settings stay in sync on supported Orca builds. Applied changes mark the old slice as outdated.
+- Added an in-preview reminder to click Slice plate after changing settings.
+- Fixed preview dragging and improved the layout for small windows.
+
+Settings sync requires Orca's process editor support. On older builds, use Plugin Configuration in the sidebar.
+
 ## 0.4.0 - 2026-11-13
 - Add full-layer context and playback, path-type filters, previous-layer outlines, and an interactive 3D orthographic view.
 - Report target areas, generated coverage, deposited footprints, time changes and per-layer kept-region reasons.
