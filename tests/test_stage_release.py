@@ -1,11 +1,14 @@
 """Release selection must not publish old or platform-specific packages."""
 from pathlib import Path
+import copy
+import hashlib
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import stage_release
+import publish_github_release
 from publish_orcacloud import PublishError
 from test_orcacloud_publish import wheel
 
@@ -58,3 +61,60 @@ class StageReleaseTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             stage_release.stage(self.root, "v0.3.1")
         self.assertEqual(list(folder.iterdir()), [stale])
+
+
+class PublishCompletedDraftTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        folder = self.root / "release-assets"
+        folder.mkdir()
+        name = "orca_arc_overhang-0.3.1-py3-none-any.whl"
+        data = wheel()
+        (folder / name).write_bytes(data)
+        (self.root / "release-notes.md").write_text("- Fix import.\n")
+        self.draft = {"tag_name": "v0.3.1", "draft": True, "prerelease": False,
+                      "body": "- Fix import.\n", "assets": [{"name": name, "state": "uploaded",
+                      "size": len(data), "digest": "sha256:" + hashlib.sha256(data).hexdigest()}]}
+        self.calls = []
+
+    def request(self, endpoint, body=None):
+        self.calls.append((endpoint, body))
+        if body is None:
+            return copy.deepcopy(self.draft)
+        return {"tag_name": "v0.3.1", "draft": False, "published_at": "2026-01-01T00:00:00Z",
+                "html_url": "https://github.com/example/repo/releases/tag/v0.3.1"}
+
+    def test_publish_only_after_uploaded_wheel_and_notes_match(self):
+        publish_github_release.publish(self.root, "v0.3.1", "123", self.request)
+        self.assertEqual(self.calls, [("releases/123", None), ("releases/123", {"draft": False})])
+
+    def test_wrong_or_already_published_release_never_publishes(self):
+        for change in ({"tag_name": "v0.3.2"}, {"draft": False}, {"prerelease": True},
+                       {"body": "Wrong notes"}, {"assets": []},
+                       {"assets": self.draft["assets"] * 2}):
+            original = copy.deepcopy(self.draft)
+            self.draft.update(change)
+            self.calls.clear()
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                publish_github_release.publish(self.root, "v0.3.1", "123", self.request)
+            self.assertEqual(self.calls, [("releases/123", None)])
+            self.draft = original
+
+    def test_incomplete_or_modified_upload_never_publishes(self):
+        for change in ({"state": "starter"}, {"size": 1}, {"digest": None},
+                       {"digest": "sha256:wrong"}, {"name": "platform.whl"}):
+            original = copy.deepcopy(self.draft)
+            self.draft["assets"][0].update(change)
+            self.calls.clear()
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                publish_github_release.publish(self.root, "v0.3.1", "123", self.request)
+            self.assertEqual(self.calls, [("releases/123", None)])
+            self.draft = original
+
+    def test_invalid_tag_or_id_never_contacts_github(self):
+        for tag, release_id in (("main", "123"), ("v0.3.1", "../other")):
+            with self.assertRaises(ValueError):
+                publish_github_release.publish(self.root, tag, release_id, self.request)
+        self.assertEqual(self.calls, [])

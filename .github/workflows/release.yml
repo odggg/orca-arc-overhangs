@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing stable tag to prepare (e.g. v0.4.2)'
+        description: 'Existing stable tag to release (e.g. v0.4.2)'
         required: true
         type: string
 
@@ -23,21 +23,34 @@ env:
 
 jobs:
   build-and-release:
-    name: Build universal wheel and prepare release
+    name: Build universal wheel and publish release
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
+      - name: Check automatic publishing setup
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo 'Add the RELEASE_TOKEN repository secret with Contents read/write access to this repository.' >&2
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
 
       - name: Refuse to overwrite an existing release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          if response=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" 2>&1); then
             echo 'This tag already has a release. Choose a new version.' >&2
+            exit 1
+          elif [[ "$response" != *"(HTTP 404)"* ]]; then
+            echo 'Could not check existing releases. Nothing will be published.' >&2
             exit 1
           fi
 
@@ -71,9 +84,9 @@ jobs:
       - name: Stage only the verified universal wheel
         run: python scripts/stage_release.py --tag "$RELEASE_TAG"
 
-      # Publishing with GITHUB_TOKEN would suppress the release event used by
-      # publish-orcacloud.yml. A person publishes this completed draft instead.
+      # Finish uploading before publishing so OrcaCloud cannot see an empty release.
       - name: Create release draft
+        id: draft
         uses: softprops/action-gh-release@v3
         with:
           files: release-assets/*
@@ -83,3 +96,10 @@ jobs:
           fail_on_unmatched_files: true
           draft: true
           prerelease: false
+
+      # A separate token is required to trigger the release-event OIDC workflow.
+      - name: Publish completed release and trigger OrcaCloud
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
+        run: python scripts/publish_github_release.py --tag "$RELEASE_TAG" --release-id "$RELEASE_ID"

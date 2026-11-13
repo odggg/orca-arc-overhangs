@@ -7,7 +7,17 @@ This follows [OrcaCloud trusted publishing](https://cloud.orcaslicer.com/wiki/#p
 In OrcaCloud, open **Shared Plugins → Edit plugin → GitHub publishing** for
 [Arc Overhangs](https://cloud.orcaslicer.com/app/plugins/plugin-hub/3408ada1-7b45-45a2-9059-feb746a26496).
 Enter **odggg/orca-arc-overhangs** and click **Connect**. A repository must be linked
-to exactly one plugin. No OrcaCloud API key or repository secret is needed.
+to exactly one plugin. No OrcaCloud API key is needed.
+
+For automatic GitHub releases, create a fine-grained personal access token owned
+by `odggg`, restricted to **only `orca-arc-overhangs`**, with **Contents: Read and
+write**. Save it as the repository Actions secret **`RELEASE_TOKEN`**. Choose an
+expiry date and renew the secret before it expires. Do not commit or paste the
+token into an issue, chat, or workflow file.
+
+This token is used only to publish a completed GitHub release. Builds and asset
+uploads use the normal job token; the OrcaCloud upload uses its existing OIDC
+identity. The release workflow stops before building if the secret is missing.
 
 ## Normal releases
 
@@ -16,13 +26,18 @@ to exactly one plugin. No OrcaCloud API key or repository secret is needed.
    **Actions → Release** with an existing tag that contains the release workflow.
 3. The workflow builds and checks the plugin, then creates a release draft with
    only `orca_arc_overhang-0.4.2-py3-none-any.whl` and that version's changelog.
-4. Review the draft and click **Publish release**. This starts **Publish to
-   OrcaCloud** automatically.
+4. It verifies the uploaded wheel's name, size, SHA-256 and release notes, then
+   publishes the completed draft automatically using `RELEASE_TOKEN`.
+5. That publication starts **Publish to OrcaCloud** automatically. No manual
+   Publish click is needed.
 
-The draft step is intentional: releases published using GitHub's built-in workflow
-token do not trigger another workflow. Publishing the prepared draft as a user
-produces the release event required by OrcaCloud. No additional credentials are
-needed. Existing releases are not rebuilt or overwritten.
+The draft step prevents the Cloud workflow from starting before the WHL upload
+finishes. GitHub's built-in job token cannot trigger another workflow; the
+dedicated token produces the release event required by OrcaCloud.
+See [GitHub's workflow triggering rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+Existing releases are not rebuilt or overwritten. If publication fails after
+the upload, the draft remains available for inspection; resolve the error before
+publishing it manually or removing that draft and retrying the workflow.
 
 The workflow downloads the exact universal wheel from that release, verifies its
 size, GitHub SHA-256 digest (when provided), embedded version, universal wheel tag
