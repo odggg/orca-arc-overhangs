@@ -186,3 +186,27 @@ All plugin UI and runtime messages translated to English. Configuration keys and
   their dispositions are recorded in COMMUNITY_ISSUE_AUDIT.md.
 - Firmware retraction: parameterless G10/G11 are tracked as a balanced firmware-retract state. The 39-test suite covers a balanced pair, preservation of a Bridge feature containing retract commands, and rejection of parameterized G10.
 - Corrected layer-tail scheduling: 39 regressions pass, including modern/legacy ordering of normal walls/infill, Arcs and Overhang walls, preserved Overhang extrusion geometry and layer/end-code boundaries. Tool-selection boundaries remain fixed.
+
+
+## Preview overlays and process synchronization (unreleased)
+
+- Python regression suite: 117 tests passed, including process override preservation,
+  same-key replacement, rejected writes, profile switches and sidebar conflicts.
+- Rendered browser checks cover full-layer default, collapsed controls, camera isolation,
+  automatic apply, reverse synchronization, invalid inputs and host errors, and light/dark
+  layouts at desktop and 390 px widths. Mock bridge responses exercise the protocol.
+- Orca source references: [preset editor](https://github.com/OrcaSlicer/OrcaSlicer/blob/main/src/slic3r/plugin/host/PluginHostPresets.cpp),
+  [UI-thread dispatch](https://github.com/OrcaSlicer/OrcaSlicer/blob/main/src/slic3r/plugin/host/PluginHostUi.cpp),
+  [slice invalidation](https://github.com/OrcaSlicer/OrcaSlicer/blob/main/src/libslic3r/Print.cpp).
+  The latter invalidates slicing for `print_plugin_config_overrides` changes.
+- Native Orca GUI validation is outstanding. The locally installed binary did not
+  contain the `PresetEditor` binding name during inspection, so this installation
+  may require an Orca update for automatic tab-to-process synchronization. Runtime
+  capability detection refuses unsupported writes; it never falls back to global defaults.
+- Manual host acceptance: change a valid tab setting, verify the same value in the
+  sidebar, confirm Orca's old Preview needs a new slice, then change it in the sidebar
+  and verify the tab. Test a profile switch during editing and verify other plugins'
+  overrides. Click Slice plate and verify both previews rebuild.
+- No public host method to start slicing was found. The inline action applies settings
+  and gives an explicit Slice plate instruction; it does not claim to launch slicing.
+- Published 0.4.0 wheel and source ZIP remain unchanged by this development work.

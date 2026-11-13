@@ -68,12 +68,26 @@ Der eigentliche G-Code-Ordner wird vom Host fuer den Export freigegeben.
 Die linken Prozessbereiche **Qualitaet**, **Staerke** und weitere bleiben bestehen.
 Der Tab ersetzt keinen dieser Bereiche.
 
-Tab und Pipeline verwenden dieselbe Konfiguration. Der Tab zeigt die fuer das
-aktive Profil gueltigen Werte. Speichern im Tab setzt die globalen Vorgaben.
-Falls ein Profil eigene Plugin-Ueberschreibungen besitzt, haben diese weiterhin
-Vorrang; der Tab weist nach dem Speichern darauf hin. Solche Werte im
-Prozessprofil unter **Plugin Configuration** anpassen.
-Mit **Aktualisieren** lassen sich Werte nach einem Profilwechsel neu laden.
+Tab und Pipeline verwenden die Einstellungen des aktiven Prozessprofils.
+Auf Orca-Versionen mit `orca.host.preset.process.update` werden gültige Änderungen
+im Tab nach einer kurzen Schreibpause angewendet. Änderungen in der Sidebar
+erscheinen automatisch im Tab. Orcas regulärer Änderungsweg aktualisiert die
+Sidebar und macht den bisherigen Slice ungültig; globale Vorgaben werden dabei
+nicht verändert. Bei einem Profilwechsel oder widersprüchlichen Änderungen muss
+vor dem Anwenden neu geladen werden.
+
+Fehlt diese Schnittstelle in der installierten Orca-Version, meldet der Tab das
+und schreibt keine globalen Vorgaben als vermeintliche Profiländerung. Dann
+**Plugin Configuration** in der Sidebar verwenden. Ein direkter Start von
+**Slice plate** ist über die öffentliche Plugin-Schnittstelle nicht verfügbar.
+Die Vorschau zeigt deshalb den nötigen Schritt in Orca ausdrücklich an.
+
+Die Vorschau öffnet standardmäßig die ganze ausgewählte Schicht mit Wänden,
+Infill und Support. Bahnfilter, Ansichtsoptionen sowie Ebenen- und Druckverlauf
+liegen als halbtransparente, einklappbare Overlays im Bild. 2D, 3D und einzelne
+Overhangs bleiben auswählbar. Native Orca-Tests dieser neuen Synchronisierung
+stehen noch aus; die automatische Anbindung ist bisher mit einem Host-Modell
+und anhand von Orcas Quellcode geprüft.
 
 Die Pipeline muss einmal im Prozessprofil ausgewaehlt werden. Danach kann
 die normale Bedienung ueber den neuen Tab erfolgen. Nur den Tab zu aktivieren

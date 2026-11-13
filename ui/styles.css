@@ -16,3 +16,39 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 .region-table-wrap{overflow:auto}.region-table-wrap table{width:100%;border-collapse:collapse;font-size:11px}.region-table-wrap th,.region-table-wrap td{padding:8px;text-align:left;border-bottom:1px solid var(--line)}
 
 #export-paths polyline.active{stroke:#d78037!important}
+
+/* Viewport controls remain separate from the SVG camera interaction surface. */
+.plot{height:650px;min-height:650px;isolation:isolate}
+#export-drawing{height:100%;min-height:0;padding:65px 12px 230px}
+.preview-overlay{position:absolute;z-index:1;border:1px solid var(--line);border-radius:12px;background:light-dark(#fffefaeb,#1f2725eb);background:color-mix(in srgb,var(--panel) 75%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 20px #102e2114;font-size:11px}
+.preview-overlay>summary{padding:10px 12px;cursor:pointer;font-weight:650;color:var(--ink);user-select:none}
+.preview-overlay[open]>summary{border-bottom:1px solid var(--line)}
+.visibility-overlay{left:12px;top:12px;width:168px}
+.visibility-overlay:not([open]){width:auto}
+.path-filters{display:grid;gap:2px;padding:7px;max-height:310px;overflow:auto}
+.path-filters label{display:grid;grid-template-columns:18px 12px 1fr;gap:6px;padding:4px;border-radius:5px;font-size:11px}
+.path-filters label:hover{background:var(--soft)}
+.path-filters input{width:16px;height:16px;margin:0}
+.path-filters i{height:4px;border-radius:2px}
+.path-filters label:has(input:not(:checked)){opacity:.5}
+.view-overlay{right:12px;top:12px;max-width:210px}
+.view-overlay .workbench-toolbar{display:grid;border:0;padding:10px;gap:8px}
+.view-overlay .workbench-toolbar label{justify-content:space-between;gap:8px}
+.view-overlay .workbench-toolbar select{max-width:135px}
+.view-overlay .workbench-hint{font-size:10px;padding:0 10px 10px;margin:0}
+.timeline-overlay{left:12px;right:12px;bottom:12px}
+.preview-controls{border:0;padding:10px 12px 4px}
+.preview-layer-nav{margin-bottom:8px}
+.preview-playback-info{margin-top:7px;font-size:10px}
+.preview-playback-info output{font-variant-numeric:tabular-nums}
+#preview-motion-note{font-size:9px;margin-top:5px}
+.plot-caption{padding:4px 12px 10px;gap:8px}
+.plot-caption>span:first-child,.plot-caption>span:nth-child(2){display:none}
+.reslice-overlay{left:50%;top:80px;transform:translateX(-50%);width:270px;max-width:calc(100% - 24px);padding:12px;z-index:2;border-color:var(--warm)}
+.reslice-overlay strong{font-size:12px}.reslice-overlay p{font-size:11px;margin:5px 0 8px}.reslice-overlay button{padding:7px 10px}
+.plot .empty-state{padding:160px 20px 180px;pointer-events:none}.empty-state button{pointer-events:auto}.empty-state svg{flex-shrink:0;width:120px;height:75px}.empty-state h4{font-size:17px}
+@media(max-width:1000px){.overview-grid{grid-template-columns:1fr}.setup-stack{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+@media(max-width:760px){.plot{height:660px;min-height:660px}.setup-stack{grid-template-columns:1fr}#export-drawing{height:100%;padding-bottom:250px}.timeline-overlay,.visibility-overlay{left:8px}.timeline-overlay,.view-overlay{right:8px}.visibility-overlay{width:155px}.view-overlay{max-width:180px}.preview-playback{gap:5px}.preview-playback input[type=range]{min-width:65px}.preview-playback-info output{width:100%}.plot-caption{font-size:9px}.reslice-overlay{top:58px}.preview-overlay>summary{padding:8px 10px}}
+
+.plot:has(#preview-timeline:not([open])) #export-drawing{padding-bottom:65px}
+.app-shell:has(.export-panel:not([hidden])) .save-bar{position:static}

@@ -18,26 +18,64 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 .region-table-wrap{overflow:auto}.region-table-wrap table{width:100%;border-collapse:collapse;font-size:11px}.region-table-wrap th,.region-table-wrap td{padding:8px;text-align:left;border-bottom:1px solid var(--line)}
 
 #export-paths polyline.active{stroke:#d78037!important}
+
+/* Viewport controls remain separate from the SVG camera interaction surface. */
+.plot{height:650px;min-height:650px;isolation:isolate}
+#export-drawing{height:100%;min-height:0;padding:65px 12px 230px}
+.preview-overlay{position:absolute;z-index:1;border:1px solid var(--line);border-radius:12px;background:light-dark(#fffefaeb,#1f2725eb);background:color-mix(in srgb,var(--panel) 75%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 20px #102e2114;font-size:11px}
+.preview-overlay>summary{padding:10px 12px;cursor:pointer;font-weight:650;color:var(--ink);user-select:none}
+.preview-overlay[open]>summary{border-bottom:1px solid var(--line)}
+.visibility-overlay{left:12px;top:12px;width:168px}
+.visibility-overlay:not([open]){width:auto}
+.path-filters{display:grid;gap:2px;padding:7px;max-height:310px;overflow:auto}
+.path-filters label{display:grid;grid-template-columns:18px 12px 1fr;gap:6px;padding:4px;border-radius:5px;font-size:11px}
+.path-filters label:hover{background:var(--soft)}
+.path-filters input{width:16px;height:16px;margin:0}
+.path-filters i{height:4px;border-radius:2px}
+.path-filters label:has(input:not(:checked)){opacity:.5}
+.view-overlay{right:12px;top:12px;max-width:210px}
+.view-overlay .workbench-toolbar{display:grid;border:0;padding:10px;gap:8px}
+.view-overlay .workbench-toolbar label{justify-content:space-between;gap:8px}
+.view-overlay .workbench-toolbar select{max-width:135px}
+.view-overlay .workbench-hint{font-size:10px;padding:0 10px 10px;margin:0}
+.timeline-overlay{left:12px;right:12px;bottom:12px}
+.preview-controls{border:0;padding:10px 12px 4px}
+.preview-layer-nav{margin-bottom:8px}
+.preview-playback-info{margin-top:7px;font-size:10px}
+.preview-playback-info output{font-variant-numeric:tabular-nums}
+#preview-motion-note{font-size:9px;margin-top:5px}
+.plot-caption{padding:4px 12px 10px;gap:8px}
+.plot-caption>span:first-child,.plot-caption>span:nth-child(2){display:none}
+.reslice-overlay{left:50%;top:80px;transform:translateX(-50%);width:270px;max-width:calc(100% - 24px);padding:12px;z-index:2;border-color:var(--warm)}
+.reslice-overlay strong{font-size:12px}.reslice-overlay p{font-size:11px;margin:5px 0 8px}.reslice-overlay button{padding:7px 10px}
+.plot .empty-state{padding:160px 20px 180px;pointer-events:none}.empty-state button{pointer-events:auto}.empty-state svg{flex-shrink:0;width:120px;height:75px}.empty-state h4{font-size:17px}
+@media(max-width:1000px){.overview-grid{grid-template-columns:1fr}.setup-stack{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+@media(max-width:760px){.plot{height:660px;min-height:660px}.setup-stack{grid-template-columns:1fr}#export-drawing{height:100%;padding-bottom:250px}.timeline-overlay,.visibility-overlay{left:8px}.timeline-overlay,.view-overlay{right:8px}.visibility-overlay{width:155px}.view-overlay{max-width:180px}.preview-playback{gap:5px}.preview-playback input[type=range]{min-width:65px}.preview-playback-info output{width:100%}.plot-caption{font-size:9px}.reslice-overlay{top:58px}.preview-overlay>summary{padding:8px 10px}}
+
+.plot:has(#preview-timeline:not([open])) #export-drawing{padding-bottom:65px}
+.app-shell:has(.export-panel:not([hidden])) .save-bar{position:static}
 </style></head>
 <body><div class="app-shell">
 <header class="app-header"><div class="identity"><svg class="brand" viewBox="0 0 40 40" aria-hidden="true"><path d="M7 31V9h9v22M19 31a12 12 0 0 1 12-12M19 24a5 5 0 0 1 5-5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/></svg><div><h1>Arc Overhang <span class="version">0.4.0</span></h1><p class="eyebrow">Overhang support, made visible.</p></div></div><span class="local-badge"><span></span> Local · open source</span></header>
 <nav class="view-nav" aria-label="Plugin workspace"><button type="button" data-view="overview" aria-current="page">Overview</button><button type="button" data-view="tuning">Fine tuning</button><button type="button" data-view="guide">How it works</button></nav>
-<p class="context-note">You are editing global defaults for the active preset. Existing preset overrides take precedence.</p>
+<p class="context-note">Settings are shared with the active process preset. Applied changes require a new slice in Orca.</p>
 <main id="settings">
 <section id="view-overview" class="app-view" aria-label="Overview">
 <div class="section-heading"><div><p class="kicker">THE WORKBENCH</p><h2>Shape your overhang support.</h2><p>Choose how the overhang is filled. Slice your model, then inspect the Arcs.</p></div><label class="enable-switch"><span>Enable processing</span><input id="enabled" type="checkbox" role="switch"></label></div>
 <p id="processing-note" class="inline-note" hidden>Processing is disabled. You can adjust settings, then enable and save them before slicing.</p>
 <div class="overview-grid">
-<section  class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">SLICE PREVIEW</p><h3 id="preview-heading">Your generated support</h3></div><div class="preview-pickers"><label>Layer<select id="preview-layer" disabled><option>Slice a model first</option></select></label><label>Overhang<select id="preview-region" disabled><option>No regions</option></select></label></div></div>
-<div class="workbench-toolbar"><label>Display<select id="preview-scope"><option value="region">Selected support</option><option value="layer">Full layer playback</option></select></label><label>View<select id="preview-view"><option value="2d">2D plan</option><option value="3d">3D orthographic</option></select></label><button type="button" id="preview-home">Reset view</button><label><input id="preview-context-toggle" type="checkbox" checked> Layer context</label><label><input id="preview-previous-toggle" type="checkbox"> Previous layer</label></div>
-<div id="preview-filters" class="path-filters" aria-label="Visible path types"></div><p id="preview-camera-help" class="workbench-hint">Scroll to zoom · drag to pan. In 3D: drag to orbit, Shift-drag to pan. Keyboard: arrows, +/−, Home.</p>
-<div id="preview-warning" class="inline-note" hidden></div>
-<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Support paths for the sliced model"><g id="preview-previous"></g><g id="preview-context"></g><g id="export-outlines"></g><g id="preview-travels"></g><g id="export-paths"></g><g id="preview-head"><circle id="preview-nozzle" hidden></circle></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4 id="preview-empty-title">Slice your model to see its Arcs.</h4><p id="preview-empty-message">Enable Arc Overhang in your process settings, then click Slice plate. The preview appears automatically when calculation finishes.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div></div>
-<div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">Support paths for your sliced model.</span></div>
-<div class="preview-controls" aria-label="Layer and print playback">
+<section  class="panel export-panel" aria-labelledby="preview-heading"><div class="panel-heading"><div><p class="kicker">SLICE PREVIEW</p><h3 id="preview-heading">Your sliced layer</h3></div><div class="preview-pickers"><label>Layer<select id="preview-layer" disabled><option>Slice a model first</option></select></label><label>Overhang<select id="preview-region" disabled><option>No regions</option></select></label></div></div>
+<div class="plot"><svg id="export-drawing" viewBox="0 0 480 340" role="img" aria-label="Layer toolpaths for the sliced model"><g id="preview-previous"></g><g id="preview-context"></g><g id="export-outlines"></g><g id="preview-travels"></g><g id="export-paths"></g><g id="preview-head"><circle id="preview-nozzle" hidden></circle></g></svg><div id="preview-empty" class="empty-state"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M20 90V25H65V90M65 88a58 58 0 0 1 58-58M65 78a48 48 0 0 1 48-48M65 68a38 38 0 0 1 38-38M65 58a28 28 0 0 1 28-28" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M65 90H157V25H65" fill="none" stroke="currentColor" stroke-dasharray="4 5"/></svg><h4 id="preview-empty-title">Slice your model to see its Arcs.</h4><p id="preview-empty-message">Enable Arc Overhang in your process settings, then click Slice plate. The preview appears automatically when calculation finishes.</p><button type="button" class="text-button" id="open-guide">See how it works <span aria-hidden="true">↗</span></button></div>
+<details id="preview-visibility" class="preview-overlay visibility-overlay" open><summary>Visible paths</summary><div id="preview-filters" class="path-filters" aria-label="Visible path types"></div></details>
+<details id="preview-view-options" class="preview-overlay view-overlay"><summary>View options</summary><div class="workbench-toolbar"><label>Display<select id="preview-scope"><option value="layer">Full layer</option><option value="region">Selected support</option></select></label><label>View<select id="preview-view"><option value="2d">2D plan</option><option value="3d">3D orthographic</option></select></label><button type="button" id="preview-home">Reset view</button><label><input id="preview-context-toggle" type="checkbox" checked> Layer context</label><label><input id="preview-previous-toggle" type="checkbox"> Previous layer</label></div>
+<p id="preview-camera-help" class="workbench-hint">Scroll to zoom · drag to pan. In 3D: drag to orbit, Shift-drag to pan. Keyboard: arrows, +/−, Home.</p></details>
+<div id="preview-warning" class="preview-overlay reslice-overlay" hidden role="status"><strong>Slice needs updating</strong><p id="preview-warning-message"></p><button id="preview-reslice" type="button" class="primary">Apply changes</button></div>
+<details id="preview-timeline" class="preview-overlay timeline-overlay" open><summary>Layer &amp; print progress</summary><div class="preview-controls" aria-label="Layer and print playback">
 <div class="preview-layer-nav"><button type="button" id="preview-prev" disabled aria-label="Previous overhang">←</button><label for="preview-layer-range">Layer</label><input id="preview-layer-range" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Layer with Arc or Wave overhangs"><button type="button" id="preview-next" disabled aria-label="Next overhang">→</button></div>
-<div class="preview-playback"><button type="button" id="preview-play" disabled aria-label="Play print animation">Play</button><button type="button" id="preview-reset" disabled>Restart</button><label class="sr-only" for="preview-progress">Print progress within selected overhang</label><input type="range" id="preview-progress" min="0" max="1000" value="1000" step="1" disabled><label>Speed<select id="preview-speed"><option value="1">1×</option><option value="5">5×</option><option value="20" selected>20×</option><option value="100">100×</option></select></label></div>
-<div class="preview-playback-info"><label><input id="preview-show-travel" type="checkbox"> Show travel moves</label><output id="preview-progress-label" aria-live="off">No toolpaths loaded</output></div><p id="preview-motion-note">Selected overhang only · toolpath time estimate, without acceleration.</p>
+<div class="preview-playback"><button type="button" id="preview-play" disabled aria-label="Play print animation">Play</button><button type="button" id="preview-reset" disabled>Restart</button><label class="sr-only" for="preview-progress">Print progress in the selected view</label><input type="range" id="preview-progress" min="0" max="1000" value="1000" step="1" disabled><label>Speed<select id="preview-speed"><option value="1">1×</option><option value="5">5×</option><option value="20" selected>20×</option><option value="100">100×</option></select></label></div>
+<div class="preview-playback-info"><label><input id="preview-show-travel" type="checkbox"> Show travel moves</label><output id="preview-progress-label" aria-live="off">No toolpaths loaded</output></div><p id="preview-motion-note">Full selected layer · movement time estimate, without acceleration or heater waits.</p>
+</div><div class="plot-caption"><span><i class="legend-line"></i> Generated support</span><span><i class="legend-line outline"></i> Layer outline</span><button id="preview-fit" class="text-button" type="button" aria-pressed="false" disabled>Show whole layer</button><span id="preview-caption">Support paths for your sliced model.</span></div>
+</details>
 </div>
 <p id="preview-area" class="workbench-hint"></p><div class="export-stats" aria-label="Slice preview summary"><div><span id="stat-regions">—</span><small>regions replaced</small></div><div><span id="stat-paths">—</span><small>support paths</small></div><div><span id="stat-hilbert">—</span><small>Hilbert regions</small></div></div>
 <p id="preview-time" class="workbench-hint"></p><details id="region-diagnostics" class="report-details" hidden><summary>Region results by layer</summary><div class="region-table-wrap"><table><thead><tr><th>Layer</th><th>Result</th><th>Area / reason</th></tr></thead><tbody id="region-results"></tbody></table></div></details><p id="last-report" class="report-summary" role="status">Slice a model to generate the preview.</p><details id="report-details" class="report-details" hidden><summary>Why regions were kept</summary><ul id="skip-list"></ul></details></section>
@@ -62,7 +100,7 @@ html[data-orca-theme=dark],html[data-theme=dark]{color-scheme:dark}html[data-orc
 <footer class="app-footer"><span>GPL-3.0 · runs locally · 0.4.0</span><span>Arc concept: McCulloch · Wachenschwan · Kelsch. Contributions: persano.</span></footer>
 </div><script>
 const pending = new Map();
-let requestNumber = 0;
+let requestNumber = 0, hostConfig = null, hostContext = null;
 window.orca.onMessage(message=>{
   const request=pending.get(message.request_id);
   if(!request) return;
@@ -75,13 +113,15 @@ function requestSettings(action,config){
     const request_id=++requestNumber;
     const timer=setTimeout(()=>{pending.delete(request_id);reject(new Error('No response. Enable the plugin and reload it.'));},15000);
     pending.set(request_id,{resolve,reject,timer});
-    try{window.orca.postMessage({action,request_id,config});}
+    try{window.orca.postMessage({action,request_id,config,...(action==='save'?{base_config:hostConfig,config_context:hostContext}:{})});}
     catch(error){clearTimeout(timer);pending.delete(request_id);reject(error);}
   });
 }
 const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
+    hostConfig=response.config;hostContext=response.config_context;
+    settingsBridge.canSync=response.can_sync;
     const report=response.last_report;
     previewRevision=response.revision;
     renderReport(report);
@@ -90,7 +130,13 @@ const settingsBridge = {
   },
   getPreview:()=>requestSettings('preview',{revision:previewRevision}),
   getRegion:(id,revision)=>requestSettings('region',{id,revision}),
-  saveConfig:config=>requestSettings('save',config)
+  saveConfig:async config=>{
+    const response=await requestSettings('save',config);
+    hostConfig=response.config;hostContext=response.config_context;
+    return response;
+  },
+  acceptConfig:response=>{hostConfig=response.config;hostContext=response.config_context;settingsBridge.canSync=response.can_sync;}
+
 };
 
 const defaults = {"enabled": true, "support_mode": "integrated", "peel_gap_mm": 0.1, "upper_slowdown_layers": 0, "upper_speed_percent": 50.0, "adaptive_paths": false, "path_cooling_s": 0.0, "support_acceleration_mm_s2": 0.0, "support_fan_percent": 0.0, "support_fan_override": false, "initial_path_count": 0, "initial_flow_percent": 100.0, "initial_fan_percent": 70.0, "far_speed_percent": 100.0, "edge_coast_mm": 0.0, "wipe_mm": 0.0, "connected_travel_mm": 0.0, "next_layer_pattern": "slicer", "print_order": "layer_tail", "overhang_mode": "arc", "wave_pattern": "smart", "wave_spacing_nozzle_ratio": 0.875, "wave_line_spacing_mm": 0.35, "wave_speed_mm_s": 2.0, "wave_travel_speed_mm_s": 40.0, "wave_flow_mm3_per_mm": 0.15, "wave_perimeter_overlap_mm": 0.1, "wave_min_width_mm": 0.7, "wave_min_new_area_mm2": 0.01, "wave_min_length_mm": 0.0, "wave_max_iterations": 0, "wave_corner_taper": false, "wave_corner_spacing_mm": 0.2, "wave_corner_distance_mm": 3.0, "wave_corner_angle_deg": 90.0, "wave_fan_override": false, "wave_fan_percent": 100.0, "wave_aux_fan_override": false, "wave_aux_fan_percent": 0.0, "wave_temperature_c": 0.0, "wave_min_time_s": 0.0, "wave_min_layer_time_s": 0.0, "wave_instead_of_bridges": true, "wave_end_retract_mm": 0.0, "wave_perimeter_speed_mm_s": 0.0, "wave_floor_layers": 2, "wave_floor_print_speed_mm_s": 0.0, "wave_floor_perimeter_speed_mm_s": 0.0, "wave_floor_speed_ramp": 0, "wave_floor_use_hilbert": false, "wave_floor_hilbert_layers": 0, "wave_floor_hilbert_density_percent": 100.0, "wave_floor_fan_override": false, "wave_floor_fan_percent": 0.0, "wave_floor_aux_fan_override": false, "wave_floor_aux_fan_percent": 0.0, "z_hop_mm": 0.0, "arc_speed_mm_s": 1.5, "minimum_arc_speed_mm_s": 0.5, "travel_speed_mm_s": 30.0, "arc_spacing_nozzle_ratio": 0.95, "wall_overlap_mm": 0.2, "arc_center_offset_mm": 2.0, "max_radius_mm": 100.0, "minimum_area_mm2": 50.0, "minimum_overhang_length_mm": 5.0, "minimum_coverage_percent": 90.0, "flow_multiplier": 1.35, "minimum_arc_time_s": 3.0, "max_edge_gap_mm": 0.8, "points_per_circle": 80, "max_centers": 2000, "retract_length_mm": 0.8, "retract_speed_mm_s": 35.0, "z_min_mm": 0.0, "z_max_mm": 10000.0};
@@ -101,6 +147,7 @@ const $ = id => document.getElementById(id);
 const all = selector => Array.from(document.querySelectorAll?.(selector) || []);
 const status = $('status');
 let previewRevision = null, previewPollBusy = false;
+let savedConfig=null, savedContext=null, previewState="waiting", configConflict=false, applyTimer=null, settingsEpoch=0;
 let draft = null, ready = false, savingUI = false, lastReport = null, showWholeLayer = false;
 function text(id, value) { const el=$(id); if(el) el.textContent=value; }
 function collect() {
@@ -155,8 +202,25 @@ function renderPreviewWarning() {
   const el=$('preview-warning'); if(!el) return;
   const snapshot=lastReport?.preview, values=collect();
   const different=snapshot?.settings && fields.some(key=>snapshot.settings[key]!==undefined && snapshot.settings[key]!==values[key]);
-  el.hidden=!different;
-  el.textContent=different?'Settings changed. Save and slice again to update the preview.':'';
+  const pending=!!draft || !!different;
+  el.hidden=!(pending || previewState==='stale' || configConflict);
+  const unsupported=settingsBridge.canSync===false;
+  text('preview-warning-message',configConflict?'Settings changed in Orca while you were editing. Reload settings before applying your changes.':unsupported?'This Orca build cannot apply settings from this tab. Edit Plugin Configuration in the sidebar, then click Slice plate.':pending?'Apply these changes to the process, then click Slice plate in Orca.':"Settings applied. Click Slice plate in Orca to rebuild its Preview and this view.");
+  const button=$('preview-reslice');if(button){button.hidden=!pending;button.disabled=savingUI||readonly()||unsupported||configConflict;button.textContent=savingUI?'Applying…':'Apply changes';}
+}
+function syncHostSettings(response) {
+  if(!response.config || savingUI)return;
+  const values={...defaults,...response.config};
+  const changed=savedConfig && (fields.some(key=>values[key]!==savedConfig[key]) || JSON.stringify(response.config_context)!==JSON.stringify(savedContext));
+  if(changed && draft){configConflict=true;status.textContent='Settings changed in Orca. Reload settings before applying edits.';renderPreviewWarning();return;}
+  if(!draft){
+    settingsBridge.acceptConfig?.(response);savedConfig=values;savedContext=response.config_context;
+    if(changed){for(const key of fields){const el=$(key);if(!el)continue;if(typeof defaults[key]==='boolean')el.checked=values[key];else el.value=values[key];}configConflict=false;renderState();status.textContent='Synced with the active process.';}
+  }
+}
+function scheduleApply(){
+  if(applyTimer!==null)clearTimeout(applyTimer);
+  if(settingsBridge.canSync===true && !configConflict)applyTimer=setTimeout(()=>{applyTimer=null;saveSettings(true);},700);
 }
 let activeRegion=null, previewScene=null, playbackTime=0, playbackFrame=null, lastFrameTime=null;
 let regionRequest=0, selectedRegionId=null, previewLayerKeys=[];
@@ -316,18 +380,24 @@ function renderReport(report) {
   if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement('li'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }
   populatePreviewChoices(); renderPreviewWarning(); renderSuggestions();
 }
-function remember() { draft=collect(); status.textContent='Unsaved changes.'; renderState(); }
+function remember() { draft=collect(); status.textContent=settingsBridge.canSync===true?'Changes pending…':'Unsaved changes.'; renderState(); scheduleApply(); }
 function readonly() { return window.orca.getContext ? !!window.orca.getContext().readOnly : false; }
 async function initialize(discard=false) {
   try {
     let saved=await settingsBridge.getConfig(); if(typeof saved==='string') saved=JSON.parse(saved);
-    if(discard===true) draft=null;
+    if(discard===true){draft=null;if(applyTimer!==null){clearTimeout(applyTimer);applyTimer=null;}}
+    const incoming={...defaults,...(saved||{})};
+    if(draft && savedConfig && (fields.some(key=>incoming[key]!==savedConfig[key]) || JSON.stringify(typeof hostContext==='undefined'?null:hostContext)!==JSON.stringify(savedContext)))configConflict=true;
     const values={...defaults,...(saved||{}),...(draft||{})};
     for(const key of fields) {
       const el=$(key); if(!el) continue;
       if(typeof defaults[key]==='boolean') el.checked=values[key]; else el.value=values[key];
       el.disabled=readonly(); el.removeAttribute?.('aria-invalid');
     }
+    savedConfig={...defaults,...(saved||{})};savedContext=typeof hostContext==='undefined'?null:hostContext;
+    if(discard===true)configConflict=false;
+    const contextNote=all('.context-note')[0];
+    if(contextNote && settingsBridge.getPreview)contextNote.textContent=settingsBridge.canSync===false?"This Orca build cannot edit process settings from this tab. Use Plugin Configuration in the sidebar, then Slice plate.":"Changes apply to the active process after a short pause. Slice plate in Orca to update both previews.";
     ready=true; renderState();
     status.textContent=readonly()?'This preset is read-only.':draft?'Unsaved changes.':'Settings loaded.';
   } catch(error) { status.textContent='Could not load settings: '+error.message; }
@@ -343,30 +413,43 @@ function invalid(key,message) {
   }
   status.textContent=message;
 }
-$('save').onclick=async()=>{
+async function saveSettings(automatic=false){
+  if(configConflict){status.textContent='Settings changed in Orca. Reload settings before applying edits.';return false;}
+  if(applyTimer!==null){clearTimeout(applyTimer);applyTimer=null;}
   if(!ready) { status.textContent='Wait for settings to load.'; return; }
   if(readonly()) { status.textContent='This preset is read-only.'; return; }
   if(savingUI) return;
+  const rejectValue=(key,message)=>{if(automatic){$(key)?.setAttribute?.('aria-invalid','true');status.textContent=message;}else invalid(key,message);};
   const values=collect();
+  let applied=false;
   for(const key of fields) {
     $(key)?.removeAttribute?.('aria-invalid');
-    if(typeof values[key]==='number' && (!Number.isFinite(values[key]) || $(key)?.value==='')) { invalid(key,'Please enter a valid number for '+key+'.'); return; }
-    if($(key)?.checkValidity && !$(key).checkValidity()) { invalid(key,$(key).validationMessage); return; }
+    if(typeof values[key]==='number' && (!Number.isFinite(values[key]) || $(key)?.value==='')) { rejectValue(key,'Please enter a valid number for '+key+'.'); return; }
+    if($(key)?.checkValidity && !$(key).checkValidity()) { rejectValue(key,$(key).validationMessage); return; }
   }
-  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s) { invalid('minimum_arc_speed_mm_s','Minimum speed must not exceed maximum arc speed.'); return; }
-  if(values.z_min_mm>values.z_max_mm) { invalid('z_min_mm','Invalid Z range.'); return; }
-  savingUI=true; $('save').disabled=true; status.textContent='Saving…';
+  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s) { rejectValue('minimum_arc_speed_mm_s','Minimum speed must not exceed maximum arc speed.'); return; }
+  if(values.z_min_mm>values.z_max_mm) { rejectValue('z_min_mm','Invalid Z range.'); return; }
+  settingsEpoch++;savingUI=true; $('save').disabled=true; status.textContent='Saving…'; renderPreviewWarning();
   try {
     const result=await settingsBridge.saveConfig(values);
     if(result===false) status.textContent='Save failed.';
-    else { draft=null; status.textContent=result?.preset_override_active?'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.':'Saved.'; }
+    else {
+      applied=true;savedConfig={...values};savedContext=result?.config_context??savedContext;
+      if(fields.every(key=>collect()[key]===values[key]))draft=null;
+      if(result?.state){previewRevision=result.revision;renderReport(result.last_report);renderSliceState(result.state);}
+      status.textContent=result?.preset_override_active?'The active preset overrides these values. Edit Plugin Configuration in Orca.':automatic?'Applied to process. Slice plate in Orca to update the preview.':'Saved.';
+      return true;
+    }
   } catch(error) {
     const key=fields.find(key=>error.message.startsWith(key+' '));
-    if(key) invalid(key,'Save failed: '+error.message);
+    if(key) rejectValue(key,'Save failed: '+error.message);
     else status.textContent='Save failed: '+error.message;
   }
-  finally { savingUI=false; $('save').disabled=false; renderPreviewWarning(); }
-};
+  finally { settingsEpoch++;savingUI=false; $('save').disabled=false; renderPreviewWarning();if(applied && draft)scheduleApply(); }
+  return false;
+}
+$('save').onclick=()=>saveSettings();
+if($('preview-reslice'))$('preview-reslice').onclick=async()=>{if(await saveSettings())renderPreviewWarning();};
 function importProfile(text) {
   const marker={},explicit={},prefixed=new Set(),ignored=[];
   for(const line of text.split(/\r?\n/)) {
@@ -393,7 +476,7 @@ $('import').onclick=()=>{
   if(!count) { status.textContent='No wave_overhang_ settings found in the pasted text.'; return; }
   for(const [key,value] of Object.entries(values)) { const el=$(key); if(!el) continue; if(typeof value==='boolean') el.checked=value; else el.value=value; }
   remember(); $('import_text').value='';
-  status.textContent=`Imported ${count} settings; press Save to keep them.`+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
+  status.textContent=(settingsBridge.canSync===true?`Imported ${count} settings; applying to the active process…`:`Imported ${count} settings; press Save to keep them.`)+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
 };
 $('refresh').onclick=()=>initialize(true);
 $('settings').addEventListener('input',event=>{if(fields.includes(event.target.id)) remember();});
@@ -412,9 +495,11 @@ if($('preview-progress')) $('preview-progress').oninput=()=>{stopPlayback();play
 if($('preview-show-travel')) $('preview-show-travel').onchange=()=>renderSnapshot();
 if($('preview-fit')) $('preview-fit').onclick=()=>{showWholeLayer=!showWholeLayer; $('preview-fit').setAttribute('aria-pressed',String(showWholeLayer)); $('preview-fit').textContent=showWholeLayer?'Fit support':'Show whole layer'; renderSnapshot();};
 document.addEventListener('visibilitychange',()=>{stopPlayback();if(!document.hidden) initialize();});
+if(window.matchMedia?.('(max-width: 600px)').matches && $('preview-visibility'))$('preview-visibility').open=false;
 initialize();
 
 function renderSliceState(state) {
+  previewState=state;renderPreviewWarning();
   const messages={waiting:'Slice a model to generate the preview.',slicing:'Slicing your model…',
     calculating:'Calculating Arc/Wave paths…',stale:'Model or settings changed. Slice again to update the preview.',
     cancelled:'Slicing stopped. Slice again to generate a preview.',failed:'Preview unavailable. Check the message below.',
@@ -429,10 +514,13 @@ function renderSliceState(state) {
   }
 }
 async function pollSlicePreview() {
-  if(previewPollBusy || document.hidden || !settingsBridge.getPreview) return;
+  if(previewPollBusy || savingUI || document.hidden || !settingsBridge.getPreview) return;
+  const epoch=settingsEpoch;
   previewPollBusy=true;
   try {
     const response=await settingsBridge.getPreview();
+    if(epoch!==settingsEpoch)return;
+    syncHostSettings(response);
     if(response.changed) {
       previewRevision=response.revision;
       renderReport(response.last_report);
@@ -472,6 +560,7 @@ function visibleContextPaths(){
   return result;
 }
 function renderRegionStats(){
+  if($('preview-fit'))$('preview-fit').hidden=$('preview-scope')?.value==='layer';
   const r=activeRegion;if(!r)return;
   const coverage=r.coverage_percent==null?'':` · Minimum generated coverage ${Number(r.coverage_percent).toFixed(1)}%`;
   text('preview-area',`${r.path_count??r.paths.length} support paths${r.deposited_area_mm2==null?'':` · Deposited footprint ${r.deposited_area_mm2} mm²`}${coverage}`);
@@ -529,7 +618,7 @@ if($('apply-suggestion'))$('apply-suggestion').onclick=()=>{
   if(readonly())return;
   const item=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$('suggestion-tool').value);if(!item)return;
   for(const [key,value] of Object.entries(item.values)){const el=$(key);if(!el)continue;if(typeof value==='boolean')el.checked=value;else el.value=value;}
-  remember();status.textContent='Starting points applied to draft. Review all tools and save before slicing.';
+  remember();status.textContent=settingsBridge.canSync===true?'Starting points selected. Applying to the active process…':'Starting points applied to draft. Review all tools and save before slicing.';
 };
 if($('export-drawing')){
   const svg=$('export-drawing');let drag=null;
@@ -546,7 +635,7 @@ if($('export-drawing')){
   });
   svg.addEventListener('wheel',event=>{if(!activeRegion)return;event.preventDefault();const box=svg.getAttribute('viewBox').split(' ').map(Number),scale=event.deltaY>0?1.12:.89;if(box[2]*scale<.1||box[2]*scale>100000)return;svg.setAttribute('viewBox',`${box[0]+box[2]*(1-scale)/2} ${box[1]+box[3]*(1-scale)/2} ${box[2]*scale} ${box[3]*scale}`);},{passive:false});
   svg.addEventListener('pointerdown',event=>{if(!activeRegion)return;drag={x:event.clientX,y:event.clientY};svg.setPointerCapture(event.pointerId);});
-  svg.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;drag={x:event.clientX,y:event.clientY};if($('preview-view').value==='3d'&&!event.shiftKey){cameraYaw+=dx*.008;cameraPitch=Math.max(.15,Math.min(1.5,cameraPitch+dy*.008));renderSnapshot();}else{const b=svg.getAttribute('viewBox').split(' ').map(Number),rect=svg.getBoundingClientRect();svg.setAttribute('viewBox',`${b[0]-dx*b[2]/rect.width} ${b[1]-dy*b[3]/rect.height} ${b[2]} ${b[3]}`);}});
+  svg.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;drag={x:event.clientX,y:event.clientY};if($('preview-view').value==='3d'&&!event.shiftKey){cameraYaw+=dx*.008;cameraPitch=Math.max(.15,Math.min(1.5,cameraPitch+dy*.008));renderSnapshot();}else{const b=svg.getAttribute('viewBox').split(' ').map(Number),matrix=svg.getScreenCTM();if(!matrix)return;const inverse=matrix.inverse();svg.setAttribute('viewBox',`${b[0]-dx*inverse.a-dy*inverse.c} ${b[1]-dx*inverse.b-dy*inverse.d} ${b[2]} ${b[3]}`);}});
   svg.addEventListener('pointerup',()=>drag=null);svg.addEventListener('pointercancel',()=>drag=null);
 }
 </script></body></html>

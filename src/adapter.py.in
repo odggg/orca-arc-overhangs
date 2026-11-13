@@ -2194,7 +2194,7 @@ if(typeof window.orca.onConfig==='function') window.orca.onConfig(config=>{
     if as_tab:
         bridge = r"""
 const pending = new Map();
-let requestNumber = 0;
+let requestNumber = 0, hostConfig = null, hostContext = null;
 window.orca.onMessage(message=>{
   const request=pending.get(message.request_id);
   if(!request) return;
@@ -2207,13 +2207,15 @@ function requestSettings(action,config){
     const request_id=++requestNumber;
     const timer=setTimeout(()=>{pending.delete(request_id);reject(new Error('No response. Enable the plugin and reload it.'));},15000);
     pending.set(request_id,{resolve,reject,timer});
-    try{window.orca.postMessage({action,request_id,config});}
+    try{window.orca.postMessage({action,request_id,config,...(action==='save'?{base_config:hostConfig,config_context:hostContext}:{})});}
     catch(error){clearTimeout(timer);pending.delete(request_id);reject(error);}
   });
 }
 const settingsBridge = {
   getConfig:async()=>{
     const response=await requestSettings('read');
+    hostConfig=response.config;hostContext=response.config_context;
+    settingsBridge.canSync=response.can_sync;
     const report=response.last_report;
     previewRevision=response.revision;
     renderReport(report);
@@ -2222,10 +2224,16 @@ const settingsBridge = {
   },
   getPreview:()=>requestSettings('preview',{revision:previewRevision}),
   getRegion:(id,revision)=>requestSettings('region',{id,revision}),
-  saveConfig:config=>requestSettings('save',config)
+  saveConfig:async config=>{
+    const response=await requestSettings('save',config);
+    hostConfig=response.config;hostContext=response.config_context;
+    return response;
+  },
+  acceptConfig:response=>{hostConfig=response.config;hostContext=response.config_context;settingsBridge.canSync=response.can_sync;}
+
 };
 """
-    context = ("You are editing global defaults for the active preset. Existing preset overrides take precedence."
+    context = ("Settings are shared with the active process preset. Applied changes require a new slice in Orca."
                if as_tab else "Settings belong to this Orca plugin configuration. Save your process preset after editing.")
     return (page.replace("__DEFAULTS__", json.dumps(DEFAULTS)).replace("__IMPORT__", json.dumps(WAVE_IMPORT))
             .replace("__ALIASES__", json.dumps(WAVE_MARKER_ALIASES)).replace("__VERSION__", VERSION)
@@ -2266,6 +2274,60 @@ def preview_file(path, config, resolved=None, cancelled=lambda: False):
         return None  # A later host event must not replace a processed preview with an empty one.
     _, report = process_text(text, config, resolved, cancelled)
     return report
+
+
+def page_preset_context():
+    """Read host-owned profile identity on the page callback/UI thread only."""
+    host = getattr(orca, "host", None)
+    editor = getattr(getattr(getattr(host, "preset", None), "process", None), "update", None)
+    if not callable(editor) or not callable(getattr(host, "preset_bundle", None)):
+        return None
+    bundle = host.preset_bundle()
+    preset = bundle.current_process_preset()
+    if "print_plugin_config_overrides" not in preset.config_keys():
+        return None
+    return {"process": preset.name, "printer": bundle.current_printer_preset().name,
+            "pipeline": preset.config_value("slicing_pipeline_plugin")}
+
+
+def save_page_preset(capability, requested, expected_context=None, expected_config=None):
+    """Use Orca's setting-change path: sidebar refresh, preset dirty, slice invalidation."""
+    context = page_preset_context()
+    if context is None:
+        raise RuntimeError("This Orca build cannot edit process settings from a plugin tab. Use the sidebar's Plugin Configuration, or update Orca. No global defaults were changed.")
+    if expected_context is not None and context != expected_context:
+        raise ValueError("The active process or printer changed. Reload settings before applying edits.")
+    effective = configuration(json.loads(capability.get_config() or "{}"))
+    if expected_config is not None and effective != expected_config:
+        raise ValueError("Settings changed in the sidebar. Reload settings before applying edits.")
+    # The selection is a ConfigOptionStrings value, not a substring match.
+    pipeline = re.findall(r'"(?:\\.|[^"\\])*"|[^;]+', context["pipeline"] or "")
+    names = [json.loads(value) if value.startswith('"') else value for value in pipeline]
+    if capability.get_name() not in names:
+        raise ValueError("Select Arc Overhang in the process slicing pipeline first.")
+    host = orca.host
+    preset = host.preset_bundle().current_process_preset()
+    # ConfigOptionString exposes C-style escaped text through config_value().
+    raw = preset.config_value("print_plugin_config_overrides") or ""
+    decoded = re.sub(r'\\(.)', lambda m: {"n": "\n", "r": "\r"}.get(m[1], m[1]), raw)
+    entries = json.loads(decoded) if decoded else []
+    if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+        raise ValueError("The process contains invalid plugin settings; nothing was changed.")
+    # plugin.storage() is scoped by Orca to the calling plugin; its final folder is the runtime key.
+    plugin_key = Path(host.plugin.storage()).name
+    if not plugin_key:
+        raise ValueError("Orca did not provide this plugin's identity.")
+    entry = {"plugin_key": plugin_key, "capability": capability.get_name(),
+             "capability_type": "slicing-pipeline", "plugin_version": VERSION, "cap_config": requested}
+    entries = [item for item in entries if not (item.get("plugin_key") == plugin_key and
+               item.get("capability") == capability.get_name() and item.get("capability_type", "") in ("", "slicing-pipeline"))]
+    entries.append(entry)
+    raw = json.dumps(entries, ensure_ascii=False, separators=(",", ":"))
+    escaped = raw.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
+    host.preset.process.update("print_plugin_config_overrides", escaped)
+    capability.invalidate_preview()
+    if configuration(json.loads(capability.get_config() or "{}")) != requested:
+        raise RuntimeError("Orca did not activate these process settings. Check Plugin Configuration in the sidebar before slicing.")
 
 
 if orca is not None:
@@ -2383,6 +2445,16 @@ if orca is not None:
                 action = data.get("action")
                 if action not in ("read", "save", "preview", "region"):
                     raise ValueError("Unknown request.")
+                effective = configuration(json.loads(capability.get_config() or "{}"))
+                previous = getattr(self, "_observed_config", None)
+                snapshot = (_last_report or {}).get("preview", {}).get("settings")
+                if (previous is not None and previous != effective) or (snapshot is not None and configuration(snapshot) != effective):
+                    capability.invalidate_preview()
+                self._observed_config = effective
+                context = page_preset_context()
+                if hasattr(self, "_observed_context") and self._observed_context != context:
+                    capability.invalidate_preview()
+                self._observed_context = context
                 if action == "region":
                     query = data.get("config") or {}
                     if query.get("revision") != _preview_revision:
@@ -2398,7 +2470,8 @@ if orca is not None:
                     previous = data.get("config") or {}
                     revision = _preview_revision
                     response = {"request_id": request_id, "ok": True, "revision": revision,
-                                "state": _preview_state, "changed": previous.get("revision") != revision}
+                                "state": _preview_state, "changed": previous.get("revision") != revision,
+                                "config": effective, "config_context": context, "can_sync": context is not None}
                     if response["changed"]:
                         response["last_report"] = preview_catalog(_last_report)
                     self.post_message(response)
@@ -2407,11 +2480,10 @@ if orca is not None:
                     requested = configuration(data.get("config"))
                     if not isinstance(data.get("config"), dict):
                         raise ValueError("Settings must be a JSON object.")
-                    if not capability.save_config(json.dumps(requested)):
-                        raise RuntimeError("Could not save settings.")
-                    capability.invalidate_preview()
+                    save_page_preset(capability, requested, data.get("config_context"), data.get("base_config"))
+                    self._observed_config = requested
                 effective = configuration(json.loads(capability.get_config() or "{}"))
-                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":preview_catalog(_last_report), "revision":_preview_revision, "state":_preview_state}
+                response = {"request_id":request_id, "ok":True, "config":effective, "last_report":preview_catalog(_last_report), "revision":_preview_revision, "state":_preview_state, "config_context": context, "can_sync": context is not None}
                 if action == "save":
                     response["preset_override_active"] = effective != requested
                 self.post_message(response)

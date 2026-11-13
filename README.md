@@ -19,22 +19,32 @@ The plugin only replaces extrusions Orca labels Bridge or Internal Bridge. If Or
 
 ## The graphical workbench
 
-- **Overview** shows essential settings, print order, next-layer infill and a local
-  2D snapshot of generated support from the completed slice.
-- **Fine tuning** groups all advanced controls and shows the selected mode's
-  settings without dropping values for the other mode.
-- **How it works** explains the method with an original schematic. It is separate
-  from the actual export snapshot.
-- Saving waits for Orca's acknowledgement. A snapshot is marked when settings
-  differ from the slice. Model edits invalidate the preview until the model is sliced again.
-- Light/dark themes, keyboard focus, a narrow layout and a sticky save bar are
-  included. No remote fonts, licence checks or network calls are added.
+- **Overview** opens the full selected layer in 2D or 3D, including walls,
+  infill and generated support. Individual support regions remain selectable.
+- Path visibility, view options and layer/print playback sit in translucent,
+  collapsible overlays inside the viewport. The narrow layout starts with the
+  path legend collapsed. Light and dark themes are supported.
+- **Fine tuning** groups advanced controls; **How it works** explains them with
+  original schematics, separate from the actual sliced geometry.
+- On Orca builds exposing `orca.host.preset.process.update`, valid tab edits
+  apply to the active process after a short typing pause. Sidebar changes are
+  polled back into the tab. Conflicting drafts require a reload instead of
+  overwriting newer settings or a different profile.
+- Applying writes the process's `print_plugin_config_overrides` through Orca's
+  setting-change API, so the sidebar refreshes and Orca invalidates the old
+  slice. Other plugins' overrides and global defaults are preserved.
+- The preview shows an **Apply changes** action for pending edits and tells you
+  to click **Slice plate** after applying. The public plugin API does not expose
+  an action to start slicing: this is not a one-click reslice button.
+- Older Orca builds without the process editor must use **Plugin Configuration**
+  in the sidebar. The tab reports that limitation and refuses a misleading
+  global-default save. Native host integration still needs an in-app test;
+  mocked bridge tests do not establish compatibility with every Orca 2.5 build.
 
-The preview includes layer/overhang selection and Play/Pause, Restart,
-a progress slider, playback speed, nozzle position and optional travel paths. All
-generated regions remain selectable; geometry loads one region at a time. Motion
-follows the final generated G-code, with estimated timing. This feature is in the
-preview development branch and still needs an in-app slice test before release.
+The preview includes layer/overhang selection, Play/Pause, Restart, a progress
+slider, playback speed, nozzle position and optional travel paths. Motion follows
+the generated G-code, with estimated movement timing. Geometry loads on demand.
+No remote fonts, licence checks or network calls are added.
 
 All UI code and graphics were created for this project. See [UX design notes](docs/UX_DESIGN.md).
 
