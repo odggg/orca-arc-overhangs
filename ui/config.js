@@ -29,12 +29,14 @@ function renderState() {
   const wave=$('overhang_mode')?.value==='wave';
   for(const section of all('[data-mode]')) section.hidden=section.dataset.mode!==(wave?'wave':'arc');
   text('mode-note',wave?'Offset fronts grow from the supported edge. Wave mode is experimental.':'Concentric paths connect to the previous layer and extend into the overhang.');
+  const removable=$('support_mode')?.value==='removable';
+  for(const key of ['print_order','next_layer_pattern'])if($(key))$(key).disabled=readonly()||removable;
   const slicer=$('print_order')?.value==='slicer';
-  const labels=slicer?['Slicer sequence','Bridge → support','Early overhang walls follow']:['Walls + infill',wave?'Waves':'Arcs','Overhang walls'];
+  const labels=removable?['Lower layer','Removable floor','Original model paths']:slicer?['Slicer sequence','Bridge → support','Early overhang walls follow']:['Walls + infill',wave?'Waves':'Arcs','Overhang walls'];
   all('#sequence li').forEach((el,index)=>{el.textContent=labels[index];});
-  text('sequence-note',slicer?'Normal walls and infill stay in their sliced positions. Early Overhang walls follow the support.':'The previous order is kept within each layer and tool section.');
+  text('sequence-note',removable?'Experimental floor inserted earlier when space permits. The original model paths and infill pattern are retained.':slicer?'Normal walls and infill stay in their sliced positions. Early Overhang walls follow the support.':'The previous order is kept within each layer and tool section.');
   const note=$('floor-note'); if(note) note.hidden=!(wave && $('wave_floor_use_hilbert')?.checked);
-  renderGuide(); renderPreviewWarning();
+  renderGuide(); renderPreviewWarning(); renderParameterGuide();
 }
 function renderGuide() {
   const group=$('guide-paths'); if(!group) return;
@@ -74,7 +76,7 @@ function playbackEnabled(enabled) {
   for(const id of ['preview-play','preview-reset','preview-progress']) if($(id)) $(id).disabled=!enabled;
 }
 function clearDrawing() {
-  for(const id of ['export-paths','export-outlines','preview-travels']) $(id)?.replaceChildren();
+  for(const id of ['export-paths','export-outlines','preview-travels','preview-context','preview-previous']) $(id)?.replaceChildren();
   $('preview-nozzle')?.setAttribute('hidden','');
 }
 function fillRegionChoices(layerKey, preferred=null) {
@@ -136,40 +138,42 @@ function moveRegion(direction) {
 }
 function makePolyline(group,line) {
   const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
-  poly.setAttribute('points',line.map(point=>point.slice(0,2).join(',')).join(' '));group.appendChild(poly);return poly;
+  poly.setAttribute('points',line.map(point=>projectPoint(point).join(',')).join(' '));group.appendChild(poly);return poly;
 }
 function renderSnapshot() {
-  const region=activeRegion,canvas=$('export-drawing');if(!canvas)return;
+  const region=displayRegion(),canvas=$('export-drawing');if(!canvas)return;
   clearDrawing();
   if(!region){canvas.setAttribute('viewBox','0 0 480 340');return;}
   const showTravel=!!$('preview-show-travel')?.checked;
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-  function include(point){if(!point||!Number.isFinite(point[0])||!Number.isFinite(point[1]))return;minX=Math.min(minX,point[0]);maxX=Math.max(maxX,point[0]);minY=Math.min(minY,point[1]);maxY=Math.max(maxY,point[1]);}
+  function include(point){point=projectPoint(point);if(!point||!Number.isFinite(point[0])||!Number.isFinite(point[1]))return;minX=Math.min(minX,point[0]);maxX=Math.max(maxX,point[0]);minY=Math.min(minY,point[1]);maxY=Math.max(maxY,point[1]);}
   for(const line of region.paths) for(const point of line) include(point);
   if(showWholeLayer) for(const line of region.outlines||[]) for(const point of line)include(point);
   if(showTravel) for(const motion of region.motions||[]) {include(motion);include(motion.slice(3));}
   if(!Number.isFinite(minX))return;
+  if(showWholeLayer || $('preview-view')?.value==='3d') for(const path of visibleContextPaths()) for(const point of path.points) include(point);
   const span=Math.max(maxX-minX,maxY-minY,1),pad=span*.12;
   canvas.setAttribute('viewBox',`${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);
-  for(const id of ['export-outlines','export-paths','preview-travels','preview-head']) $(id)?.setAttribute('transform',`translate(0 ${minY+maxY}) scale(1 -1)`);
+  for(const id of ['export-outlines','export-paths','preview-travels','preview-head','preview-context','preview-previous']) $(id)?.setAttribute('transform',`translate(0 ${minY+maxY}) scale(1 -1)`);
   for(const line of region.outlines||[]) makePolyline($('export-outlines'),line);
-  const nodes=region.paths.map(line=>makePolyline($('export-paths'),line));
+  for(const path of visibleContextPaths()) { const node=makePolyline($(path.previous?'preview-previous':'preview-context'),path.points);node.style.stroke=path.color; }
+  const nodes=region.paths.map((line,i)=>{const node=makePolyline($('export-paths'),line);node.dataset.role=region.roles?.[i]||'support';if(region.roles)node.style.stroke=pathColors[node.dataset.role];return node;});
   const ends=[],pathEnds=region.paths.map(()=>0),travels=[];let duration=0;
   for(const [index,motion] of (region.motions||[]).entries()) {
     duration+=Math.max(0,motion[6]);ends.push(duration);
     if(motion[7]===1) pathEnds[motion[8]]=duration;
-    if(showTravel&&motion[7]===0) travels.push({index,node:makePolyline($('preview-travels'),[motion.slice(0,2),motion.slice(3,5)])});
+    if(showTravel&&motion[7]===0) travels.push({index,node:makePolyline($('preview-travels'),[motion.slice(0,3),motion.slice(3,6)])});
   }
-  previewScene={nodes,ends,pathEnds,travels,duration,fullPoints:region.paths.map(line=>line.map(p=>p.join(',')).join(' ')),states:nodes.map(()=>null)};
+  previewScene={region,nodes,ends,pathEnds,travels,duration,fullPoints:region.paths.map(line=>line.map(p=>projectPoint(p).join(',')).join(' ')),states:nodes.map(()=>null)};
   $('preview-nozzle')?.setAttribute('r',String(span*.009));
   playbackTime=Math.min(playbackTime,duration);playbackEnabled(duration>0);
   text('preview-caption',`Overhang ${region.id+1} · Layer ${region.layer} · Z ${region.z} mm · T${region.tool} · ${region.mode==='wave'?'Wave':'Arc'}`);
-  renderPlayback();
+  renderPlayback(); renderRegionStats();
 }
 function clockText(seconds){const n=Math.max(0,Math.floor(seconds));return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;}
 function renderPlayback() {
   if(!activeRegion||!previewScene)return;
-  const {ends,pathEnds,nodes,travels,duration,fullPoints,states}=previewScene,motions=activeRegion.motions||[];
+  const {ends,pathEnds,nodes,travels,duration,fullPoints,states}=previewScene,motions=previewScene.region.motions||[];
   let low=0,high=ends.length;
   while(low<high){const middle=(low+high)>>1;if(ends[middle]<=playbackTime)low=middle+1;else high=middle;}
   const index=Math.min(low,motions.length-1),motion=motions[index];
@@ -178,14 +182,14 @@ function renderPlayback() {
   let printed=0;
   nodes.forEach((node,path)=>{
     const complete=pathEnds[path]<=playbackTime;
-    const partial=motion&&motion[7]===1&&motion[8]===path&&!complete;
+    const partial=motion&&ratio>0&&motion[7]===1&&motion[8]===path&&!complete;
     const state=complete?'complete':partial?'active':'future';
-    if(states[path]!==state){node.toggleAttribute('hidden',state==='future');node.classList.toggle('active',state==='active');if(complete)node.setAttribute('points',fullPoints[path]);states[path]=state;}
+    if(states[path]!==state){node.toggleAttribute('hidden',state==='future'||!pathVisible(node.dataset.role));node.classList.toggle('active',state==='active');if(complete)node.setAttribute('points',fullPoints[path]);states[path]=state;}
     if(complete)printed++;
-    else if(partial)node.setAttribute('points',[...activeRegion.paths[path].slice(0,motion[9]),position.slice(0,2)].map(p=>p.join(',')).join(' '));
+    else if(partial)node.setAttribute('points',[...previewScene.region.paths[path].slice(0,motion[9]),position].map(p=>projectPoint(p).join(',')).join(' '));
   });
-  for(const travel of travels){travel.node.toggleAttribute('hidden',travel.index>index);if(travel.index===index&&motion[7]===0)travel.node.setAttribute('points',`${motion[0]},${motion[1]} ${position[0]},${position[1]}`);else {const m=motions[travel.index];travel.node.setAttribute('points',`${m[0]},${m[1]} ${m[3]},${m[4]}`);}}
-  const nozzle=$('preview-nozzle');if(nozzle&&position){nozzle.removeAttribute('hidden');nozzle.setAttribute('cx',position[0]);nozzle.setAttribute('cy',position[1]);}
+  for(const travel of travels){travel.node.toggleAttribute('hidden',travel.index>index);if(travel.index===index&&motion[7]===0)travel.node.setAttribute('points',[projectPoint(motion.slice(0,3)),projectPoint(position)].map(p=>p.join(',')).join(' '));else {const m=motions[travel.index];travel.node.setAttribute('points',[projectPoint(m.slice(0,3)),projectPoint(m.slice(3,6))].map(p=>p.join(',')).join(' '));}}
+  const nozzle=$('preview-nozzle');if(nozzle&&position){nozzle.removeAttribute('hidden');const point=projectPoint(position);nozzle.setAttribute('cx',point[0]);nozzle.setAttribute('cy',point[1]);}
   if($('preview-progress'))$('preview-progress').value=String(duration?Math.round(playbackTime/duration*1000):1000);
   const state=playbackTime>=duration?'Complete':motion?.[7]===1?'Printing':motion?.[7]===0?'Travel':'Retract / wait';
   text('preview-progress-label',`${clockText(playbackTime)} / ${clockText(duration)} · ${printed}/${nodes.length} paths · ${state}${position?' · Z '+position[2].toFixed(2)+' mm':''}`);
@@ -214,7 +218,7 @@ function renderReport(report) {
   const reasons=Object.entries(report?.skip_reasons||{}), details=$('report-details'),list=$('skip-list');
   if(details) details.hidden=!reasons.length;
   if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement('li'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }
-  populatePreviewChoices(); renderPreviewWarning();
+  populatePreviewChoices(); renderPreviewWarning(); renderSuggestions();
 }
 function remember() { draft=collect(); status.textContent='Unsaved changes.'; renderState(); }
 function readonly() { return window.orca.getContext ? !!window.orca.getContext().readOnly : false; }

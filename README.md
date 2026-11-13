@@ -4,9 +4,15 @@ Native Arc Overhang plugin for OrcaSlicer 2.5, based on the integration by Kelsc
 
 ## Install and use
 
-Use [orca_arc_overhang-0.3.2-py3-none-any.whl](dist/orca_arc_overhang-0.3.2-py3-none-any.whl) or [the 0.3.2 ZIP](Arc_Overhang_OrcaSlicer_2.5_v0.3.2.zip). The stable single-file plugin is [dist/arc_overhang.py](dist/arc_overhang.py). German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
+Use [orca_arc_overhang-0.3.2-py3-none-any.whl](dist/orca_arc_overhang-0.3.2-py3-none-any.whl) or [the 0.3.2 ZIP](Arc_Overhang_OrcaSlicer_2.5_v0.3.2.zip). The development single-file plugin is [dist/arc_overhang.py](dist/arc_overhang.py). German setup and control descriptions are in [README_DE.md](README_DE.md). Check [VALIDATION.md](VALIDATION.md) for tested behavior and remaining limitations.
 
 The development preview calculates support automatically when Orca finishes slicing. Open the Arc Overhang tab to inspect the result; no manual file export is required for this view. Final G-code processing still runs through the configured pipeline. This new lifecycle integration is under host validation; released 0.3.2 does not yet include it.
+
+Development now also includes full-layer playback and filters, a 3D orthographic
+view, per-region diagnostics, material starting points, local slowdown and opt-in
+experimental print strategies. See [Workbench extensions](docs/WORKBENCH.md) for
+controls, safety checks and known limits. Released 0.3.2 packages do not include
+these changes.
 
 ## Required Orca settings (both modes)
 

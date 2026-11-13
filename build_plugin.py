@@ -57,11 +57,12 @@ from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 out = ROOT / 'dist'
 out.mkdir(exist_ok=True)
 adapter = (ROOT / 'adapter.py.in').read_text(encoding='utf-8')
+extensions = (ROOT / 'workbench.py.in').read_text(encoding='utf-8')
 template = (ROOT / 'ui/config.html').read_text(encoding='utf-8')
 styles = (ROOT / 'ui/styles.css').read_text(encoding='utf-8')
-script = (ROOT / 'ui/config.js').read_text(encoding='utf-8')
+script = (ROOT / 'ui/config.js').read_text(encoding='utf-8') + '\n' + (ROOT / 'ui/workbench.js').read_text(encoding='utf-8')
 template = template.replace('__STYLES__', styles).replace('__SCRIPT__', script)
-source = header + geometry + '\n\nUI_TEMPLATE = ' + repr(template) + '\n\n' + adapter
+source = header + geometry + '\n\n' + extensions + '\n\nUI_TEMPLATE = ' + repr(template) + '\n\n' + adapter
 (out / 'arc_overhang.py').write_text(source, encoding='utf-8', newline='\n')
 mirrors = ROOT / 'src'
 mirrors.mkdir(exist_ok=True)

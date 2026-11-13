@@ -22,11 +22,11 @@ const {chromium}=require('playwright');
      if(request.action==='region') {
        window.__regionRequests.push(request.config.id);
        const response={request_id:request.request_id,ok:true,revision:window.__revision,
-         region:window.__report.preview.layers.find(region=>region.id===request.config.id)};
+         region:(()=>{const r=window.__report.preview.layers.find(region=>region.id===request.config.id);return {...r,context:window.__report.preview.contexts?.[String(r.layer)]};})()};
        setTimeout(()=>receive(response),request.config.id===0?window.__regionDelay:0);return;
      }
      const catalog=window.__catalogOnly&&window.__report?.preview?{...window.__report,preview:{...window.__report.preview,
-       layers:window.__report.preview.layers.map(({paths,outlines,motions,...index})=>index)}}:window.__report;
+       contexts:undefined,layers:window.__report.preview.layers.map(({paths,outlines,motions,...index})=>index)}}:window.__report;
      receive({request_id:request.request_id,ok:true,config:window.__config,last_report:catalog,
        revision:window.__revision,state:window.__state,changed:request.config?.revision!==window.__revision});
     })};
@@ -44,6 +44,24 @@ const {chromium}=require('playwright');
   assert.notEqual(await page.locator('#export-drawing').getAttribute('viewBox'),fit);
   await page.locator('#preview-fit').click();
   assert.equal(await page.locator('#export-drawing').getAttribute('viewBox'),fit);
+  assert((await page.locator('#preview-context polyline').count())>0);
+  await page.locator('#preview-context-toggle').uncheck();assert.equal(await page.locator('#preview-context polyline').count(),0);await page.locator('#preview-context-toggle').check();
+  await page.locator('#preview-previous-toggle').check();assert((await page.locator('#preview-previous polyline').count())>0);
+  await page.locator('#preview-scope').selectOption('layer');
+  const layerPaths=await page.locator('#export-paths polyline').count();assert(layerPaths>61);
+  const plan=await page.locator('#export-paths polyline').first().getAttribute('points');
+  await page.locator('#preview-view').selectOption('3d');assert.notEqual(await page.locator('#export-paths polyline').first().getAttribute('points'),plan);
+  await page.locator('#preview-filters input[data-role="outer"]').uncheck();assert.equal(await page.locator('#export-paths polyline[data-role="outer"]:not([hidden])').count(),0);
+  await page.locator('#preview-filters input[data-role="outer"]').check();assert((await page.locator('#export-paths polyline[data-role="outer"]:not([hidden])').count())>0);
+  await page.locator('#preview-reset').click();assert.equal(await page.locator('#export-paths polyline:not([hidden])').count(),0);
+  await page.locator('#preview-progress').evaluate(el=>{el.value='500';el.dispatchEvent(new Event('input'));});
+  await page.screenshot({path:'evidence/workbench-3d.png',fullPage:true});
+  await page.locator('#preview-view').selectOption('2d');await page.locator('#preview-scope').selectOption('region');await page.locator('#preview-previous-toggle').uncheck();
+  assert.equal(await page.locator('#export-paths polyline').count(),61);
+  assert((await page.locator('#preview-area').textContent()).includes('mm²'));
+  await page.locator('#apply-suggestion').click();assert((await page.locator('#status').textContent()).includes('draft'));
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#parameter-guide article').count(),5);
   await page.screenshot({path:'evidence/ui-overview.png',fullPage:true});
   await page.locator('#preview-reset').click();
   assert.equal(await page.locator('#export-paths polyline:not([hidden])').count(),0);

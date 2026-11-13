@@ -2,15 +2,9 @@
 
 ## Intent
 
-A readable, local configuration workspace for the existing Arc/Wave engine.
-The user's reference was the public Arc Overhang Pro listing:
-https://cloud.orcaslicer.com/app/plugins/plugin-hub/3c638cc4-a84d-4c4d-8de9-e80f696e9b10
-
-Its published screenshots were viewed for general usability principles. No plugin
-package was downloaded, no plugin source was used, and no image, logo, animation,
-copy or design asset was imported. This project's layout, typography, colour system,
-SVG drawings, interaction logic and export-preview renderer were written here.
-Reference images remain outside the public project in ignored local evidence.
+A local workbench for configuring, inspecting and explaining Arc/Wave toolpaths.
+The interface uses project-authored HTML, CSS and SVG illustrations with no remote
+assets or rendering dependencies. Printer behavior and display settings are separate.
 
 ## Information hierarchy
 
@@ -38,7 +32,7 @@ Geometry stays in the local in-memory report and is omitted from pipeline logs.
 
 ## Input and save behaviour
 
-All 60 controls are rendered once. Mode changes hide irrelevant groups without
+All existing controls and new workbench settings are rendered once. Mode changes hide irrelevant groups without
 resetting them. Unsaved edits survive focus changes in this view; Reload saved
 explicitly discards them. No persistent cross-preset draft is restored.
 Save waits for the actual host acknowledgement. The existing preset/global scope

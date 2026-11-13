@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased - automatic preview and layer player
+## Unreleased - slice workbench and experimental print strategies
+- Add full-layer context and playback, path-type filters, previous-layer outlines, and an interactive 3D orthographic view.
+- Report target areas, generated coverage, deposited footprints, time changes and per-layer kept-region reasons.
+- Add original interactive parameter illustrations and profile-derived material starting points applied to drafts only.
+- Add optional local slowdown above supports, with boundary splitting, feed restoration and extrusion conservation.
+- Add opt-in anchor/branch ordering, support acceleration, initial flow/cooling, distance-based speed, minimum path time, free-end coasting, curved wipes and short supported connectors.
+- Add an experimental removable-floor mode that retains model paths and rejects insufficient clearance, conflicting tools and intervening-layer collisions.
+- Keep existing print defaults and released 0.3.2 artifacts unchanged. Native Orca slicing and physical print validation remain required.
+
 - Calculate the plugin preview automatically from the completed slice; remove manual export instructions.
 - Select all generated Arc/Wave regions by layer, Z height and tool, with previous/next navigation.
 - Add Play/Pause, Restart, scrubbing, playback speed, nozzle position and optional travel paths using final G-code motion order.

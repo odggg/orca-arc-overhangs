@@ -53,8 +53,9 @@ playback. The complete region is shown initially; Play starts from the beginning
 Motion data is extracted after final G-code scheduling, with exact emitted XYZ,
 feed rates, retraction/unretraction moves, Z hops, approach/return travels and
 explicit G4 dwell times. Time is an estimate from distance/feed, not a firmware
-simulation with acceleration or temperature-wait prediction. The view is 2D; Z is
-reported numerically. Model walls/infill outside the selected block are not animated.
+simulation with acceleration or temperature-wait prediction. The default view is 2D, with an optional 3D orthographic projection.
+Full-layer playback includes walls and infill in the final sequence; filters control
+visibility. See [Workbench extensions](WORKBENCH.md).
 Layer outlines remain simplified for context; support paths are not downsampled.
 
 Four additional tests compare final motion coordinates and timing in both print
