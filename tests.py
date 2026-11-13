@@ -301,6 +301,51 @@ class Tests(unittest.TestCase):
         get = lambda features: next(m.before.feed for f in features if f.role == "sparse infill" for m in f.moves)
         self.assertEqual(get(original), get(printed))
 
+    def test_ui_preserves_all_configuration_controls_without_remote_assets(self):
+        import re
+        page = a.config_page(as_tab=True)
+        ids = re.findall(r'\bid="([^"]+)"', page)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(set(a.DEFAULTS).issubset(ids))
+        self.assertIn('id="export-drawing"', page)
+        self.assertIn('id="guide-drawing"', page)
+        self.assertNotRegex(page, r'<(?:script|img|iframe)[^>]+src=')
+        self.assertNotIn('<form', page)
+        for placeholder in ('__STYLES__', '__SCRIPT__', '__BRIDGE__', '__ARC_QUICK__', '__ANCHOR_QUICK__'):
+            self.assertNotIn(placeholder, page)
+
+    def test_ui_preview_uses_final_printed_paths(self):
+        output, report = a.process_text(fixture())
+        snapshot = report['preview']
+        self.assertEqual(snapshot['schema'], 2)
+        self.assertEqual(len(snapshot['layers']), 1)
+        region = snapshot['layers'][0]
+        self.assertEqual((region['layer'],region['z'],region['tool'],region['mode']), (2,.4,0,'arc'))
+        self.assertEqual(len(region['paths']),report['generated_arcs'])
+        self.assertEqual(sum(m[7] == 1 for m in region['motions']),sum(len(p)-1 for p in region['paths']))
+        self.assertAlmostEqual(region['duration'],sum(m[6] for m in region['motions']))
+        self.assertFalse(snapshot['limited'])
+        self.assertNotIn('preview',a.process_text(fixture(),{'enabled':False})[1])
+
+    def test_ui_changes_do_not_change_released_toolpaths(self):
+        import json,hashlib
+        baselines=json.loads((ROOT/'tests/ui_gcode_baselines.json').read_text(encoding='utf-8'))
+        for mode in ('arc','wave'):
+            for order in ('layer_tail','slicer'):
+                with self.subTest(mode=mode,order=order):
+                    output,_=a.process_text(fixture(),{'overhang_mode':mode,'print_order':order})
+                    output=output.replace(a.MARKER+a.VERSION,a.MARKER+'VERSION').replace('orca_arc_overhang-'+a.VERSION,'orca_arc_overhang-VERSION')
+                    self.assertEqual(hashlib.sha256(output.encode()).hexdigest(),baselines[mode+':'+order])
+
+    def test_preview_failure_does_not_fail_or_change_export(self):
+        expected,_=a.process_text(fixture())
+        with patch.object(a,'export_preview',side_effect=ValueError('invalid preview geometry')):
+            output,report=a.process_text(fixture())
+        self.assertEqual(output,expected)
+        self.assertEqual(report['replaced_features'],1)
+        self.assertNotIn('preview',report)
+        self.assertIn('preview_error',report)
+
     def test_no_bridge_unchanged(self):
         source = "G90\nM83\n; CHANGE_LAYER\nG1 X1 Y1 E0.2\n"
         self.assertEqual(a.process_text(source)[0], source)
@@ -667,7 +712,7 @@ class Tests(unittest.TestCase):
     def test_actual_orca_metadata_contract_and_registration(self):
         import types, runpy, tomllib
         file = ROOT / "dist/arc_overhang.py"
-        source = file.read_text()
+        source = file.read_text(encoding="utf-8")
         block = source.split("# /// script\n",1)[1].split("# ///",1)[0]
         metadata = tomllib.loads("\n".join(line[2:] for line in block.splitlines()))
         self.assertEqual(metadata["tool"]["orcaslicer"]["plugin"]["version"], a.VERSION)
@@ -705,6 +750,14 @@ class Tests(unittest.TestCase):
         self.assertTrue(capability.has_config_ui())
         self.assertIn("window.orca.saveConfig", capability.get_config_ui())
         self.assertEqual(capability.execute(types.SimpleNamespace(step=0))[0], "skipped")
+        with tempfile.TemporaryDirectory(dir=ROOT) as folder:
+            path=Path(folder)/'ui-export.gcode'
+            path.write_text(fixture(),encoding='utf-8')
+            live=types.SimpleNamespace(step=99,config_value=lambda key:None,gcode_path=str(path),cancelled=lambda:False)
+            exported=capability.execute(live)
+            self.assertEqual(exported[0],'success')
+            self.assertNotIn('preview',__import__('json').loads(exported[1][1]))
+            self.assertIn('preview',capability.execute.__globals__['_last_report'])
         ctx = types.SimpleNamespace(step=99, config_value=lambda key:None, gcode_path="missing-file.gcode", cancelled=lambda:False)
         self.assertEqual(capability.execute(ctx)[0], "failure")
         page = calls[1]()
@@ -930,5 +983,7 @@ if __name__ == "__main__":
         out, report = a.process_text(fixture(), {"minimum_coverage_percent":80})
         (ROOT / "synthetic_before.gcode").write_text(fixture())
         (ROOT / "synthetic_after.gcode").write_text(out)
-        print(report)
+        (ROOT / "evidence").mkdir(exist_ok=True)
+        (ROOT / "evidence/ui-report.json").write_text(__import__("json").dumps(report),encoding="utf-8")
+        print({k: v for k, v in report.items() if k != "preview"})
     sys.exit(not result.wasSuccessful())

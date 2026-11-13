@@ -1,0 +1,11 @@
+{
+  "name": "orca-arc-overhang-ui-tests",
+  "private": true,
+  "scripts": {
+    "test:ui": "node test_browser.js"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  },
+  "packageManager": "pnpm@11.25.0"
+}

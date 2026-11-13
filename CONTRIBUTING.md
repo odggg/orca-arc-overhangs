@@ -15,3 +15,5 @@ Remove account data, printer access codes and private paths from logs.
 - `tests.py`, `test_audit.py`, `test_tab.js`, `test_ui.js`: regression and UI checks.
 - `examples/`: synthetic G-code examples.
 - `CHANGELOG.md`, `COMMUNITY_ISSUE_AUDIT.md`, `VALIDATION.md`: changes, reviewed reports and verification.
+
+UI sources live in `ui/` and are embedded by `build_plugin.py`; do not edit generated previews directly. Run `pnpm install --frozen-lockfile --ignore-scripts`, `pnpm exec playwright install chromium` and `pnpm test:ui` after `python tests.py` for rendered browser checks. Reference images and real printer data stay in ignored local evidence.

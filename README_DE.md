@@ -1,5 +1,5 @@
 # Arc Overhang fuer OrcaSlicer 2.5
-Version 0.3.0  -  11.11.2026  -  experimentell
+Version 0.4.0  -  13.11.2026  -  experimentell
 
 Der Wave-Modus (neu in 0.3.0) ist in README.md (Englisch) beschrieben.
 
@@ -8,11 +8,10 @@ auf Orcas natives Python-Pluginsystem. Grundlage ist der konzentrische
 Arc-Algorithmus von Steven McCulloch, Nicolai Wachenschwan und Kelsch.
 
 ## Installation
-1. ZIP entpacken.
+1. Die Datei **orca_arc_overhang-0.4.0-py3-none-any.whl** aus dem GitHub-Release herunterladen.
 2. In OrcaSlicer 2.5 das Menue **Plugins** oeffnen.
-3. **Install local plugin** waehlen und **dist/arc_overhang.py** installieren.
-   Diese Variante hat einen stabilen Dateinamen fuer spaetere Updates.
-   Alternativ ist die enthaltene .whl installierbar. Nur eine Variante installieren.
+3. **Install local plugin** waehlen und die heruntergeladene WHL installieren.
+   Nur eine Variante des Plugins aktivieren.
 4. Orca installiert NumPy und Shapely automatisch in seiner Python-Umgebung.
    Fuer diese erste Installation braucht Orca Internetzugang.
 5. Das Plugin und beide Faehigkeiten **Arc Overhang** aktivieren: **Pages** fuer den Tab und **Slicing Pipeline** fuer die Verarbeitung.
@@ -115,6 +114,24 @@ werden nicht unterstuetzt. Parameterlose Firmware-Retraktion (G10/G11) wird unte
 Standardmaessig gelten Temperatur und Luefterwerte des ersetzten Bridge-Abschnitts weiter. Im Wave-Modus sind optionale Temperatur-, Bauteil- und Aux-Luefter-Ueberschreibungen moeglich; die vorherigen Werte werden danach wiederhergestellt. Die Temperatur gehoert zum aktiven Werkzeug. Der Gehaeuseluefter bleibt unberuehrt.
 Die eingestellte Plugin-Retraktion muss zu deinem Drucker passen.
 Z-Hop waehrend der erzeugten Arc- und Wave-Fahrten ist mit der Einstellung z_hop_mm moeglich (Standard 0 = aus).
+
+## Neue grafische Oberflaeche
+
+- **Overview**: wenige Grundeinstellungen, Druckreihenfolge, Folgeschicht und
+  vereinfachte 2D-Ansicht der erzeugten Stuetzbahnen des letzten Exports.
+- **Fine tuning**: alle erweiterten Optionen, passend zum Arc- oder Wave-Modus.
+  Die Werte des anderen Modus bleiben beim Speichern erhalten.
+- **How it works**: eigens gezeichnete schematische Erklaerung des Verfahrens.
+  Diese Grafik ist ausdruecklich von der echten Exportansicht getrennt.
+
+Eine Meldung zeigt, wenn die Einstellungen vom dargestellten Export abweichen.
+Nach dem Speichern erneut exportieren. Modell-Aenderungen werden von dieser
+Ansicht nicht live ueberwacht. Fuer die endgueltige Kontrolle den exportierten
+G-Code in Orca neu oeffnen. Die Vorschau bleibt lokal und veraendert keine Bahnen.
+
+Die Speichern-Leiste ist immer erreichbar. Helle und dunkle Darstellung,
+Tastaturfokus und schmale Fenster werden unterstuetzt. Die neue Version wird als
+ein universelles any-Wheel gebaut. Die Oberflaeche bleibt vorerst Englisch.
 
 ## Wichtige Einstellungen
 | Einstellung in der Maske | JSON-Schluessel | Standard | Wirkung |

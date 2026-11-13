@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.0 - 2026-11-13
+- Add full-layer context and playback, path-type filters, previous-layer outlines, and an interactive 3D orthographic view.
+- Report target areas, generated coverage, deposited footprints, time changes and per-layer kept-region reasons.
+- Add original interactive parameter illustrations and profile-derived material starting points applied to drafts only.
+- Add optional local slowdown above supports, with boundary splitting, feed restoration and extrusion conservation.
+- Add opt-in anchor/branch ordering, support acceleration, initial flow/cooling, distance-based speed, minimum path time, free-end coasting, curved wipes and short supported connectors.
+- Add an experimental removable-floor mode that retains model paths and rejects insufficient clearance, conflicting tools and intervening-layer collisions.
+- Keep existing print defaults and earlier release artifacts unchanged. Native Orca GUI and physical print validation are still outstanding.
+
+- Calculate the plugin preview automatically from the completed slice; remove manual export instructions.
+- Select all generated Arc/Wave regions by layer, Z height and tool, with previous/next navigation.
+- Add Play/Pause, Restart, scrubbing, playback speed, nozzle position and optional travel paths using final G-code motion order.
+- Remove the eight-region, 240-path and 10,000-point preview cutoffs; transfer only the selected region geometry.
+- Invalidate stale previews and reject late region responses without overwriting unsaved settings.
+- Add lifecycle, full-region coverage, final-motion and rendered playback tests. In-app slice validation is still pending.
+
+## 0.3.2 - 2026-11-12
+- Automatically publish stable GitHub releases to the connected OrcaCloud plugin using GitHub OIDC; no stored OrcaCloud API key is required.
+- Upload only the exact universal `py3-none-any` WHL attached to the release, with its version and changelog.
+- Verify package size, SHA-256 checksum, embedded version, wheel tag and RECORD integrity before upload.
+- Add manual release-asset validation without uploading and document the publishing setup.
+- Add 14 publishing regression tests. No toolpath, print-order, settings or UI behavior changes from 0.3.1.
+
+## 0.3.1 — 2026-11-12
+- Add an original graphical workbench with Overview, Fine tuning and How it works.
+- Show simplified, bounded support paths from the last export as a local 2D snapshot; keep the explanatory schematic separate.
+- Preserve all 60 configuration controls and existing defaults while showing mode-specific settings.
+- Add draft-state handling, stale-settings notices, read-only feedback, accessible focus and a responsive light/dark layout with a sticky save bar.
+- Keep preview geometry out of pipeline result logs; a snapshot failure does not fail or change G-code generation.
+- Verify the Arc/Wave output against 0.3.0 in both print orders, apart from version comments.
+- Add rendered browser checks alongside native-bridge, engine and restricted-file-access tests.
+- Build one universal any wheel for new versions.
+
 ## 0.3.0 — 2026-11-11
 - Add a **Print order** dropdown. Default `layer_tail` retains the 0.2.4 sequence: normal walls/infill → Arcs/Waves → Overhang walls. Optional `slicer` retains Orca's normal wall/infill order, including "Print infill first".
 - In `slicer` order only early Overhang walls move after the last generated support block of that layer/tool run. Layer and tool-selection boundaries stay fixed.

@@ -1,3 +1,56 @@
+# Release validation — 0.4.0 (2026-11-13)
+
+111 Python tests, rendered browser checks, native configuration-bridge checks,
+restricted-file-access execution and universal-wheel/source-package validation
+passed for this implementation. The 0.4.0 version and package are rechecked during
+release preparation. Existing default toolpaths retain their version-normalized
+regression baselines.
+
+Coverage includes complete layer/region navigation, final-path animation, 2D/3D
+views, filters, stale responses, material draft suggestions, local feed splitting,
+extrusion conservation, tool boundaries, optional path strategies and conservative
+removable-floor insertion/rejection.
+
+Native Orca GUI slicing and physical print validation are still outstanding.
+Material starting points are heuristic. Removable floors need clear undercut
+space and can reject ordinary overhangs whose walls intersect the proposed floor.
+All new print strategies are opt-in. See docs/WORKBENCH.md for precise limits.
+
+## Earlier validation records
+
+# Release validation - 0.3.2 (2026-11-12)
+
+Publishing automation only: 14 standard-library tests cover release asset selection,
+wheel integrity, release-event authentication, secret redaction and redirects.
+The existing 0.3.1 GitHub wheel passed a real download/integrity dry run. Manual
+upload was rejected by OrcaCloud (HTTP 401); uploads now require a release event.
+The plugin source differs from 0.3.1 only in version metadata; existing regression,
+package and browser checks remain required for this release.
+
+# UI validation — 0.3.1 (2026-11-12)
+
+70 Python regressions, both configuration bridge checks, the restricted file-access
+audit, and the rendered local Chrome tests passed.
+
+The new workbench retains every configuration key, both existing order choices
+and the existing engine. Additional tests cover unique controls, bounded actual
+export snapshots, version-normalised G-code comparisons in Arc/Wave with both
+orders, omission of geometry from pipeline logs, and a safe fallback if rendering
+data cannot be prepared.
+
+Rendered browser tests use an actual synthetic export report and the generated
+HTML. They exercise light/dark schemes, a 390 px viewport, all saved keys, mode
+visibility, order selection, Hilbert-floor notices, drafts/reload, read-only state,
+text injection resistance and absence of outbound requests. The native Orca
+JavaScript bridge is checked separately. UI generation also passes the restricted
+file-access audit without reading runtime template files.
+
+The displayed 2D result is a simplified snapshot of the last export, not a claim
+of current unsaved model state. Physical print quality remains outside this UI
+review. See [UX design notes](docs/UX_DESIGN.md) for the original implementation.
+
+## Prior 0.3.0 integration record
+
 # Validation — Arc Overhang 0.3.0
 
 Last updated: 2026-11-11.

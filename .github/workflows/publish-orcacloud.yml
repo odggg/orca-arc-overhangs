@@ -1,96 +1,52 @@
 name: Publish to OrcaCloud
 
-# Probed in persano/smooth-z-wall-speed-plugin: the OIDC token only
-# authorizes POST /plugin-publish/releases, and only from this workflow on
-# a release event (a dispatch gets "UNAUTHORIZED: connected release
-# workflow required"), so this workflow deliberately has no
-# workflow_dispatch. DELETE and PATCH on a release id answer
-# "invalid_token" even here, so a version OrcaCloud already knows -
-# including one held_for_review - can only be removed from the
-# OrcaCloud side, never from CI.
-
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing stable GitHub release tag to validate (no upload)
+        required: true
+        type: string
 
 permissions:
-  id-token: write
   contents: read
 
-env:
-  # Space-separated globs matching the platform-tagged wheels to upload.
-  PLUGIN_FILES: "dist/orca_arc_overhang_win_x86_64.whl dist/orca_arc_overhang_win_arm64.whl dist/orca_arc_overhang_linux_x86_64.whl dist/orca_arc_overhang_linux_arm64.whl dist/orca_arc_overhang_macosx_arm64.whl dist/orca_arc_overhang_macosx_x86_64.whl"
+concurrency:
+  group: orcacloud-publishing
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  validate:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Validate existing release without uploading
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python scripts/publish_orcacloud.py --tag "$RELEASE_TAG" --dry-run
 
-      - name: Install dependencies
-        run: python -m pip install -r requirements-dev.txt
-
-      - name: Build wheels
-        run: |
-          python build_plugin.py
-          python package_release.py
-
-      - name: Publish release to OrcaCloud
-        run: |
-          set -euo pipefail
-          oidc_token="$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=orcacloud" | jq -r .value)"
-          version="${GITHUB_REF_NAME#v}"
-          if [ -z "$version" ] || [ "$version" = "main" ]; then
-            echo "Cannot determine version from ref '$GITHUB_REF_NAME'" >&2
-            exit 1
-          fi
-          changelog="$(jq -r '.release.body // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")"
-          if [ -z "$changelog" ]; then
-            # Fall back to the CHANGELOG.md section for the version.
-            changelog="$(awk -v pat="## $version " '$0 ~ "^"pat {p=1; next} /^## / {p=0} p {print}' \
-              CHANGELOG.md 2>/dev/null || true)"
-          fi
-          if [ -z "$changelog" ]; then
-            changelog="Automated release from GitHub"
-          fi
-          # OrcaCloud shows its own version/date chip above the changelog, so
-          # the payload must not repeat the "## x.y.z - date" heading. Strip
-          # level-2 headings only; the "### Added/Changed/Fixed" subsections
-          # (level 3) stay - "^## " does not match "### ".
-          changelog="$(printf '%s\n' "$changelog" | sed '/^## /d')"
-          changelog="$(echo "$changelog" | head -c 4000)"
-          metadata="$(jq -cn --arg version "$version" --arg changelog "$changelog" \
-            '{version: $version} + (if $changelog == "" then {} else {changelog: $changelog} end)')"
-          # --form-string, not -F: -F parses ';' / '<' / '@' inside the value
-          # as form attributes and silently truncates the JSON.
-          args=(--form-string "metadata=$metadata")
-          shopt -s nullglob
-          for file in $PLUGIN_FILES; do
-            args+=(-F "files=@$file")
-          done
-          if [ "${#args[@]}" -eq 1 ]; then
-            echo "No plugin files matched: $PLUGIN_FILES" >&2
-            exit 1
-          fi
-          status="$(curl -sS -o response.json -w '%{http_code}' \
-            -H "Authorization: Bearer $oidc_token" \
-            "${args[@]}" \
-            https://api.orcaslicer.com/api/v1/plugin-publish/releases)"
-          cat response.json
-          echo
-          if [ "$status" != "200" ] && [ "$status" != "201" ] && [ "$status" != "202" ]; then
-            echo "Publish failed with HTTP $status" >&2
-            exit 1
-          fi
-          scan_status="$(jq -r '.status // "unknown"' response.json 2>/dev/null || echo unknown)"
-          if [ "$scan_status" = "held_for_review" ]; then
-            echo "::warning::OrcaCloud holds v$version for review: $(jq -r '.scan_summary // ""' response.json)"
-          fi
+  publish:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Publish exact universal release asset
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python scripts/publish_orcacloud.py --tag "$RELEASE_TAG"
