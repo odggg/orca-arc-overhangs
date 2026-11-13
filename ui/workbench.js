@@ -27,6 +27,7 @@ function visibleContextPaths(){
   return result;
 }
 function renderRegionStats(){
+  if($('preview-fit'))$('preview-fit').hidden=$('preview-scope')?.value==='layer';
   const r=activeRegion;if(!r)return;
   const coverage=r.coverage_percent==null?'':` · Minimum generated coverage ${Number(r.coverage_percent).toFixed(1)}%`;
   text('preview-area',`${r.path_count??r.paths.length} support paths${r.deposited_area_mm2==null?'':` · Deposited footprint ${r.deposited_area_mm2} mm²`}${coverage}`);
@@ -84,7 +85,7 @@ if($('apply-suggestion'))$('apply-suggestion').onclick=()=>{
   if(readonly())return;
   const item=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$('suggestion-tool').value);if(!item)return;
   for(const [key,value] of Object.entries(item.values)){const el=$(key);if(!el)continue;if(typeof value==='boolean')el.checked=value;else el.value=value;}
-  remember();status.textContent='Starting points applied to draft. Review all tools and save before slicing.';
+  remember();status.textContent=settingsBridge.canSync===true?'Starting points selected. Applying to the active process…':'Starting points applied to draft. Review all tools and save before slicing.';
 };
 if($('export-drawing')){
   const svg=$('export-drawing');let drag=null;
@@ -101,6 +102,6 @@ if($('export-drawing')){
   });
   svg.addEventListener('wheel',event=>{if(!activeRegion)return;event.preventDefault();const box=svg.getAttribute('viewBox').split(' ').map(Number),scale=event.deltaY>0?1.12:.89;if(box[2]*scale<.1||box[2]*scale>100000)return;svg.setAttribute('viewBox',`${box[0]+box[2]*(1-scale)/2} ${box[1]+box[3]*(1-scale)/2} ${box[2]*scale} ${box[3]*scale}`);},{passive:false});
   svg.addEventListener('pointerdown',event=>{if(!activeRegion)return;drag={x:event.clientX,y:event.clientY};svg.setPointerCapture(event.pointerId);});
-  svg.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;drag={x:event.clientX,y:event.clientY};if($('preview-view').value==='3d'&&!event.shiftKey){cameraYaw+=dx*.008;cameraPitch=Math.max(.15,Math.min(1.5,cameraPitch+dy*.008));renderSnapshot();}else{const b=svg.getAttribute('viewBox').split(' ').map(Number),rect=svg.getBoundingClientRect();svg.setAttribute('viewBox',`${b[0]-dx*b[2]/rect.width} ${b[1]-dy*b[3]/rect.height} ${b[2]} ${b[3]}`);}});
+  svg.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;drag={x:event.clientX,y:event.clientY};if($('preview-view').value==='3d'&&!event.shiftKey){cameraYaw+=dx*.008;cameraPitch=Math.max(.15,Math.min(1.5,cameraPitch+dy*.008));renderSnapshot();}else{const b=svg.getAttribute('viewBox').split(' ').map(Number),matrix=svg.getScreenCTM();if(!matrix)return;const inverse=matrix.inverse();svg.setAttribute('viewBox',`${b[0]-dx*inverse.a-dy*inverse.c} ${b[1]-dx*inverse.b-dy*inverse.d} ${b[2]} ${b[3]}`);}});
   svg.addEventListener('pointerup',()=>drag=null);svg.addEventListener('pointercancel',()=>drag=null);
 }

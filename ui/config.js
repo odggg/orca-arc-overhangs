@@ -6,6 +6,7 @@ const $ = id => document.getElementById(id);
 const all = selector => Array.from(document.querySelectorAll?.(selector) || []);
 const status = $('status');
 let previewRevision = null, previewPollBusy = false;
+let savedConfig=null, savedContext=null, previewState="waiting", configConflict=false, applyTimer=null, settingsEpoch=0;
 let draft = null, ready = false, savingUI = false, lastReport = null, showWholeLayer = false;
 function text(id, value) { const el=$(id); if(el) el.textContent=value; }
 function collect() {
@@ -60,8 +61,25 @@ function renderPreviewWarning() {
   const el=$('preview-warning'); if(!el) return;
   const snapshot=lastReport?.preview, values=collect();
   const different=snapshot?.settings && fields.some(key=>snapshot.settings[key]!==undefined && snapshot.settings[key]!==values[key]);
-  el.hidden=!different;
-  el.textContent=different?'Settings changed. Save and slice again to update the preview.':'';
+  const pending=!!draft || !!different;
+  el.hidden=!(pending || previewState==='stale' || configConflict);
+  const unsupported=settingsBridge.canSync===false;
+  text('preview-warning-message',configConflict?'Settings changed in Orca while you were editing. Reload settings before applying your changes.':unsupported?'This Orca build cannot apply settings from this tab. Edit Plugin Configuration in the sidebar, then click Slice plate.':pending?'Apply these changes to the process, then click Slice plate in Orca.':"Settings applied. Click Slice plate in Orca to rebuild its Preview and this view.");
+  const button=$('preview-reslice');if(button){button.hidden=!pending;button.disabled=savingUI||readonly()||unsupported||configConflict;button.textContent=savingUI?'Applying…':'Apply changes';}
+}
+function syncHostSettings(response) {
+  if(!response.config || savingUI)return;
+  const values={...defaults,...response.config};
+  const changed=savedConfig && (fields.some(key=>values[key]!==savedConfig[key]) || JSON.stringify(response.config_context)!==JSON.stringify(savedContext));
+  if(changed && draft){configConflict=true;status.textContent='Settings changed in Orca. Reload settings before applying edits.';renderPreviewWarning();return;}
+  if(!draft){
+    settingsBridge.acceptConfig?.(response);savedConfig=values;savedContext=response.config_context;
+    if(changed){for(const key of fields){const el=$(key);if(!el)continue;if(typeof defaults[key]==='boolean')el.checked=values[key];else el.value=values[key];}configConflict=false;renderState();status.textContent='Synced with the active process.';}
+  }
+}
+function scheduleApply(){
+  if(applyTimer!==null)clearTimeout(applyTimer);
+  if(settingsBridge.canSync===true && !configConflict)applyTimer=setTimeout(()=>{applyTimer=null;saveSettings(true);},700);
 }
 let activeRegion=null, previewScene=null, playbackTime=0, playbackFrame=null, lastFrameTime=null;
 let regionRequest=0, selectedRegionId=null, previewLayerKeys=[];
@@ -221,18 +239,24 @@ function renderReport(report) {
   if(list) { list.replaceChildren(); for(const [reason,count] of reasons) { const item=document.createElement('li'); item.textContent=`${count} × ${reason}`; list.appendChild(item); } }
   populatePreviewChoices(); renderPreviewWarning(); renderSuggestions();
 }
-function remember() { draft=collect(); status.textContent='Unsaved changes.'; renderState(); }
+function remember() { draft=collect(); status.textContent=settingsBridge.canSync===true?'Changes pending…':'Unsaved changes.'; renderState(); scheduleApply(); }
 function readonly() { return window.orca.getContext ? !!window.orca.getContext().readOnly : false; }
 async function initialize(discard=false) {
   try {
     let saved=await settingsBridge.getConfig(); if(typeof saved==='string') saved=JSON.parse(saved);
-    if(discard===true) draft=null;
+    if(discard===true){draft=null;if(applyTimer!==null){clearTimeout(applyTimer);applyTimer=null;}}
+    const incoming={...defaults,...(saved||{})};
+    if(draft && savedConfig && (fields.some(key=>incoming[key]!==savedConfig[key]) || JSON.stringify(typeof hostContext==='undefined'?null:hostContext)!==JSON.stringify(savedContext)))configConflict=true;
     const values={...defaults,...(saved||{}),...(draft||{})};
     for(const key of fields) {
       const el=$(key); if(!el) continue;
       if(typeof defaults[key]==='boolean') el.checked=values[key]; else el.value=values[key];
       el.disabled=readonly(); el.removeAttribute?.('aria-invalid');
     }
+    savedConfig={...defaults,...(saved||{})};savedContext=typeof hostContext==='undefined'?null:hostContext;
+    if(discard===true)configConflict=false;
+    const contextNote=all('.context-note')[0];
+    if(contextNote && settingsBridge.getPreview)contextNote.textContent=settingsBridge.canSync===false?"This Orca build cannot edit process settings from this tab. Use Plugin Configuration in the sidebar, then Slice plate.":"Changes apply to the active process after a short pause. Slice plate in Orca to update both previews.";
     ready=true; renderState();
     status.textContent=readonly()?'This preset is read-only.':draft?'Unsaved changes.':'Settings loaded.';
   } catch(error) { status.textContent='Could not load settings: '+error.message; }
@@ -248,30 +272,43 @@ function invalid(key,message) {
   }
   status.textContent=message;
 }
-$('save').onclick=async()=>{
+async function saveSettings(automatic=false){
+  if(configConflict){status.textContent='Settings changed in Orca. Reload settings before applying edits.';return false;}
+  if(applyTimer!==null){clearTimeout(applyTimer);applyTimer=null;}
   if(!ready) { status.textContent='Wait for settings to load.'; return; }
   if(readonly()) { status.textContent='This preset is read-only.'; return; }
   if(savingUI) return;
+  const rejectValue=(key,message)=>{if(automatic){$(key)?.setAttribute?.('aria-invalid','true');status.textContent=message;}else invalid(key,message);};
   const values=collect();
+  let applied=false;
   for(const key of fields) {
     $(key)?.removeAttribute?.('aria-invalid');
-    if(typeof values[key]==='number' && (!Number.isFinite(values[key]) || $(key)?.value==='')) { invalid(key,'Please enter a valid number for '+key+'.'); return; }
-    if($(key)?.checkValidity && !$(key).checkValidity()) { invalid(key,$(key).validationMessage); return; }
+    if(typeof values[key]==='number' && (!Number.isFinite(values[key]) || $(key)?.value==='')) { rejectValue(key,'Please enter a valid number for '+key+'.'); return; }
+    if($(key)?.checkValidity && !$(key).checkValidity()) { rejectValue(key,$(key).validationMessage); return; }
   }
-  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s) { invalid('minimum_arc_speed_mm_s','Minimum speed must not exceed maximum arc speed.'); return; }
-  if(values.z_min_mm>values.z_max_mm) { invalid('z_min_mm','Invalid Z range.'); return; }
-  savingUI=true; $('save').disabled=true; status.textContent='Saving…';
+  if(values.minimum_arc_speed_mm_s>values.arc_speed_mm_s) { rejectValue('minimum_arc_speed_mm_s','Minimum speed must not exceed maximum arc speed.'); return; }
+  if(values.z_min_mm>values.z_max_mm) { rejectValue('z_min_mm','Invalid Z range.'); return; }
+  settingsEpoch++;savingUI=true; $('save').disabled=true; status.textContent='Saving…'; renderPreviewWarning();
   try {
     const result=await settingsBridge.saveConfig(values);
     if(result===false) status.textContent='Save failed.';
-    else { draft=null; status.textContent=result?.preset_override_active?'Global defaults saved. The active preset overrides some values; edit them in Plugin Configuration.':'Saved.'; }
+    else {
+      applied=true;savedConfig={...values};savedContext=result?.config_context??savedContext;
+      if(fields.every(key=>collect()[key]===values[key]))draft=null;
+      if(result?.state){previewRevision=result.revision;renderReport(result.last_report);renderSliceState(result.state);}
+      status.textContent=result?.preset_override_active?'The active preset overrides these values. Edit Plugin Configuration in Orca.':automatic?'Applied to process. Slice plate in Orca to update the preview.':'Saved.';
+      return true;
+    }
   } catch(error) {
     const key=fields.find(key=>error.message.startsWith(key+' '));
-    if(key) invalid(key,'Save failed: '+error.message);
+    if(key) rejectValue(key,'Save failed: '+error.message);
     else status.textContent='Save failed: '+error.message;
   }
-  finally { savingUI=false; $('save').disabled=false; renderPreviewWarning(); }
-};
+  finally { settingsEpoch++;savingUI=false; $('save').disabled=false; renderPreviewWarning();if(applied && draft)scheduleApply(); }
+  return false;
+}
+$('save').onclick=()=>saveSettings();
+if($('preview-reslice'))$('preview-reslice').onclick=async()=>{if(await saveSettings())renderPreviewWarning();};
 // Rendered "Wave settings" labels of a waveoverhangs.com gallery entry -> WAVE_OVERHANG_CONFIG keys.
 // "Wave perimeters" has no plugin equivalent and is left out.
 const GALLERY={'line spacing':'line_spacing','wave flow':'flow_mm3_per_mm','print speed':'print_speed','travel speed':'travel_speed','fan speed':'fan_speed','floor layers':'floor_layers','replace bridges':'instead_of_bridges'};
@@ -321,7 +358,7 @@ $('import').onclick=()=>{
   }
   for(const [key,value] of Object.entries(values)) { const el=$(key); if(!el) continue; if(typeof value==='boolean') el.checked=value; else el.value=value; }
   remember(); $('import_text').value='';
-  status.textContent=`Imported ${count} settings; press Save to keep them.`+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
+  status.textContent=(settingsBridge.canSync===true?`Imported ${count} settings; applying to the active process…`:`Imported ${count} settings; press Save to keep them.`)+(ignored.length?' No equivalent for: '+ignored.join(', ')+'.':'');
 };
 $('refresh').onclick=()=>initialize(true);
 $('settings').addEventListener('input',event=>{if(fields.includes(event.target.id)) remember();});
@@ -340,9 +377,11 @@ if($('preview-progress')) $('preview-progress').oninput=()=>{stopPlayback();play
 if($('preview-show-travel')) $('preview-show-travel').onchange=()=>renderSnapshot();
 if($('preview-fit')) $('preview-fit').onclick=()=>{showWholeLayer=!showWholeLayer; $('preview-fit').setAttribute('aria-pressed',String(showWholeLayer)); $('preview-fit').textContent=showWholeLayer?'Fit support':'Show whole layer'; renderSnapshot();};
 document.addEventListener('visibilitychange',()=>{stopPlayback();if(!document.hidden) initialize();});
+if(window.matchMedia?.('(max-width: 600px)').matches && $('preview-visibility'))$('preview-visibility').open=false;
 initialize();
 
 function renderSliceState(state) {
+  previewState=state;renderPreviewWarning();
   const messages={waiting:'Slice a model to generate the preview.',slicing:'Slicing your model…',
     calculating:'Calculating Arc/Wave paths…',stale:'Model or settings changed. Slice again to update the preview.',
     cancelled:'Slicing stopped. Slice again to generate a preview.',failed:'Preview unavailable. Check the message below.',
@@ -357,10 +396,13 @@ function renderSliceState(state) {
   }
 }
 async function pollSlicePreview() {
-  if(previewPollBusy || document.hidden || !settingsBridge.getPreview) return;
+  if(previewPollBusy || savingUI || document.hidden || !settingsBridge.getPreview) return;
+  const epoch=settingsEpoch;
   previewPollBusy=true;
   try {
     const response=await settingsBridge.getPreview();
+    if(epoch!==settingsEpoch)return;
+    syncHostSettings(response);
     if(response.changed) {
       previewRevision=response.revision;
       renderReport(response.last_report);

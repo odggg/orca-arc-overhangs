@@ -14,11 +14,12 @@ const {chromium}=require('playwright');
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(/^https?:/.test(r.url())) network.push(r.url());});
   await page.addInitScript(({defaults,report})=>{
-   window.__config={...defaults};window.__report=report;window.__saved=[];window.__readonly=false;window.__revision=1;window.__state="ready";window.__catalogOnly=false;window.__regionRequests=[];window.__regionDelay=0;
+   window.__config={...defaults};window.__report=report;window.__saved=[];window.__readonly=false;window.__revision=1;window.__state="ready";window.__catalogOnly=false;window.__regionRequests=[];window.__regionDelay=0;window.__canSync=undefined;window.__failSave=false;window.__context={process:'Test',printer:'Test',pipeline:'Arc Overhang'};
    let receive;
    window.orca={onMessage:cb=>{receive=cb;},getContext:()=>({readOnly:window.__readonly}),
     postMessage:request=>queueMicrotask(()=>{
-     if(request.action==='save') { window.__config={...request.config};window.__saved.push({...request.config}); }
+     if(request.action==='save' && window.__failSave){receive({request_id:request.request_id,ok:false,error:'Host rejected settings'});return;}
+     if(request.action==='save') { window.__config={...request.config};window.__saved.push({...request.config});if(window.__canSync){window.__report=null;window.__revision++;window.__state='stale';} }
      if(request.action==='region') {
        window.__regionRequests.push(request.config.id);
        const response={request_id:request.request_id,ok:true,revision:window.__revision,
@@ -28,11 +29,28 @@ const {chromium}=require('playwright');
      const catalog=window.__catalogOnly&&window.__report?.preview?{...window.__report,preview:{...window.__report.preview,
        contexts:undefined,layers:window.__report.preview.layers.map(({paths,outlines,motions,...index})=>index)}}:window.__report;
      receive({request_id:request.request_id,ok:true,config:window.__config,last_report:catalog,
-       revision:window.__revision,state:window.__state,changed:request.config?.revision!==window.__revision});
+       revision:window.__revision,state:window.__state,config_context:window.__context,can_sync:window.__canSync,changed:request.config?.revision!==window.__revision});
     })};
   },{defaults,report});
   await page.goto(pathToFileURL(path.resolve('tab-preview.html')).href);
   await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#preview-scope').inputValue(),'layer');
+  assert((await page.locator('#export-paths polyline').count())>61);
+  // All controls float inside the viewport; collapsing them changes no geometry.
+  for(const id of ['preview-visibility','preview-timeline','preview-view-options']) {
+    assert(await page.locator('#'+id).evaluate(el=>el.closest('.plot')!==null));
+  }
+  const beforeCollapse=await page.locator('#export-drawing').getAttribute('viewBox');
+  await page.locator('#preview-visibility > summary').click();
+  assert.equal(await page.locator('#preview-filters').isVisible(),false);
+  await page.locator('#preview-visibility > summary').click();
+  await page.locator('#preview-timeline > summary').click();
+  assert.equal(await page.locator('#preview-progress').isVisible(),false);
+  await page.locator('#preview-timeline > summary').click();
+  assert.equal(await page.locator('#export-drawing').getAttribute('viewBox'),beforeCollapse);
+  await page.locator('.plot').screenshot({path:'evidence/preview-overlays.png'});
+  await page.locator('#preview-view-options > summary').click();
+  await page.locator('#preview-scope').selectOption('region');
   assert.equal(await page.locator('#export-paths polyline').count(),61);
   assert.equal(await page.locator('#stat-paths').textContent(),'61');
   assert.equal(await page.locator('#preview-empty').isVisible(),false);
@@ -44,6 +62,16 @@ const {chromium}=require('playwright');
   assert.notEqual(await page.locator('#export-drawing').getAttribute('viewBox'),fit);
   await page.locator('#preview-fit').click();
   assert.equal(await page.locator('#export-drawing').getAttribute('viewBox'),fit);
+  // Drag follows screen pixels even with viewport padding and SVG aspect fitting.
+  await page.locator('#export-drawing').scrollIntoViewIfNeeded();
+  const svgBox=await page.locator('#export-drawing').boundingBox();
+  const pathBeforePan=await page.locator('#export-paths polyline').first().boundingBox();
+  await page.mouse.move(svgBox.x+svgBox.width*.65,svgBox.y+395);
+  await page.mouse.down();await page.mouse.move(svgBox.x+svgBox.width*.65+30,svgBox.y+415);await page.mouse.up();
+  const pathAfterPan=await page.locator('#export-paths polyline').first().boundingBox();
+  assert(Math.abs(pathAfterPan.x-pathBeforePan.x-30)<1);
+  assert(Math.abs(pathAfterPan.y-pathBeforePan.y-20)<1);
+  await page.locator('#preview-home').click();
   assert((await page.locator('#preview-context polyline').count())>0);
   await page.locator('#preview-context-toggle').uncheck();assert.equal(await page.locator('#preview-context polyline').count(),0);await page.locator('#preview-context-toggle').check();
   await page.locator('#preview-previous-toggle').check();assert((await page.locator('#preview-previous polyline').count())>0);
@@ -187,6 +215,60 @@ const {chromium}=require('playwright');
   assert.equal(await page.locator('#export-paths polyline').count(),0);
   await page.evaluate(report=>{window.__catalogOnly=false;window.__state='ready';window.__report=report;window.__revision++;},report);
   await page.waitForFunction(()=>document.querySelectorAll('#export-paths polyline').length===61);
+  // Process synchronization: automatic apply, sidebar polling and explicit re-slice guidance.
+  await page.setViewportSize({width:1400,height:1100});
+  await page.locator('#preview-view-options > summary').evaluate(el=>el.parentElement.open=false);
+  await page.evaluate(report=>{window.__config={...report.preview.settings};window.__canSync=true;window.__state='ready';window.__report=report;window.__revision++;},report);
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  await page.locator('#preview-scope').evaluate(el=>{el.value='layer';el.dispatchEvent(new Event('change'));});
+  await page.waitForFunction(()=>document.querySelectorAll('#export-paths polyline').length>61);
+  assert.equal(await page.locator('#preview-warning').isVisible(),false);
+  await page.locator('.plot').screenshot({path:'evidence/preview-overlays.png'});
+  const initialSaves=await page.evaluate(()=>window.__saved.length);
+  await page.locator('#arc_speed_mm_s').fill('3.125');
+  await page.waitForFunction(n=>window.__saved.length>n,initialSaves);
+  assert.equal(await page.evaluate(()=>window.__config.arc_speed_mm_s),3.125);
+  assert.equal(await page.locator('#export-paths polyline').count(),0);
+  assert.equal(await page.locator('#preview-warning').isVisible(),true);
+  assert((await page.locator('#preview-warning-message').textContent()).includes('Slice plate'));
+  // Changes made in the sidebar appear without a reload, even if the slice revision is unchanged.
+  await page.evaluate(()=>{window.__config.arc_speed_mm_s=4.25;});
+  await page.waitForFunction(()=>document.querySelector('#arc_speed_mm_s').value==='4.25');
+  // An input that is still invalid must not silently apply.
+  const beforeInvalid=await page.evaluate(()=>window.__saved.length);
+  await page.locator('#arc_speed_mm_s').fill('0');await page.waitForTimeout(850);
+  assert.equal(await page.evaluate(()=>window.__saved.length),beforeInvalid);
+  await page.evaluate(()=>{window.__failSave=true;});
+  await page.locator('#arc_speed_mm_s').fill('3.5');
+  await page.getByText('Save failed: Host rejected settings',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__config.arc_speed_mm_s),4.25);
+  await page.evaluate(()=>{window.__failSave=false;window.__canSync=undefined;});
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  // Never apply a pending draft over a concurrent sidebar edit.
+  await page.evaluate(async()=>{
+    window.__canSync=true;await initialize(true);
+    const input=document.querySelector('#arc_speed_mm_s');input.value='5';input.dispatchEvent(new Event('input',{bubbles:true}));
+    window.__config.arc_speed_mm_s=6;await pollSlicePreview();
+  });
+  const conflictSaves=await page.evaluate(()=>window.__saved.length);
+  await page.waitForTimeout(850);
+  assert.equal(await page.evaluate(()=>window.__saved.length),conflictSaves);
+  assert((await page.locator('#preview-warning-message').textContent()).includes('Reload settings'));
+  await page.evaluate(()=>{window.__canSync=undefined;});
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  // Restore a completed layer to inspect the compact, translucent overlays in both themes.
+  await page.evaluate(report=>{window.__config={...report.preview.settings};window.__state='ready';window.__report=report;window.__revision++;},report);
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  await page.emulateMedia({colorScheme:'dark'});
+  await page.locator('.plot').screenshot({path:'evidence/preview-overlays-dark.png'});
+  await page.emulateMedia({colorScheme:'light'});await page.setViewportSize({width:390,height:844});
+  await page.locator('#preview-visibility > summary').evaluate(el=>el.parentElement.open=false);
+  await page.locator('.plot').scrollIntoViewIfNeeded();
+  await page.locator('.plot').screenshot({path:'evidence/preview-overlays-mobile.png'});
+  for(const id of ['preview-timeline','preview-visibility','preview-view-options']){
+    const contained=await page.locator('#'+id).evaluate(el=>{const a=el.getBoundingClientRect(),b=el.closest('.plot').getBoundingClientRect();return a.left>=b.left&&a.right<=b.right&&a.top>=b.top&&a.bottom<=b.bottom;});
+    assert(contained,id+' stays inside the viewport');
+  }
   // Host data is text, never HTML.
   await page.evaluate(()=>{window.__report={error:'<img src=x onerror="window.__xss=true">'};});
   await page.locator('#refresh').click();await page.waitForTimeout(100);
@@ -197,6 +279,6 @@ const {chromium}=require('playwright');
   await page.getByText('This preset is read-only.',{exact:true}).waitFor();
   assert.equal(await page.locator('#arc_speed_mm_s').isDisabled(),true);
   assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
-  console.log('Rendered UI: layer/region navigation, timed playback, lazy loading and stale-response protection, all settings preserved, modes/order, Hilbert conflict note, guide, light/dark, mobile, draft/reload, safe report text and read-only passed.');
+  console.log('Rendered UI: viewport overlays, full-layer default, automatic process apply, sidebar sync, conflict and failure handling, layer/region playback, light/dark/mobile, accessibility and existing UI regressions passed.');
  } finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

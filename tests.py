@@ -817,21 +817,13 @@ class Tests(unittest.TestCase):
         capability.on_load()
         page.on_message({"action":"read","request_id":1})
         self.assertEqual(page.messages[-1]["config"], a.DEFAULTS)
+        # Older Orca builds must not silently save globals from the process tab.
         page.on_message({"action":"save","request_id":2,"config":{"arc_speed_mm_s":10}})
-        self.assertTrue(page.messages[-1]["ok"])
-        self.assertEqual(__import__("json").loads(capability.get_config())["arc_speed_mm_s"],10)
+        self.assertFalse(page.messages[-1]["ok"])
+        self.assertIn("sidebar",page.messages[-1]["error"])
+        self.assertEqual(capability.config,"{}")
         page.on_message({"action":"save","request_id":3,"config":{"arc_speed_mm_s":0}})
         self.assertFalse(page.messages[-1]["ok"])
-        self.assertEqual(__import__("json").loads(capability.get_config())["arc_speed_mm_s"],10)
-        capability.fail_save = True
-        page.on_message({"action":"save","request_id":4,"config":{"arc_speed_mm_s":12}})
-        self.assertFalse(page.messages[-1]["ok"])
-        capability.fail_save = False
-        capability.override = '{"arc_speed_mm_s":3}'
-        page.on_message({"action":"save","request_id":5,"config":{"arc_speed_mm_s":12}})
-        self.assertTrue(page.messages[-1]["preset_override_active"])
-        self.assertEqual(page.messages[-1]["config"]["arc_speed_mm_s"],3)
-        capability.override = None
         capability.on_unload()
         page.on_message({"action":"read","request_id":6})
         self.assertFalse(page.messages[-1]["ok"])
