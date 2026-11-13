@@ -33,12 +33,18 @@ separation, print order and the local slowdown. They respond to settings and hav
 an optional replay that respects reduced-motion preferences. These are concepts,
 not simulations of the current model.
 
-Material suggestions are computed per tool from available filament family,
-nozzle, layer height, fan limit and maximum volumetric flow. They are heuristics,
-not calibrated presets. Applying a suggestion changes the draft only; it does
-not enable removable floors or adaptive path ordering. Plugin settings are shared,
-so multi-material users must review every tool before saving. Unknown materials
-are explicitly labelled. No material data is sent over the network.
+Material suggestions use the selected tool's nozzle, layer height and maximum
+volumetric flow. **Auto** uses the filament family and fan limit from the sliced
+profile. Alternatively choose PLA, PETG, ABS, ASA, TPU, PA or PC, independently of
+that profile. Manual choices use that material's part-cooling recommendation;
+they keep the tool's nozzle and flow limits. The filament profile and chamber fan
+are never changed.
+
+Selecting a material only updates the suggestion. **Apply to draft** copies its
+values into the plugin settings, using the same save/synchronization path as
+other edits. These are test-print starting points, not calibrated presets.
+Plugin settings are shared, so review every tool in a multi-material print.
+No material data is sent over the network.
 
 ## Local slowdown
 

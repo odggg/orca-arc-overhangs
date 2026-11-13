@@ -18,6 +18,12 @@ const {chromium}=require('playwright');
    let receive;
    window.orca={onMessage:cb=>{receive=cb;},getContext:()=>({readOnly:window.__readonly}),
     postMessage:request=>queueMicrotask(()=>{
+     if(request.action==='retry_preview') {
+       window.__retryCount=(window.__retryCount||0)+1;
+       window.__state=window.__denyPermission?'permission':'ready';
+       window.__report=window.__denyPermission?{error:'File read permission denied'}:report;
+       window.__revision++;
+     }
      if(request.action==='save' && window.__failSave){receive({request_id:request.request_id,ok:false,error:'Host rejected settings'});return;}
      if(request.action==='save') { window.__config={...request.config};window.__saved.push({...request.config});if(window.__canSync){window.__report=null;window.__revision++;window.__state='stale';} }
      if(request.action==='region') {
@@ -94,6 +100,20 @@ const {chromium}=require('playwright');
   assert.equal(await page.locator('#export-paths polyline').count(),61);
   assert((await page.locator('#preview-area').textContent()).includes('mm²'));
   await page.locator('#apply-suggestion').click();assert((await page.locator('#status').textContent()).includes('draft'));
+  // Selecting a material changes suggestions only; Apply and Save use the shared settings path.
+  const materialOriginal=await page.evaluate(()=>({...window.__config}));
+  const speedBeforeMaterial=await page.locator('#arc_speed_mm_s').inputValue();
+  await page.locator('#suggestion-material').selectOption('ASA');
+  assert((await page.locator('#suggestion-note').textContent()).startsWith('ASA starting points'));
+  await page.locator('#suggestion-material').selectOption('PLA');
+  assert.equal(await page.locator('#arc_speed_mm_s').inputValue(),speedBeforeMaterial);
+  await page.locator('#apply-suggestion').click();
+  assert.equal(await page.locator('#support_fan_percent').inputValue(),'100');
+  await page.locator('#save').click();await page.getByText('Saved.',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__config.support_fan_percent),100);
+  assert.equal(await page.evaluate(()=>Object.hasOwn(window.__config,'filament_type')),false);
+  await page.evaluate(config=>{window.__config=config;},materialOriginal);
+  await page.locator('#suggestion-material').selectOption('auto');
   await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
   assert.equal(await page.locator('#parameter-guide article').count(),5);
   await page.screenshot({path:'evidence/ui-overview.png',fullPage:true});
@@ -270,6 +290,17 @@ const {chromium}=require('playwright');
     assert(contained,id+' stays inside the viewport');
   }
   // Host data is text, never HTML.
+  await page.evaluate(()=>{window.__state='permission';window.__report={error:'File read permission denied'};window.__denyPermission=true;window.__revision++;});
+  await page.locator('#refresh').click();await page.getByText('Settings loaded.',{exact:true}).waitFor();
+  assert(await page.locator('#preview-permission').isVisible());
+  await page.locator('#preview-allow').click();
+  assert(await page.locator('#preview-permission').isVisible());
+  assert.equal(await page.evaluate(()=>window.__retryCount),1);
+  await page.evaluate(()=>{window.__denyPermission=false;});
+  await page.locator('#preview-allow').click();
+  await page.locator('#preview-permission').waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>window.__retryCount),2);
+  assert((await page.locator('#export-paths polyline').count())>0);
   await page.evaluate(()=>{window.__report={error:'<img src=x onerror="window.__xss=true">'};});
   await page.locator('#refresh').click();await page.waitForTimeout(100);
   assert((await page.locator('#last-report').textContent()).includes('<img'));
