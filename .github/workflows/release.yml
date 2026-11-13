@@ -40,6 +40,10 @@ jobs:
       - name: Build and run regression suite
         run: |
           python build_plugin.py
+          python -m unittest discover -s tests -p test_orcacloud_publish.py -v
+          python -m unittest discover -s tests -p test_slice_preview.py -v
+          python -m unittest discover -s tests -p test_preview_playback.py -v
+          python -m unittest discover -s tests -p test_workbench.py -v
           python tests.py
           python test_audit.py
           node test_tab.js
@@ -53,7 +57,6 @@ jobs:
           # universal wheels from older versions committed on main.
           sha256sum \
             "dist/orca_arc_overhang-${version}-py3-none-any.whl" \
-            dist/orca_arc_overhang_*.whl \
             "Arc_Overhang_OrcaSlicer_2.5_v${version}.zip" \
             > SHA256SUMS.txt
           cat SHA256SUMS.txt
@@ -63,7 +66,6 @@ jobs:
           mkdir release-assets
           cp \
             "dist/orca_arc_overhang-${version}-py3-none-any.whl" \
-            dist/orca_arc_overhang_*.whl \
             "Arc_Overhang_OrcaSlicer_2.5_v${version}.zip" \
             SHA256SUMS.txt \
             release-assets/
@@ -72,9 +74,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: release-assets/*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
           generate_release_notes: true
           draft: false
           prerelease: false
