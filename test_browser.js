@@ -186,6 +186,12 @@ const {chromium}=require('playwright');
   assert.equal(await page.locator('#preview-area').textContent(),'');
   assert.equal(await page.locator('#preview-time').textContent(),'');
   assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3.25');
+  await page.evaluate(()=>{
+    window.__revision++;window.__state='ready';
+    window.__report={bridge_features:0,replaced_features:0,generated_arcs:0,skipped_features:0};
+  });
+  await page.locator('#preview-empty-title').getByText('No bridge fill in this slice',{exact:true}).waitFor();
+  assert((await page.locator('#preview-empty-message').textContent()).includes('Bridge or Internal Bridge'));
   await page.evaluate(report=>{window.__revision++;window.__state='ready';window.__report=report;},report);
   await page.waitForFunction(()=>document.querySelectorAll('#export-paths polyline').length===61);
   assert.equal(await page.locator('#wave_speed_mm_s').inputValue(),'3.25');
