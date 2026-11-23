@@ -382,9 +382,12 @@ initialize();
 
 function renderSliceState(state) {
   previewState=state;renderPreviewWarning();
+  if($('preview-permission'))$('preview-permission').hidden=state!=='permission';
+  if($('preview-allow'))$('preview-allow').disabled=!settingsBridge.retryPreview;
   const messages={waiting:'Slice a model to generate the preview.',slicing:'Slicing your model…',
     calculating:'Calculating Arc/Wave paths…',stale:'Model or settings changed. Slice again to update the preview.',
     cancelled:'Slicing stopped. Slice again to generate a preview.',failed:'Preview unavailable. Check the message below.',
+    permission:'File access is needed. Click Allow access / retry preview and approve the request in Orca.',
     unavailable:'No preview is available for this slice. Slice the model again.',disabled:'Enable Arc Overhang and slice your model.'};
   text('preview-empty-title',state==='ready'?'No eligible overhangs':state==='calculating'?'Building your preview':state==='slicing'?'Slicing your model':'Slice preview');
   text('preview-empty-message',messages[state] || 'The current slice contains no eligible Arc/Wave regions. Check the region details below.');
@@ -395,6 +398,15 @@ function renderSliceState(state) {
     text('preview-caption','No eligible Arc/Wave regions in this slice.');
   }
 }
+if($('preview-allow'))$('preview-allow').onclick=async()=>{
+  if(!settingsBridge.retryPreview)return;
+  $('preview-allow').disabled=true;
+  try{
+    const response=await settingsBridge.retryPreview();
+    previewRevision=response.revision;renderReport(response.last_report);renderSliceState(response.state);
+  }catch(error){status.textContent=error.message;}
+  finally{$('preview-allow').disabled=!settingsBridge.retryPreview;}
+};
 async function pollSlicePreview() {
   if(previewPollBusy || savingUI || document.hidden || !settingsBridge.getPreview) return;
   const epoch=settingsEpoch;

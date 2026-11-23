@@ -207,15 +207,19 @@ def profile_suggestions(lines, resolved, tool):
     except UnsupportedGCode: fan_limit = 100
     if not isinstance(fan_limit, float): fan_limit = 100
     fan_limit = max(0,min(100,fan_limit))
-    speed, fan = {'PLA':(2,100),'PETG':(1.5,80),'ABS':(1,30),'ASA':(1,30),'TPU':(.8,70),'PA':(1,30),'PC':(1,20)}.get(family,(1,50))
-    speed *= min(1.5,max(.5,printer['nozzle_diameter']/.4))
-    cap = printer['max_volumetric_speed']
-    if cap: speed = min(speed, cap/(math.pi*(printer['nozzle_diameter']/2)**2*1.35*printer['filament_flow_ratio']))
-    values = {'arc_speed_mm_s':round(speed,3), 'minimum_arc_speed_mm_s':round(min(.5,speed),3),
-              'wave_speed_mm_s':round(speed,3), 'support_fan_override':True,
-              'support_fan_percent':min(fan,fan_limit), 'peel_gap_mm':round(min(.15,printer['layer_height']*.5),3)}
+    starting_points = {'PLA':(2,100),'PETG':(1.5,80),'ABS':(1,30),'ASA':(1,30),'TPU':(.8,70),'PA':(1,30),'PC':(1,20)}
+    def values_for(selected, automatic=False):
+        speed, fan = starting_points.get(selected,(1,50))
+        speed *= min(1.5,max(.5,printer['nozzle_diameter']/.4))
+        cap = printer['max_volumetric_speed']
+        if cap: speed = min(speed, cap/(math.pi*(printer['nozzle_diameter']/2)**2*1.35*printer['filament_flow_ratio']))
+        return {'arc_speed_mm_s':round(speed,3), 'minimum_arc_speed_mm_s':round(min(.5,speed),3),
+                'wave_speed_mm_s':round(speed,3), 'support_fan_override':True,
+                'support_fan_percent':min(fan,fan_limit) if automatic else fan,
+                'peel_gap_mm':round(min(.15,printer['layer_height']*.5),3)}
     return dict(tool=tool, material=material, family=family, nozzle=printer['nozzle_diameter'],
-                layer_height=printer['layer_height'], fan_limit=fan_limit, values=values,
+                layer_height=printer['layer_height'], fan_limit=fan_limit, values=values_for(family,True),
+                materials={name:values_for(name) for name in starting_points},
                 note='Starting points for a test print, not calibrated material profiles. Review before applying.')
 
 

@@ -9,6 +9,31 @@ successful event's path and runs the same process_text engine in memory. It neve
 writes the internal file or opens a Save dialog. Resolved settings are copied during
 pipeline callbacks; no live slicing-graph references are retained.
 
+## File access
+
+During plugin registration, builds with `orca.request_permissions` ask for
+read-only access to `<system temp>/orcaslicer_model/*`, where Orca 2.5 stores its
+model backups and internal slice files. The request does not include write,
+network or process permissions. Orca presents and stores the user's decision;
+denying a declared permission aborts loading, as specified by the host API.
+
+For custom/restored slice paths, revoked permissions or older hosts, a denied
+read shows **Allow access / retry preview** in the tab. Clicking it retries the
+host-provided path in the page callback so Orca can show its normal file-read
+prompt. No file path is accepted from the page. Polling never retries a denied
+read. A changed model, plate, preset, configuration or slice invalidates the
+pending request. If prompts were suppressed, review read access in Orca's
+Plugins dialog, then retry. The preview leaves the source file unchanged.
+
+Source: [Orca 2.5 permission registration](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.5.0/src/slic3r/plugin/PythonPluginBridge.cpp),
+[model-cache layout](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.5.0/src/libslic3r/Model.cpp).
+
+The declaration, denied-read/retry path and stale-request rejection are covered
+by host-contract tests; the page button is covered by rendered browser tests.
+A fresh-install native permission-dialog check for this change is still pending.
+
+## Preview updates
+
 The tab polls a lightweight revision/state endpoint every 1.5 seconds while visible.
 Geometry is sent only when the revision changes; polling preserves settings drafts.
 Slice starts, relevant model/plate/preset edits, successful settings saves and failed
