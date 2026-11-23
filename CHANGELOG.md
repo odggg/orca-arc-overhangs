@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix export with upper-layer slowdown when printer start G-code uses absolute extrusion for purging.
+
 ## 0.4.4 - 2026-11-23
 
 - Fix an Arc/Wave export crash when clipped areas also contain isolated points or lines.

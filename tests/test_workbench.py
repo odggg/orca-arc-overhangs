@@ -43,8 +43,11 @@ class WorkbenchTests(unittest.TestCase):
     def test_local_slowdown_splits_boundary_preserves_extrusion(self):
         cfg=a.configuration({'upper_slowdown_layers':2,'upper_speed_percent':40})
         source='G90\nM83\n;CHANGE_LAYER\n;TYPE:Bridge\nG1 X0 Y0 Z.2 F600\n'+a.MARKER+'BEGIN\nG1 X5 Y0 E1\n'+a.MARKER+'END\n;CHANGE_LAYER\n;TYPE:Internal solid infill\nG1 X-5 Y0 Z.4 F3000\nG1 X10 Y0 E3 F3000\nG1 X10 Y10 E2\n'
-        source=fixture().split('; CHANGE_LAYER')[0]+source
+        # P1S start G-code purges in absolute E before switching to M83 for the model.
+        startup = ';TYPE:Custom\nG90\nM82\nG92 E0\nG1 X0 Y0 Z.2 F1800\nG1 E50 F200\n'
+        source = fixture().split('; CHANGE_LAYER')[0] + startup + source
         out,count=a.slowdown_above_support(source.splitlines(True),cfg,lambda:False)
+        self.assertIn(startup, ''.join(out))
         self.assertEqual(count,1)
         moves=[m for f in a.parse(out) if f.layer==1 for m in f.moves if a.segment(m) is not None]
         self.assertAlmostEqual(sum(m.delta_e for m in moves),5,places=7)

@@ -485,23 +485,41 @@ def slowdown_above_support(lines, cfg, cancelled, resolved=None):
     nozzles = {}
     for f in features:
         for m in f.moves:
-            line=segment(m)
-            if m.index in generated and line is not None:
-                tool=m.after.tool
+            if m.index not in generated:
+                continue
+            line = segment(m)
+            if line is not None:
+                tool = m.after.tool
                 if tool not in nozzles:
-                    nozzles[tool]=printer_settings(lines,resolved,tool)['nozzle_diameter']
-                zones.setdefault((f.layer,tool),[]).append(line.buffer(nozzles[tool]/2))
-    zones={key:unary_union(value) for key,value in zones.items()}
-    edits=[]
+                    nozzles[tool] = printer_settings(lines, resolved, tool)['nozzle_diameter']
+                zones.setdefault((f.layer, tool), []).append(line.buffer(nozzles[tool] / 2))
+
+    by_target = {}
+    for (layer, tool), strokes in zones.items():
+        zone = unary_union(strokes)
+        for offset in range(1, cfg['upper_slowdown_layers'] + 1):
+            by_target.setdefault((layer + offset, tool), []).append(zone)
+
+    # The footprint and its boundary are shared by all moves on this layer/tool.
+    target_geometry = {}
+    edits = []
     for f in features:
+        if f.layer < 0:  # Start G-code can use absolute extrusion to purge.
+            continue
         for m in f.moves:
-            if cancelled(): raise Cancelled('Cancelled.')
-            line=segment(m)
-            if line is None or m.index in generated or m.command not in ('G0','G1','G2','G3') or m.before.z != m.after.z: continue
-            matches=[geom for (layer,tool),geom in zones.items() if tool==m.after.tool and 1<=f.layer-layer<=cfg['upper_slowdown_layers']]
-            if not matches: continue
-            zone=unary_union(matches)
-            intersections=line.intersection(zone.boundary)
+            if cancelled():
+                raise Cancelled('Cancelled.')
+            key = (f.layer, m.after.tool)
+            if key not in by_target or m.index in generated or m.before.z != m.after.z:
+                continue
+            line = segment(m)
+            if line is None:
+                continue
+            if key not in target_geometry:
+                zone = polygonal_area(unary_union(by_target[key]))
+                target_geometry[key] = (zone, zone.boundary)
+            zone, boundary = target_geometry[key]
+            intersections = line.intersection(boundary)
             cuts=[0.0,line.length]
             if m.command in ('G2','G3'):
                 cumulative=0
