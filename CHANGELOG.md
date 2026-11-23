@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix Arc/Wave geometry calculations when a clipped area also contains isolated points or lines.
+
 ## 0.4.3 - 2026-11-23
 
 - Choose a material for starting points independently of Orca's filament profile.
