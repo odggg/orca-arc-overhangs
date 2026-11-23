@@ -58,3 +58,6 @@ Not ported: wave-aware supports and forced solid shell layers (they need the sli
 
 Changes after 0.4.2:
 - Isolate geometry topology failures so failed regions keep Orca's original toolpaths.
+Changes dated 2026-11-23:
+- Added numeric Klipper motion-limit parsing and state restoration for generated and relocated paths.
+- Recognize compact motion commands; added a synthetic regression based on the reported bridge travel sequence.

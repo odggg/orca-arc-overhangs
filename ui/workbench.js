@@ -43,10 +43,17 @@ function renderSuggestions(){
   if([...select.options].some(option=>option.value===previous))select.value=previous;
   showSuggestion();
 }
+function selectedSuggestion(){
+  const item=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$('suggestion-tool')?.value);
+  const material=$('suggestion-material')?.value||'auto';
+  if(!item)return null;
+  if(material==='auto')return {...item,selectedMaterial:item.material,automatic:true};
+  return item.materials?.[material]?{...item,values:item.materials[material],selectedMaterial:material,automatic:false}:null;
+}
 function showSuggestion(){
-  const suggestion=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$('suggestion-tool')?.value);
+  const suggestion=selectedSuggestion();
   if($('apply-suggestion'))$('apply-suggestion').disabled=!suggestion||readonly();
-  text('suggestion-note',suggestion?`${suggestion.nozzle} mm nozzle · ${suggestion.layer_height} mm layer. Suggested ${suggestion.values.arc_speed_mm_s} mm/s, fan ${suggestion.values.support_fan_percent}%, gap ${suggestion.values.peel_gap_mm} mm. These are shared plugin settings; review every tool in a multi-material print.`:'Slice with generated support to read the active material profile.');
+  text('suggestion-note',suggestion?`${suggestion.selectedMaterial} starting points · ${suggestion.nozzle} mm nozzle · ${suggestion.layer_height} mm layer. Suggested ${suggestion.values.arc_speed_mm_s} mm/s, part-cooling fan ${suggestion.values.support_fan_percent}%, gap ${suggestion.values.peel_gap_mm} mm. ${suggestion.automatic?'Uses the sliced profile’s fan limit.':'Uses the selected material’s cooling, keeping nozzle and flow limits from the sliced profile.'} These are shared plugin settings; review every tool in a multi-material print.`:'Slice with generated support to read nozzle and flow limits.');
 }
 function renderParameterGuide(){
   const root=$('parameter-guide');if(!root)return;
@@ -81,9 +88,10 @@ for(const id of ['preview-view','preview-context-toggle','preview-previous-toggl
 if($('preview-scope'))$('preview-scope').onchange=()=>{stopPlayback();playbackTime=displayRegion()?.duration||0;renderSnapshot();};
 if($('preview-home'))$('preview-home').onclick=()=>{cameraYaw=-.55;cameraPitch=.65;renderSnapshot();};
 if($('suggestion-tool'))$('suggestion-tool').onchange=showSuggestion;
+if($('suggestion-material'))$('suggestion-material').onchange=showSuggestion;
 if($('apply-suggestion'))$('apply-suggestion').onclick=()=>{
   if(readonly())return;
-  const item=(lastReport?.preview?.suggestions||[]).find(item=>String(item.tool)===$('suggestion-tool').value);if(!item)return;
+  const item=selectedSuggestion();if(!item)return;
   for(const [key,value] of Object.entries(item.values)){const el=$(key);if(!el)continue;if(typeof value==='boolean')el.checked=value;else el.value=value;}
   remember();status.textContent=settingsBridge.canSync===true?'Starting points selected. Applying to the active process…':'Starting points applied to draft. Review all tools and save before slicing.';
 };
