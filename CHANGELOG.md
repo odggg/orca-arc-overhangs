@@ -1,13 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.3 - 2026-11-23
 
-- Keep Orca's original bridge paths when a geometry calculation fails, so the rest of the print can still export.
-- Fix skipped Klipper bridges containing `SET_VELOCITY_LIMIT` acceleration changes.
-- Preserve Klipper motion limits when moving Arc and overhang-wall paths.
+- Choose a material for starting points independently of Orca's filament profile.
+- Request preview file access and offer a retry if access is denied.
+- Fix skipped Klipper bridges with `SET_VELOCITY_LIMIT` and preserve motion limits when moving toolpaths.
 - Recognize compact G-code moves such as `G1E-.6F1800`.
-- Choose a material for starting points independently of the filament profile.
-- Ask for preview file access when loading the plugin and offer a retry when access is denied.
+- Keep Orca's original paths when a bridge geometry error would otherwise abort the export.
 
 ## 0.4.2 - 2026-11-13
 

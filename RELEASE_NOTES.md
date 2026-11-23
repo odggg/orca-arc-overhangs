@@ -1,7 +1,7 @@
-# Arc Overhang 0.4.2
+# Arc Overhang 0.4.3
 
-- Import copied Wave settings from gallery pages.
-- Explain which text to copy when a profile import contains no Wave settings.
-- Publish universal WHL releases to Orca Cloud automatically from GitHub.
-
-Thanks to @persano for the gallery import fixes and release automation contribution.
+- Choose a material for starting points independently of Orca's filament profile.
+- Request preview file access and offer a retry if access is denied.
+- Fix skipped Klipper bridges with `SET_VELOCITY_LIMIT` and preserve motion limits when moving toolpaths.
+- Recognize compact G-code moves such as `G1E-.6F1800`.
+- Keep Orca's original paths when a bridge geometry error would otherwise abort the export.
