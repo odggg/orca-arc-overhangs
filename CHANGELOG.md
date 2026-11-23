@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Explain when the preview finds no bridge fill to replace.
+- Recover the active filament diameter from sliced G-code when Orca's preset data omits that slot.
+
 ## 0.4.6 - 2026-11-23
 
 - Try Arc start points on interior support ribs when the usual search cannot fill a bridge.

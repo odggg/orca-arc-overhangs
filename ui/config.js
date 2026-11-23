@@ -389,13 +389,16 @@ function renderSliceState(state) {
     cancelled:'Slicing stopped. Slice again to generate a preview.',failed:'Preview unavailable. Check the message below.',
     permission:'File access is needed. Click Allow access / retry preview and approve the request in Orca.',
     unavailable:'No preview is available for this slice. Slice the model again.',disabled:'Enable Arc Overhang and slice your model.'};
-  text('preview-empty-title',state==='ready'?'No eligible overhangs':state==='calculating'?'Building your preview':state==='slicing'?'Slicing your model':'Slice preview');
-  text('preview-empty-message',messages[state] || 'The current slice contains no eligible Arc/Wave regions. Check the region details below.');
+  const noBridges=state==='ready' && lastReport?.bridge_features===0;
+  text('preview-empty-title',state==='ready'?(noBridges?'No bridge fill in this slice':'No eligible overhangs'):state==='calculating'?'Building your preview':state==='slicing'?'Slicing your model':'Slice preview');
+  text('preview-empty-message',messages[state] || (noBridges
+    ? 'Arc/Wave uses Bridge or Internal Bridge lines from Orca. This slice has none. Check the Line Type preview in Orca.'
+    : 'The current slice contains no eligible Arc/Wave regions. Check the region details below.'));
   if(messages[state]) {
     text('preview-caption',messages[state]);
     text('last-report',lastReport?.error?'Preview: '+lastReport.error:messages[state]);
   } else if(state==='ready' && !(lastReport?.preview?.layers||[]).length) {
-    text('preview-caption','No eligible Arc/Wave regions in this slice.');
+    text('preview-caption',noBridges?'No bridge fill in this slice.':'No eligible Arc/Wave regions in this slice.');
   }
 }
 if($('preview-allow'))$('preview-allow').onclick=async()=>{

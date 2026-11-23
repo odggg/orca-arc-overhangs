@@ -211,10 +211,21 @@ def printer_settings(lines, resolved=None, tool_index=0):
         match = re.match(r"^;\s*(\w+)\s*=\s*(.*?)\s*$", line)
         if match and match[1] in CONFIG_KEYS:
             raw[match[1]] = match[2]
+    sliced_filament_diameter = raw.get("filament_diameter")
     raw.update({k: v for k, v in (resolved or {}).items() if v is not None})
     result = {}
     for key in ("nozzle_diameter", "filament_diameter", "layer_height"):
-        result[key] = scalar(raw.get(key), key, tool_index)
+        try:
+            result[key] = scalar(raw.get(key), key, tool_index)
+        except UnsupportedGCode as error:
+            # Preset data can omit a slot that is present in the sliced file.
+            # Resolve the same tool from that file; never pick another slot.
+            if key != "filament_diameter" or sliced_filament_diameter is None or (resolved or {}).get(key) is None:
+                raise
+            try:
+                result[key] = scalar(sliced_filament_diameter, key, tool_index)
+            except UnsupportedGCode:
+                raise error from None
         if not isinstance(result[key], float) or result[key] <= 0:
             raise UnsupportedGCode(key + " must be positive.")
     width = scalar(raw.get("outer_wall_line_width", raw.get("line_width", result["nozzle_diameter"])), "outer_wall_line_width", tool_index)

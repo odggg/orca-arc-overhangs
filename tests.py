@@ -1029,6 +1029,32 @@ class Tests(unittest.TestCase):
         output, report = a.process_text(source)
         self.assertEqual(report["replaced_features"], 1, report)
 
+    def test_filament_diameter_recovers_missing_live_slot_from_slice(self):
+        source = fixture().replace("G90\nM83", "T1000\nT3\nG90\nM83")
+        expected, _ = a.process_text(source)
+        for live in ([], [1.75, 1.75]):
+            with self.subTest(live=live):
+                output, report = a.process_text(source, resolved={"filament_diameter": live})
+                self.assertEqual(report["replaced_features"], 1)
+                self.assertEqual(output, expected)
+
+        source = source.replace("filament_diameter = 1.75", "filament_diameter = 1.75;1.75;1.75;2.85")
+        selected = a.printer_settings(source.splitlines(), {"filament_diameter": [1.75, 1.75]}, tool_index=3)
+        self.assertEqual(selected["filament_diameter"], 2.85)
+        preferred = a.printer_settings(source.splitlines(), {"filament_diameter": [1.75] * 4}, tool_index=3)
+        self.assertEqual(preferred["filament_diameter"], 1.75)
+
+        missing = source.replace("1.75;1.75;1.75;2.85", "1.75;1.75")
+        with self.assertRaisesRegex(a.UnsupportedGCode, "No filament_diameter value for physical tool T3"):
+            a.process_text(missing, resolved={"filament_diameter": [1.75, 1.75]})
+
+    def test_overhang_walls_without_bridge_fill_are_kept(self):
+        source = fixture().replace("; FEATURE: Bridge", "; FEATURE: Overhang wall")
+        output, report = a.process_text(source)
+        self.assertEqual(output, source)
+        self.assertEqual(report["bridge_features"], 0)
+        self.assertEqual(report["generated_arcs"], 0)
+
     def test_single_nonzero_tool_index_is_supported(self):
         source = fixture().replace("G90\nM83", "T1\nT1\nG90\nM83")
         output, report = a.process_text(source)
