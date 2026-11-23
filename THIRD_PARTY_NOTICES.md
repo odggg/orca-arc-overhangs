@@ -55,3 +55,7 @@ Klappe (AGPL-3.0) https://github.com/dennisklappe/OrcaSlicer-WaveOverhangs.
 PR #1 by persano contributes the Python/Shapely implementation. Ported: narrow-neck
 slit splitting, corner taper, reconnection and the Smart/ZigZag/Monotonic patterns.
 Not ported: wave-aware supports and forced solid shell layers (they need the slicer, not a G-code post-processor).
+
+Changes dated 2026-11-23:
+- Added numeric Klipper motion-limit parsing and state restoration for generated and relocated paths.
+- Recognize compact motion commands; added a synthetic regression based on the reported bridge travel sequence.
