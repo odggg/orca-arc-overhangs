@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep Orca's original bridge paths when a geometry calculation fails, so the rest of the print can still export.
 - Fix skipped Klipper bridges containing `SET_VELOCITY_LIMIT` acceleration changes.
 - Preserve Klipper motion limits when moving Arc and overhang-wall paths.
 - Recognize compact G-code moves such as `G1E-.6F1800`.

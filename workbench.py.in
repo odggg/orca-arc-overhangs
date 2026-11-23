@@ -299,6 +299,17 @@ def slowdown_above_support(lines, cfg, cancelled, resolved=None):
     return ''.join(lines).splitlines(keepends=True),len(edits)
 
 
+def try_upper_slowdown(lines, cfg, cancelled, resolved, report):
+    try:
+        return slowdown_above_support(lines, cfg, cancelled, resolved)
+    except TOPOLOGY_ERRORS as error:
+        if not is_topology_error(error):
+            raise
+        # Slowdown calculates all edits before applying any of them.
+        report['skip_reasons']['Upper-layer slowdown geometry could not be calculated'] = 1
+        return lines, 0
+
+
 def process_removable(text, cfg, resolved, cancelled):
     """Conservative detachable floor: insert above layer n-2, before layer n-1 exists.
 
@@ -354,18 +365,23 @@ def process_removable(text, cfg, resolved, cancelled):
             pre=[f'G1 Z{floor_z:.5f} F{travel:.2f}\n']
             body=emit_arcs(arcs,lifted,lifted,local,p,support=support)
             post=[f'G1 Z{state.z:.5f} F{travel:.2f}\n',f'G1 F{state.feed:.2f}\n',f';TYPE:{base_features[-1].role}\n']
-            edits.append((anchor.index+1,pre+body+post));occupied[f.layer-2]=occupied.get(f.layer-2,GeometryCollection()).union(footprint)
+            footprint_with_existing = occupied.get(f.layer-2, GeometryCollection()).union(footprint)
+            edits.append((anchor.index+1,pre+body+post))
+            occupied[f.layer-2] = footprint_with_existing
             records.append((f.layer-2,floor_z,tool,cfg['overhang_mode'],(),current))
             report['region_results'].append(dict(layer=f.layer+1,tool=tool,status='removable floor',area_mm2=round(region.area,2),coverage_percent=round(min(cover),1)))
             report['replaced_features']+=1;report['removable_floors']+=1;report['generated_arcs']+=len(arcs)
             report['minimum_coverage_percent']=min(cover+[report['minimum_coverage_percent'] or 100])
+        except TOPOLOGY_ERRORS as error:
+            if not is_topology_error(error):
+                raise
+            record_kept_region(report, f.layer, "Removable floor geometry could not be calculated")
         except ValueError as error:
-            report['region_results'].append(dict(layer=f.layer+1,status='kept',reason=str(error)))
-            reason=str(error);report['skipped_features']+=1;report['skip_reasons'][reason]=report['skip_reasons'].get(reason,0)+1
+            record_kept_region(report, f.layer, str(error))
     if not edits: return text,report
     for index,body in sorted(edits,key=lambda item:item[0],reverse=True): lines[index:index]=body
     lines=''.join(lines).splitlines(keepends=True)
-    if cfg['upper_slowdown_layers']: lines,report['retimed_features']=slowdown_above_support(lines,cfg,cancelled,resolved)
+    if cfg['upper_slowdown_layers']: lines,report['retimed_features']=try_upper_slowdown(lines,cfg,cancelled,resolved,report)
     report['time_change_s']=update_time_estimates(text.splitlines(keepends=True),lines)
     try:
         report['preview']=export_preview(records,cfg,lines,cancelled)

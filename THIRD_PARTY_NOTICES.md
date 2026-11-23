@@ -56,6 +56,8 @@ PR #1 by persano contributes the Python/Shapely implementation. Ported: narrow-n
 slit splitting, corner taper, reconnection and the Smart/ZigZag/Monotonic patterns.
 Not ported: wave-aware supports and forced solid shell layers (they need the slicer, not a G-code post-processor).
 
+Changes after 0.4.2:
+- Isolate geometry topology failures so failed regions keep Orca's original toolpaths.
 Changes dated 2026-11-23:
 - Added numeric Klipper motion-limit parsing and state restoration for generated and relocated paths.
 - Recognize compact motion commands; added a synthetic regression based on the reported bridge travel sequence.
