@@ -1,3 +1,4 @@
-# Arc Overhang 0.4.4
+# Arc Overhang 0.4.5
 
-- Fix an Arc/Wave export crash when clipped areas also contain isolated points or lines.
+- Speed up Arc generation and path ordering.
+- Fix export with upper-layer slowdown when printer start G-code uses absolute extrusion for purging.

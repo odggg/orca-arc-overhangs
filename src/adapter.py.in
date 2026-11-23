@@ -1,4 +1,4 @@
-VERSION = "0.4.4"
+VERSION = "0.4.5"
 MARKER = "; ARC_OVERHANG_PLUGIN:"
 DEFAULTS = {
     "enabled": True,

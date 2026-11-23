@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.5 - 2026-11-23
 
+- Speed up Arc generation and path ordering.
 - Fix export with upper-layer slowdown when printer start G-code uses absolute extrusion for purging.
-- Speed up Arc generation and path ordering by reusing geometry and stopping distance searches when an endpoint is already anchored.
 
 ## 0.4.4 - 2026-11-23
 
