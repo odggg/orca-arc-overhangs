@@ -2241,7 +2241,7 @@ window.orca.onMessage(message=>{
 function requestSettings(action,config){
   return new Promise((resolve,reject)=>{
     const request_id=++requestNumber;
-    const timer=setTimeout(()=>{pending.delete(request_id);reject(new Error('No response. Enable the plugin and reload it.'));},15000);
+    const timer=setTimeout(()=>{pending.delete(request_id);reject(new Error('No response. Enable the plugin and reload it.'));},action==='retry_preview'?300000:15000);
     pending.set(request_id,{resolve,reject,timer});
     try{window.orca.postMessage({action,request_id,config,...(action==='save'?{base_config:hostConfig,config_context:hostContext}:{})});}
     catch(error){clearTimeout(timer);pending.delete(request_id);reject(error);}
@@ -2259,6 +2259,7 @@ const settingsBridge = {
     return response.config;
   },
   getPreview:()=>requestSettings('preview',{revision:previewRevision}),
+  retryPreview:()=>requestSettings('retry_preview',{revision:previewRevision}),
   getRegion:(id,revision)=>requestSettings('region',{id,revision}),
   saveConfig:async config=>{
     const response=await requestSettings('save',config);
@@ -2310,6 +2311,16 @@ def preview_file(path, config, resolved=None, cancelled=lambda: False):
         return None  # A later host event must not replace a processed preview with an empty one.
     _, report = process_text(text, config, resolved, cancelled)
     return report
+
+
+def request_preview_permissions():
+    """Declare read-only access to Orca's model cache before worker callbacks run."""
+    request = getattr(orca, "request_permissions", None)
+    if callable(request):
+        # Model::get_backup_path keeps slices in <temporary_dir>/orcaslicer_model.
+        # Custom/restored paths use the explicit per-file retry from the page instead.
+        root = Path(tempfile.gettempdir()).resolve() / "orcaslicer_model"
+        request(fs_read=[root.as_posix() + "/*"])
 
 
 def page_preset_context():
@@ -2377,6 +2388,7 @@ if orca is not None:
             global _pipeline_capability
             if _pipeline_capability is self:
                 _pipeline_capability = None
+            self._pending_preview = None
         def get_default_config(self):
             return dict(DEFAULTS)
         def has_config_ui(self):
@@ -2386,7 +2398,37 @@ if orca is not None:
         def invalidate_preview(self):
             global _preview_generation
             _preview_generation += 1
+            self._pending_preview = None
             publish_preview(None, "stale")
+
+        def calculate_preview(self, path, cfg, generation, resolved):
+            self._pending_preview = None
+            try:
+                publish_preview(None, "calculating")
+                report = preview_file(path, cfg, resolved, lambda: generation != _preview_generation)
+                if generation == _preview_generation:
+                    publish_preview(report, "ready" if report is not None else "unavailable")
+            except Cancelled:
+                pass
+            except PermissionError:
+                if generation == _preview_generation:
+                    self._pending_preview = (path, cfg, generation, resolved)
+                    publish_preview({"error": "Reading Orca's slice file was not allowed. Click Allow access / retry preview, then approve Orca's file-read request. If requests were previously denied, review this plugin's read permissions in Orca's Plugins dialog."}, "permission")
+            except Exception as error:
+                if generation == _preview_generation:
+                    publish_preview({"error": str(error)}, "failed")
+
+        def retry_preview(self, revision):
+            pending = getattr(self, "_pending_preview", None)
+            if revision != _preview_revision or pending is None:
+                raise ValueError("The preview changed. Refresh it before retrying.")
+            path, cfg, generation, resolved = pending
+            if generation != _preview_generation or cfg != configuration(json.loads(self.get_config() or "{}")):
+                self.invalidate_preview()
+                raise ValueError("The slice or settings changed. Slice the model again.")
+            # This explicit page callback runs on Orca's UI thread. The normal read
+            # audit hook can now show its modal prompt; no grants are changed here.
+            self.calculate_preview(path, cfg, generation, resolved)
 
         def on_lifecycle_event(self, event, ctx):
             global _preview_generation
@@ -2397,6 +2439,7 @@ if orca is not None:
                 return event == getattr(events, name, None)
             if is_event("SliceStarted"):
                 _preview_generation += 1
+                self._pending_preview = None
                 self._slice_resolved = None
                 publish_preview(None, "slicing")
                 return
@@ -2404,16 +2447,19 @@ if orca is not None:
                     "ObjectAdded", "ObjectDeleted", "ObjectTransformed", "ObjectChanged",
                     "PlateSelected", "PlateDeleted", "PresetSelected", "PresetSaved")):
                 _preview_generation += 1
+                self._pending_preview = None
                 publish_preview(None, "stale")
                 return
             codes = getattr(orca, "LifecycleEvtCode", None)
             success = codes is not None and ctx.code == codes.Ok
             if is_event("SlicingJobComplete") and not success:
                 _preview_generation += 1
+                self._pending_preview = None
                 publish_preview(None, "cancelled")
                 return
             if not is_event("GCodeExportFinished"):
                 return
+            self._pending_preview = None
             if not success:
                 publish_preview(None, "failed")
                 return
@@ -2429,13 +2475,7 @@ if orca is not None:
                 if not cfg["enabled"]:
                     publish_preview(None, "disabled")
                     return
-                publish_preview(None, "calculating")
-                report = preview_file(path, cfg, getattr(self, "_slice_resolved", None),
-                                      lambda: generation != _preview_generation)
-                if generation == _preview_generation and report is not None:
-                    publish_preview(report)
-                elif generation == _preview_generation:
-                    publish_preview(None, "unavailable")
+                self.calculate_preview(path, cfg, generation, getattr(self, "_slice_resolved", None))
             except Cancelled:
                 pass
             except Exception as error:
@@ -2452,6 +2492,7 @@ if orca is not None:
                 cfg = json.loads(self.get_config() or "{}")
                 resolved = {key: ctx.config_value(key) for key in CONFIG_KEYS}
                 report = process_file(ctx.gcode_path, cfg, resolved, ctx.cancelled)
+                self._pending_preview = None
                 publish_preview(dict(report))
                 message = f"Arc Overhang: {report['replaced_features']} features, {report['generated_arcs']} arcs, {report['skipped_features']} skipped."
                 print(message)
@@ -2479,7 +2520,7 @@ if orca is not None:
                 if capability is None:
                     raise RuntimeError("Arc Overhang processing is not loaded. Enable both plugin capabilities.")
                 action = data.get("action")
-                if action not in ("read", "save", "preview", "region"):
+                if action not in ("read", "save", "preview", "region", "retry_preview"):
                     raise ValueError("Unknown request.")
                 effective = configuration(json.loads(capability.get_config() or "{}"))
                 previous = getattr(self, "_observed_config", None)
@@ -2491,6 +2532,9 @@ if orca is not None:
                 if hasattr(self, "_observed_context") and self._observed_context != context:
                     capability.invalidate_preview()
                 self._observed_context = context
+                if action == "retry_preview":
+                    query = data.get("config") or {}
+                    capability.retry_preview(query.get("revision"))
                 if action == "region":
                     query = data.get("config") or {}
                     if query.get("revision") != _preview_revision:
@@ -2529,6 +2573,7 @@ if orca is not None:
     @orca.plugin
     class ArcOverhangPlugin(orca.base):
         def register_capabilities(self):
+            request_preview_permissions()
             orca.register_capability(ArcOverhangCapability)
             orca.register_capability(ArcOverhangPage)
 
