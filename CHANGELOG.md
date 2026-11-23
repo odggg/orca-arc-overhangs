@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Keep Orca's original bridge paths when a geometry calculation fails, so the rest of the print can still export.
+
 ## 0.4.2 - 2026-11-13
 
 - Import copied Wave settings from gallery pages.

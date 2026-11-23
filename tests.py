@@ -26,6 +26,82 @@ def fixture(style="modern"):
     return text
 
 class Tests(unittest.TestCase):
+    def test_topology_failure_keeps_one_bridge_and_exports_the_next(self):
+        from shapely.geometry import box
+
+        # Overlapping shells form an invalid MultiPolygon. Let GEOS raise the
+        # real error at the overlay step rather than mocking the exception.
+        invalid_support = a.MultiPolygon([box(18, 11, 24, 22), box(20, 13, 26, 25)])
+        self.assertFalse(invalid_support.is_valid)
+        source = fixture()
+        first_bridge = source[source.index("; FEATURE: Bridge"):source.index("; FEATURE: Sparse infill")]
+        later = "; CHANGE_LAYER" + source.split("; CHANGE_LAYER", 1)[1]
+        later = later.replace("G1 Z0.2", "G1 Z0.6").replace("G1 Z0.4", "G1 Z0.8")
+        fill = a.fill_polygon
+
+        def fill_with_bad_support(poly, support, cfg, printer, cancelled):
+            return fill(poly, invalid_support, cfg, printer, cancelled)
+
+        with patch.object(a, "fill_polygon", side_effect=fill_with_bad_support):
+            self.assertRaisesRegex(a.GEOSException, "TopologyException",
+                                   invalid_support.intersection, box(19, 10, 29, 29))
+            with tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "orcaslicer.gcode"
+                original = bytes.fromhex("efbbbf") + source.encode("utf-8")
+                target.write_bytes(original)
+                report = a.process_file(target)
+                self.assertEqual(target.read_bytes(), original)
+                self.assertEqual(report["replaced_features"], 0)
+                self.assertEqual(report["skipped_features"], 1)
+                self.assertIn("original paths", report["region_results"][0]["reason"])
+
+        with patch.object(a, "fill_polygon") as generator:
+            generator.side_effect = lambda *args: (fill_with_bad_support(*args)
+                                                   if generator.call_count == 1 else fill(*args))
+            with tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "orcaslicer.gcode"
+                target.write_bytes((source + later).encode("utf-8"))
+                report = a.process_file(target)
+                output = target.read_text(encoding="utf-8")
+        self.assertEqual(report["replaced_features"], 1, report)
+        self.assertEqual(report["skipped_features"], 1)
+        self.assertEqual([(r["layer"], r["status"]) for r in report["region_results"]],
+                         [(2, "kept"), (4, "generated")])
+        self.assertIn(first_bridge, output)
+        self.assertEqual(output.count(a.MARKER + "BEGIN"), 1)
+
+    def test_non_topology_errors_and_cancellation_still_propagate(self):
+        for error in (a.GEOSException("IllegalArgumentException: invalid coordinate"),
+                      a.Cancelled("Cancelled.")):
+            with self.subTest(error=error), patch.object(a, "fill_polygon", side_effect=error):
+                with self.assertRaises(type(error)):
+                    a.process_text(fixture())
+
+    def test_optional_geometry_failure_preserves_generated_arcs(self):
+        error = a.GEOSException("TopologyException: side location conflict")
+        upper = ("; CHANGE_LAYER\nG1 Z0.6\n; FEATURE: Internal solid infill\n"
+                 "G1 X20 Y12 F1800\nG1 X28 Y12 E0.3\n")
+        for function, settings in (("hilbert_feature_replacement", {"next_layer_pattern": "hilbert"}),
+                                   ("slowdown_above_support", {"upper_slowdown_layers": 1}),
+                                   ("retime_feature", {"overhang_mode": "wave", "wave_perimeter_speed_mm_s": 25})):
+            with self.subTest(function=function), patch.object(a, function, side_effect=error) as operation:
+                output, report = a.process_text(fixture() + upper, settings)
+                self.assertTrue(operation.called)
+                self.assertEqual(report["replaced_features"], 1, report)
+                self.assertIn(a.MARKER + "BEGIN", output)
+                self.assertIn(upper, output)
+                self.assertTrue(any("geometry could not be calculated" in key for key in report["skip_reasons"]))
+
+    def test_scheduling_topology_failure_keeps_original_file(self):
+        error = a.GEOSException("TopologyException: side location conflict")
+        source = fixture()
+        with patch.object(a, "schedule_arc_tails", side_effect=error):
+            output, report = a.process_text(source)
+        self.assertEqual(output, source)
+        self.assertEqual(report["replaced_features"], 0)
+        self.assertEqual(report["generated_arcs"], 0)
+        self.assertEqual(report["region_results"][0]["status"], "kept")
+
     def test_configuration_rejects_invalid(self):
         for cfg in ({"arc_speed_mm_s": 0}, {"points_per_circle": 81}, {"enabled": 1}, {"flow_multiplier": float("nan")}, {"made_up": 1}, {"max_centers": 1.5}, {"next_layer_pattern": "banana"}):
             with self.subTest(cfg=cfg), self.assertRaises(ValueError):

@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import shapely
 from shapely import Point, Polygon, LineString, MultiLineString, MultiPolygon, GeometryCollection
+from shapely.errors import GEOSException, TopologicalError
 from shapely.ops import nearest_points, linemerge, unary_union, polygonize
 
 class Arc:
@@ -524,6 +525,17 @@ def slowdown_above_support(lines, cfg, cancelled, resolved=None):
     return ''.join(lines).splitlines(keepends=True),len(edits)
 
 
+def try_upper_slowdown(lines, cfg, cancelled, resolved, report):
+    try:
+        return slowdown_above_support(lines, cfg, cancelled, resolved)
+    except TOPOLOGY_ERRORS as error:
+        if not is_topology_error(error):
+            raise
+        # Slowdown calculates all edits before applying any of them.
+        report['skip_reasons']['Upper-layer slowdown geometry could not be calculated'] = 1
+        return lines, 0
+
+
 def process_removable(text, cfg, resolved, cancelled):
     """Conservative detachable floor: insert above layer n-2, before layer n-1 exists.
 
@@ -579,18 +591,23 @@ def process_removable(text, cfg, resolved, cancelled):
             pre=[f'G1 Z{floor_z:.5f} F{travel:.2f}\n']
             body=emit_arcs(arcs,lifted,lifted,local,p,support=support)
             post=[f'G1 Z{state.z:.5f} F{travel:.2f}\n',f'G1 F{state.feed:.2f}\n',f';TYPE:{base_features[-1].role}\n']
-            edits.append((anchor.index+1,pre+body+post));occupied[f.layer-2]=occupied.get(f.layer-2,GeometryCollection()).union(footprint)
+            footprint_with_existing = occupied.get(f.layer-2, GeometryCollection()).union(footprint)
+            edits.append((anchor.index+1,pre+body+post))
+            occupied[f.layer-2] = footprint_with_existing
             records.append((f.layer-2,floor_z,tool,cfg['overhang_mode'],(),current))
             report['region_results'].append(dict(layer=f.layer+1,tool=tool,status='removable floor',area_mm2=round(region.area,2),coverage_percent=round(min(cover),1)))
             report['replaced_features']+=1;report['removable_floors']+=1;report['generated_arcs']+=len(arcs)
             report['minimum_coverage_percent']=min(cover+[report['minimum_coverage_percent'] or 100])
+        except TOPOLOGY_ERRORS as error:
+            if not is_topology_error(error):
+                raise
+            record_kept_region(report, f.layer, "Removable floor geometry could not be calculated")
         except ValueError as error:
-            report['region_results'].append(dict(layer=f.layer+1,status='kept',reason=str(error)))
-            reason=str(error);report['skipped_features']+=1;report['skip_reasons'][reason]=report['skip_reasons'].get(reason,0)+1
+            record_kept_region(report, f.layer, str(error))
     if not edits: return text,report
     for index,body in sorted(edits,key=lambda item:item[0],reverse=True): lines[index:index]=body
     lines=''.join(lines).splitlines(keepends=True)
-    if cfg['upper_slowdown_layers']: lines,report['retimed_features']=slowdown_above_support(lines,cfg,cancelled,resolved)
+    if cfg['upper_slowdown_layers']: lines,report['retimed_features']=try_upper_slowdown(lines,cfg,cancelled,resolved,report)
     report['time_change_s']=update_time_estimates(text.splitlines(keepends=True),lines)
     try:
         report['preview']=export_preview(records,cfg,lines,cancelled)
@@ -1068,6 +1085,22 @@ def layer_shape(features, width):
             footprint = Polygon(part.exterior).buffer(-radius)
             shape = shape.symmetric_difference(footprint)
     return shape
+
+TOPOLOGY_ERRORS = (GEOSException, TopologicalError)
+TOPOLOGY_REASON = "Bridge geometry could not be calculated; kept Orca's original paths"
+
+
+def is_topology_error(error):
+    # Shapely 2 exposes GEOS topology failures as GEOSException. Other GEOS
+    # errors should still propagate so unexpected failures remain visible.
+    return isinstance(error, TopologicalError) or "TopologyException" in str(error)
+
+
+def record_kept_region(report, layer, reason):
+    report["skipped_features"] += 1
+    report["skip_reasons"][reason] = report["skip_reasons"].get(reason, 0) + 1
+    report["region_results"].append({"layer": layer + 1, "status": "kept", "reason": reason})
+
 
 def polygons(geom):
     if geom.geom_type == "Polygon":
@@ -2286,9 +2319,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     bridges = [f for f in features if f.role in ("bridge", "bridge infill", "internal bridge")]
     report["bridge_features"] = len(bridges)
     def skipped(reason):
-        report["skipped_features"] += 1
-        report["skip_reasons"][reason] = report["skip_reasons"].get(reason, 0) + 1
-        report["region_results"].append({"layer": feature.layer+1, "status": "kept", "reason": reason})
+        record_kept_region(report, feature.layer, reason)
     if not bridges:
         return text, report
     printer_by_tool = {}
@@ -2308,71 +2339,77 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
     for feature in bridges:
         if cancelled():
             raise Cancelled("Cancelled.")
-        moves = [m for m in feature.moves if segment(m) is not None]
-        if not moves:
+        try:
+            moves = [m for m in feature.moves if segment(m) is not None]
+            if not moves:
+                continue
+            selected_tools = {m.before.tool for m in moves}
+            if len(selected_tools) != 1:
+                skipped("Tool change inside bridge feature")
+                continue
+            tool_index = selected_tools.pop()
+            if tool_index not in printer_by_tool:
+                printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
+            printer = printer_by_tool[tool_index]
+            width = printer["outer_wall_line_width"]
+            first, last = moves[0], moves[-1]
+            z = first.after.z
+            if feature.layer < 1 or z is None or not cfg["z_min_mm"] <= z <= cfg["z_max_mm"]:
+                continue
+            if any(m.before.z != z or m.after.z != z for m in moves):
+                raise UnsupportedGCode("Non-planar bridges are not supported.")
+            if is_retracted(first.before) or is_retracted(last.after):
+                skipped("Bridge starts or ends during firmware retraction")
+                continue
+            if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
+                skipped("State command inside bridge region")
+                continue
+            for layer in (feature.layer - 1, feature.layer):
+                shape_key = (layer, tool_index)
+                if shape_key not in shapes:
+                    shapes[shape_key] = layer_shape(by_layer.get(layer, []), width)
+            support, current = shapes[(feature.layer - 1, tool_index)], shapes[(feature.layer, tool_index)]
+            if support.is_empty or current.is_empty:
+                skipped("No closed contour")
+                continue
+            # Only real extrusion segments form the region; travel moves cannot join islands.
+            arc_width = printer["nozzle_diameter"] * cfg["arc_spacing_nozzle_ratio"]
+            region = bridge_region([segment(m) for m in moves], current, width, arc_width, cfg["wall_overlap_mm"])
+            pieces = polygons(region)
+            arcs = []
+            coverages = []
+            valid = bool(pieces)
+            for poly in pieces:
+                unsupported = poly.difference(support.buffer(width * 0.05))
+                geometric_overhang = unsupported.area >= cfg["minimum_area_mm2"] and unsupported.length >= cfg["minimum_overhang_length_mm"]
+                # A nearby Orca overhang label is not proof of a real overhang.
+                # In particular, keep Bridge paths that are supported by the
+                # previous layer's footprint unchanged.
+                if poly.area < cfg["minimum_area_mm2"] or not geometric_overhang:
+                    valid = False
+                    break
+                fill = fill_polygon_wave if cfg["overhang_mode"] == "wave" else fill_polygon
+                generated = fill(poly, support, cfg, printer, cancelled)
+                if generated is None:
+                    valid = False
+                    break
+                part, coverage = generated
+                arcs.extend(part)
+                coverages.append(coverage)
+            if not valid or not arcs:
+                skipped("Insufficient area, anchoring or coverage")
+                continue
+            pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
+            accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M204"]
+            pre = [*pre, *accel]
+            replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post, support=support)
+            replacement.extend(lines[i] for i in range(first.index, last.index + 1)
+                               if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
+        except TOPOLOGY_ERRORS as error:
+            if not is_topology_error(error):
+                raise
+            skipped(TOPOLOGY_REASON)
             continue
-        selected_tools = {m.before.tool for m in moves}
-        if len(selected_tools) != 1:
-            skipped("Tool change inside bridge feature")
-            continue
-        tool_index = selected_tools.pop()
-        if tool_index not in printer_by_tool:
-            printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
-        printer = printer_by_tool[tool_index]
-        width = printer["outer_wall_line_width"]
-        first, last = moves[0], moves[-1]
-        z = first.after.z
-        if feature.layer < 1 or z is None or not cfg["z_min_mm"] <= z <= cfg["z_max_mm"]:
-            continue
-        if any(m.before.z != z or m.after.z != z for m in moves):
-            raise UnsupportedGCode("Non-planar bridges are not supported.")
-        if is_retracted(first.before) or is_retracted(last.after):
-            skipped("Bridge starts or ends during firmware retraction")
-            continue
-        if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
-            skipped("State command inside bridge region")
-            continue
-        for layer in (feature.layer - 1, feature.layer):
-            shape_key = (layer, tool_index)
-            if shape_key not in shapes:
-                shapes[shape_key] = layer_shape(by_layer.get(layer, []), width)
-        support, current = shapes[(feature.layer - 1, tool_index)], shapes[(feature.layer, tool_index)]
-        if support.is_empty or current.is_empty:
-            skipped("No closed contour")
-            continue
-        # Only real extrusion segments form the region; travel moves cannot join islands.
-        arc_width = printer["nozzle_diameter"] * cfg["arc_spacing_nozzle_ratio"]
-        region = bridge_region([segment(m) for m in moves], current, width, arc_width, cfg["wall_overlap_mm"])
-        pieces = polygons(region)
-        arcs = []
-        coverages = []
-        valid = bool(pieces)
-        for poly in pieces:
-            unsupported = poly.difference(support.buffer(width * 0.05))
-            geometric_overhang = unsupported.area >= cfg["minimum_area_mm2"] and unsupported.length >= cfg["minimum_overhang_length_mm"]
-            # A nearby Orca overhang label is not proof of a real overhang.
-            # In particular, keep Bridge paths that are supported by the
-            # previous layer's footprint unchanged.
-            if poly.area < cfg["minimum_area_mm2"] or not geometric_overhang:
-                valid = False
-                break
-            fill = fill_polygon_wave if cfg["overhang_mode"] == "wave" else fill_polygon
-            generated = fill(poly, support, cfg, printer, cancelled)
-            if generated is None:
-                valid = False
-                break
-            part, coverage = generated
-            arcs.extend(part)
-            coverages.append(coverage)
-        if not valid or not arcs:
-            skipped("Insufficient area, anchoring or coverage")
-            continue
-        pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
-        accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M204"]
-        pre = [*pre, *accel]
-        replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post, support=support)
-        replacement.extend(lines[i] for i in range(first.index, last.index + 1)
-                           if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
         preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], (), current))
         for k in range(1, hilbert_layers + 1):
@@ -2409,9 +2446,15 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
                 feed = floor_speed(cfg, k, cfg["wave_floor_print_speed_mm_s"], original)
                 pre, post = fan_wrappers(lines, feature.start, cfg)
                 density = cfg["wave_floor_hilbert_density_percent"]
-            replacement = hilbert_feature_replacement(
-                feature, lines, unary_union([geom for _, geom in matching]), cfg, printer_by_tool[tool_index],
-                cancelled, feed, density, pre, post)
+            try:
+                replacement = hilbert_feature_replacement(
+                    feature, lines, unary_union([geom for _, geom in matching]), cfg, printer_by_tool[tool_index],
+                    cancelled, feed, density, pre, post)
+            except TOPOLOGY_ERRORS as error:
+                if not is_topology_error(error):
+                    raise
+                record_kept_region(report, feature.layer, "Hilbert geometry could not be calculated")
+                continue
             if replacement is not None:
                 replacements.append((feature.start, feature.end, replacement))
                 floor_done.add(id(feature))
@@ -2426,27 +2469,33 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             if len(feature_tools) != 1:
                 continue
             tool_index = feature_tools.pop()
-            zones = [(k, unary_union(wave_regions[(feature.layer - k, tool_index)]))
-                     for k in range(cfg["wave_floor_layers"] + 1) if (feature.layer - k, tool_index) in wave_regions]
-            if not zones:
-                continue
-            if tool_index not in printer_by_tool:
-                printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
-            width = printer_by_tool[tool_index]["outer_wall_line_width"]
-            zones = [(k, zone.buffer(2 * width if k == 0 else width / 2)) for k, zone in zones]
-            def speed_for(move, zones=zones, wall=wall):
-                line = segment(move)
-                if line is None:
+            try:
+                zones = [(k, unary_union(wave_regions[(feature.layer - k, tool_index)]))
+                         for k in range(cfg["wave_floor_layers"] + 1) if (feature.layer - k, tool_index) in wave_regions]
+                if not zones:
+                    continue
+                if tool_index not in printer_by_tool:
+                    printer_by_tool[tool_index] = printer_settings(lines, resolved, tool_index)
+                width = printer_by_tool[tool_index]["outer_wall_line_width"]
+                zones = [(k, zone.buffer(2 * width if k == 0 else width / 2)) for k, zone in zones]
+                def speed_for(move, zones=zones, wall=wall):
+                    line = segment(move)
+                    if line is None:
+                        return None
+                    original = move.after.feed / 60
+                    for k, zone in zones:
+                        if zone.intersects(line):
+                            if k == 0:
+                                override = cfg["wave_perimeter_speed_mm_s"] if wall else 0
+                                return min(original, override) if override else None
+                            return floor_speed(cfg, k, cfg["wave_floor_perimeter_speed_mm_s" if wall else "wave_floor_print_speed_mm_s"], original)
                     return None
-                original = move.after.feed / 60
-                for k, zone in zones:
-                    if zone.intersects(line):
-                        if k == 0:
-                            override = cfg["wave_perimeter_speed_mm_s"] if wall else 0
-                            return min(original, override) if override else None
-                        return floor_speed(cfg, k, cfg["wave_floor_perimeter_speed_mm_s" if wall else "wave_floor_print_speed_mm_s"], original)
-                return None
-            replacement = retime_feature(feature, lines, speed_for)
+                replacement = retime_feature(feature, lines, speed_for)
+            except TOPOLOGY_ERRORS as error:
+                if not is_topology_error(error):
+                    raise
+                record_kept_region(report, feature.layer, "Wave floor geometry could not be calculated")
+                continue
             if replacement is not None:
                 replacements.append((feature.start, feature.end, replacement))
                 report["retimed_features"] += 1
@@ -2473,17 +2522,20 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         lines[start:end] = replacement
     try:
         lines = schedule_arc_tails(lines, cfg, cancelled)
-    except UnsupportedGCode as error:
-        report["skip_reasons"]["Unsafe Arc tail scheduling: " + str(error)] = report["replaced_features"]
+    except (UnsupportedGCode, GEOSException, TopologicalError) as error:
+        if not isinstance(error, UnsupportedGCode) and not is_topology_error(error):
+            raise
+        reason = str(error) if isinstance(error, UnsupportedGCode) else "Geometry calculation failed"
+        report["skip_reasons"]["Unsafe Arc tail scheduling: " + reason] = report["replaced_features"]
         report["skipped_features"] += report["replaced_features"]
         report["replaced_features"] = report["generated_arcs"] = report["hilbert_features"] = report["retimed_features"] = 0
         report["minimum_coverage_percent"] = None
         for result in report["region_results"]:
-            if result["status"] == "generated": result.update(status="kept", reason="Unsafe scheduling: " + str(error))
+            if result["status"] == "generated": result.update(status="kept", reason="Unsafe scheduling: " + reason)
         return text, report
     lines = "".join(lines).splitlines(keepends=True)
     if cfg["upper_slowdown_layers"]:
-        lines, count = slowdown_above_support(lines, cfg, cancelled, resolved)
+        lines, count = try_upper_slowdown(lines, cfg, cancelled, resolved, report)
         report["retimed_features"] += count
     report["time_change_s"] = update_time_estimates(text.splitlines(keepends=True), lines)
     try:

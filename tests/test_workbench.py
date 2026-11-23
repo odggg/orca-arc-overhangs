@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 import runpy, sys, unittest, math, json
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'dist'))
@@ -78,6 +79,17 @@ class WorkbenchTests(unittest.TestCase):
         result=a.parse(out.splitlines(True))[-1].moves[-1].after
         self.assertEqual(original,result)
         self.assertEqual(a.process_text(out)[0],out)
+    def test_removable_geometry_failure_keeps_bridge(self):
+        source = self.removable_fixture()
+        error = a.GEOSException("TopologyException: side location conflict")
+        with patch.object(a, "bridge_region", side_effect=error) as region:
+            output, report = a.process_text(source, {"support_mode": "removable"})
+        self.assertTrue(region.called)
+        self.assertEqual(output, source)
+        self.assertEqual(report["removable_floors"], 0)
+        self.assertEqual(report["skipped_features"], 1)
+        self.assertIn("Removable floor geometry", report["region_results"][0]["reason"])
+
     def test_removable_collision_and_tool_mismatch_are_kept(self):
         source=self.removable_fixture().replace(ring(10,10,17,30),ring(10,10,20,30))
         out,report=a.process_text(source,{'support_mode':'removable','minimum_coverage_percent':80})
