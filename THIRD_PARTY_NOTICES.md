@@ -62,3 +62,4 @@ Changes dated 2026-11-23:
 - Added numeric Klipper motion-limit parsing and state restoration for generated and relocated paths.
 - Recognize compact motion commands; added a synthetic regression based on the reported bridge travel sequence.
 - Keep only polygonal area when clipping upstream concentric circles, so incidental contacts cannot invalidate their boundaries.
+- Reuse the polygon boundary and inset geometry during the upstream farthest-point search.

@@ -26,6 +26,23 @@ def fixture(style="modern"):
     return text
 
 class Tests(unittest.TestCase):
+    def test_anchor_order_preserves_first_endpoint_on_equal_distance(self):
+        from shapely.geometry import box
+
+        support = box(0, -1, 1, 1)
+        near = a.LineString([(1.37, 0.7), (1.7, 0.7)])
+        end_first = a.LineString([(1.6, -0.6), (0.8, -0.6)])
+        start_first = a.LineString([(0.8, 0), (1.6, 0)])
+        paths = [near, end_first, start_first]
+
+        ordered = a.anchor_arc_paths(paths, support, 0.4, 0.4)
+        self.assertEqual([list(path.coords) for path in ordered],
+                         [list(end_first.coords)[::-1], list(start_first.coords), list(near.coords)])
+        both_anchored = a.LineString([(0.8, 0), (0.9, 0.1)])
+        self.assertEqual(a.anchor_arc_paths([both_anchored], support, 0.4, 0.4), [both_anchored])
+        with self.assertRaises(a.Cancelled):
+            a.anchor_arc_paths(paths, support, 0.4, 0.4, lambda: True)
+
     def test_circle_boundary_ignores_a_tangent_island(self):
         from shapely.geometry import box
 

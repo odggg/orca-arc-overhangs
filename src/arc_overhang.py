@@ -164,11 +164,14 @@ def get_farthest_point(arc: Polygon, base_poly: Polygon, remaining_empty_space: 
         pass
         pass
         pass
-    for p in list(arc_coords):
-        distance = Point(p).distance(base_poly.boundary)
-        if distance > longest_distance and remaining_empty_space.buffer(0.01).contains(Point(p)):
+    boundary = base_poly.boundary
+    remaining = remaining_empty_space.buffer(0.01)
+    for coords in arc_coords:
+        p = Point(coords)
+        distance = p.distance(boundary)
+        if distance > longest_distance and remaining.contains(p):
             longest_distance = distance
-            farthest_point = Point(p)
+            farthest_point = p
             pointFound = True
     point_on_poly = nearest_points(base_poly, farthest_point)[0]
     if pointFound:
@@ -244,9 +247,11 @@ def adaptive_order(paths, support, width, cancelled=lambda: False):
             # Preserve the engine's dependency order if no candidate can be proven attached.
             result.extend(remaining)
             break
+        anchor_area = printed.buffer(width * .5)
+
         def score(item):
             _, path = item
-            anchor = path.intersection(printed.buffer(width * .5)).length
+            anchor = path.intersection(anchor_area).length
             connected = path.distance(last) <= width if last is not None else False
             return (not connected, -anchor, path.length, item[0])
         index, path = min(eligible, key=score)
@@ -963,11 +968,10 @@ def parse(lines, cancelled=lambda: False):
     layer = -1
     # Bambu inserts T1000/T255 as virtual markers; T0 in that stream is not
     # a physical multi-tool change. Ordinary Orca T0/T1 commands are physical.
-    has_bambu_virtual_markers = any(command(line)[0] in ("T255", "T1000") for line in lines)
-    has_nonzero_physical_tool = any(command(line)[0].startswith("T")
-                                    and command(line)[0][1:].isdigit()
-                                    and int(command(line)[0][1:]) not in (0, 255, 1000)
-                                    for line in lines)
+    tool_commands = {command(line)[0] for line in lines if line.lstrip().startswith(("T", "t"))}
+    has_bambu_virtual_markers = bool(tool_commands & {"T255", "T1000"})
+    has_nonzero_physical_tool = any(cmd[1:].isdigit() and int(cmd[1:]) not in (0, 255, 1000)
+                                    for cmd in tool_commands)
     for i, line in enumerate(lines):
         if i % 2048 == 0 and cancelled():
             raise Cancelled("Cancelled.")
@@ -1185,28 +1189,39 @@ def parameters(config, printer, cancelled):
         "_cancelled": cancelled,
     }
 
-def anchor_arc_paths(paths, support, arc_width, wall_width):
+def anchor_arc_paths(paths, support, arc_width, wall_width, cancelled=lambda: False):
     """Order extrusion paths so every new arc starts on printed material."""
-    pending = [path for path in paths if not path.is_empty and path.length > 1e-5]
-    if not pending or support.is_empty:
+    if support.is_empty:
+        return None
+    pending = []
+    for path in paths:
+        if not path.is_empty and path.length > 1e-5:
+            coords = path.coords
+            pending.append((path, Point(coords[0]), Point(coords[-1])))
+    if not pending:
         return None
     printed = support.buffer(wall_width * 0.5)
     ordered = []
     tolerance = max(0.01, arc_width * 0.05)
     while pending:
-        best = None
-        for index, path in enumerate(pending):
-            coords = list(path.coords)
-            start, end = Point(coords[0]), Point(coords[-1])
-            start_gap, end_gap = start.distance(printed), end.distance(printed)
-            if best is None or start_gap < best[0]:
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        best = (math.inf, 0, False)
+        for index, (_, start, end) in enumerate(pending):
+            start_gap = start.distance(printed)
+            if start_gap < best[0]:
                 best = (start_gap, index, False)
-            if end_gap < best[0]:
-                best = (end_gap, index, True)
+            if best[0] > 0:
+                end_gap = end.distance(printed)
+                if end_gap < best[0]:
+                    best = (end_gap, index, True)
+            # Distances cannot improve beyond zero; keep the original tie order.
+            if best[0] == 0:
+                break
         gap, index, reverse = best
         if gap > arc_width * 0.5 + tolerance:
             return None
-        path = pending.pop(index)
+        path, _, _ = pending.pop(index)
         if reverse:
             path = LineString(list(path.coords)[::-1])
         ordered.append(path)
@@ -1297,7 +1312,7 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     if coverage + 1e-6 < cfg["minimum_coverage_percent"]:
         return None
     arc_width = params["ArcWidth"]
-    anchored = anchor_arc_paths(lines, support, arc_width, printer["outer_wall_line_width"])
+    anchored = anchor_arc_paths(lines, support, arc_width, printer["outer_wall_line_width"], cancelled)
     if anchored is None:
         return None
     return adaptive_order(anchored, support, printer["nozzle_diameter"], cancelled) if cfg["adaptive_paths"] else anchored, coverage
@@ -1725,7 +1740,7 @@ def fill_polygon_wave(poly, support, cfg, printer, cancelled):
     paths, _ = result
     lines = [LineString(p).intersection(poly) for p in paths if len(p) >= 2 and _path_length(p) > 1e-5]
     lines = [part for line in lines for part in _parts(line, "LineString")]
-    anchored = anchor_arc_paths(lines, support, printer["nozzle_diameter"], printer["outer_wall_line_width"])
+    anchored = anchor_arc_paths(lines, support, printer["nozzle_diameter"], printer["outer_wall_line_width"], cancelled)
     if anchored is None:
         return None
     covered = unary_union([printed] + [line.buffer(printer["nozzle_diameter"] / 2) for line in anchored]).intersection(poly)
@@ -2179,14 +2194,15 @@ def move_seconds(lines):
     for line in lines:
         seconds = 0.0
         code = line.split(";")[0]
-        if command(code)[0] in ("G0", "G1", "G2", "G3"):
+        cmd, _ = command(code)
+        if cmd in ("G0", "G1", "G2", "G3"):
             words = {k: float(v) for k, v in re.findall(r"([XYF])(-?[0-9.]+)", code)}
             feed = words.get("F", feed)
             nx, ny = words.get("X", x), words.get("Y", y)
             # shortcut: G2/G3 count as their chord, close enough for a time difference
             seconds = math.hypot(nx - x, ny - y) / (feed / 60.0) if feed > 0 else 0.0
             x, y = nx, ny
-        elif command(code)[0] == "G4":
+        elif cmd == "G4":
             dwell = re.search(r"P([0-9.]+)", code)
             seconds = float(dwell.group(1)) / 1000.0 if dwell else 0.0
         out.append(seconds)
