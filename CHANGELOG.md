@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Try Arc start points on interior support ribs when the usual search cannot fill a bridge.
+- Keep sliced bridge paths when the unsupported area is too narrow for an Arc path.
+
 ## 0.4.5 - 2026-11-23
 
 - Speed up Arc generation and path ordering.
