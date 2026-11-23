@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Speed up Arc generation and path ordering by reusing geometry and stopping distance searches when an endpoint is already anchored.
+
 ## 0.4.4 - 2026-11-23
 
 - Fix an Arc/Wave export crash when clipped areas also contain isolated points or lines.
