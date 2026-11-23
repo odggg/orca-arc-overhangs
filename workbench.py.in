@@ -14,9 +14,11 @@ def adaptive_order(paths, support, width, cancelled=lambda: False):
             # Preserve the engine's dependency order if no candidate can be proven attached.
             result.extend(remaining)
             break
+        anchor_area = printed.buffer(width * .5)
+
         def score(item):
             _, path = item
-            anchor = path.intersection(printed.buffer(width * .5)).length
+            anchor = path.intersection(anchor_area).length
             connected = path.distance(last) <= width if last is not None else False
             return (not connected, -anchor, path.length, item[0])
         index, path = min(eligible, key=score)

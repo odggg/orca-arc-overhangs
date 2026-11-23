@@ -21,6 +21,14 @@ geometry = geometry.replace('random.choice(pts)', "kwargs['_rng'].choice(pts)")
 geometry = geometry.replace('dx /= magnitude', 'if magnitude == 0:\n        return start_point\n    dx /= magnitude')
 geometry = geometry.replace('while r <= rMax:', "while r <= rMax:\n        if kwargs.get('_cancelled', lambda: False)():\n            raise Cancelled('Cancelled.')")
 geometry = geometry.replace('arcs.append(arcObj)', 'if arc.is_empty or arc.area < 1e-10:\n            break\n        arcs.append(arcObj)')
+# The boundary and remaining-space buffer are constant for all candidate
+# vertices. Keep the same distance and strict containment comparisons.
+geometry = geometry.replace(
+    'for p in list(arc_coords):\n        distance = Point(p).distance(base_poly.boundary)',
+    'boundary = base_poly.boundary\n    remaining = remaining_empty_space.buffer(0.01)\n'
+    '    for coords in arc_coords:\n        p = Point(coords)\n        distance = p.distance(boundary)')
+geometry = geometry.replace('remaining_empty_space.buffer(0.01).contains(Point(p))', 'remaining.contains(p)')
+geometry = geometry.replace('farthest_point = Point(p)', 'farthest_point = p')
 # Keep only the area of a circle clip. A point touching a second island
 # must not make the arc's boundary undefined.
 geometry = geometry.replace('arc = circ.intersection(remainingSpace)',
