@@ -68,7 +68,7 @@ class Arc:
 
     def generateConcentricArc(self, startpt: Point, remainingSpace: Polygon | MultiPolygon) -> Polygon:
         circ = create_circle(startpt, self.r, self.pointsPerCircle)
-        arc = circ.intersection(remainingSpace)
+        arc = polygonal_area(circ.intersection(remainingSpace))
         self.poly = arc
         return arc
 
@@ -1146,6 +1146,16 @@ def polygons(geom):
         return [p for g in geom.geoms for p in polygons(g)]
     return []
 
+def polygonal_area(geometry):
+    """Keep the area in an overlay result and discard isolated lines and points."""
+    if geometry.geom_type in ("Polygon", "MultiPolygon"):
+        return geometry
+    parts = polygons(geometry)
+    if not parts:
+        return Polygon()
+    return parts[0] if len(parts) == 1 else unary_union(parts)
+
+
 def parameters(config, printer, cancelled):
     return {
         "ArcWidth": printer["nozzle_diameter"] * config["arc_spacing_nozzle_ratio"],
@@ -1202,15 +1212,17 @@ def bridge_region(segments, current, wall_width, arc_width, wall_overlap):
 
 def fill_polygon(poly, support, cfg, printer, cancelled):
     params = parameters(cfg, printer, cancelled)
-    overlap = support.intersection(poly)
+    overlap = polygonal_area(support.intersection(poly))
     if overlap.is_empty or overlap.area < 1e-5:
         return None
-    startline = overlap.boundary.intersection(poly.boundary.buffer(0.01))
-    if startline.is_empty:
-        startline = overlap.boundary
-    boundary = poly.boundary.difference(overlap.boundary.buffer(0.01))
+    overlap_boundary = overlap.boundary
+    startline = overlap_boundary.intersection(poly.boundary.buffer(0.01))
+    ls_parts = _parts(startline, "LineString")
+    if not ls_parts:
+        startline = overlap_boundary
+        ls_parts = _parts(startline, "LineString")
+    boundary = poly.boundary.difference(overlap_boundary.buffer(0.01))
     candidates = [getStartPtOnLS(startline, params)]
-    ls_parts = [startline] if startline.geom_type == "LineString" else [g for g in startline.geoms if g.geom_type == "LineString"]
     candidates.extend(ls.interpolate(f, normalized=True) for ls in ls_parts for f in (0.25, 0.5, 0.75))
     if cfg["adaptive_paths"]:
         candidates.sort(key=lambda pt: (-support.intersection(pt.buffer(printer["nozzle_diameter"] * 3)).area, pt.x, pt.y))
@@ -1533,7 +1545,7 @@ def wave_zigzag(levels, connector_limit):
     return region
 
 def _clean_fronts(next_region, trim, tolerance, reconnect, mask=None):
-    fronts = next_region.boundary.intersection(trim)
+    fronts = polygonal_area(next_region).boundary.intersection(trim)
     if mask is not None:
         fronts = fronts.intersection(mask)
     lines = [_simplify(l, tolerance) for l in _lines(fronts)]
@@ -1541,7 +1553,7 @@ def _clean_fronts(next_region, trim, tolerance, reconnect, mask=None):
 
 def bridging_unsupported_distance(real_overhang, anchors):
     """Port of detect_bridging_direction's cost: length of overhang edge left floating for the best bridge direction."""
-    area = real_overhang.difference(anchors)
+    area = polygonal_area(real_overhang.difference(anchors))
     if area.is_empty:
         return 0.0
     floating = area.boundary.difference(anchors.buffer(1e-3))
@@ -1590,7 +1602,7 @@ def wave_generate(poly, support, cfg, printer, cancelled):
     overhangs = poly.difference(lower)
     if overhangs.is_empty:
         return None
-    anchors = poly.intersection(lower)
+    anchors = polygonal_area(poly.intersection(lower))
     inset_anchors = anchors.difference(overhangs.buffer(anchors_size + 0.1 * width, join_style="bevel"))
     inset_area = poly.difference(inset_anchors)
     out_paths, filled = [], []
@@ -1613,11 +1625,12 @@ def wave_generate(poly, support, cfg, printer, cancelled):
             slits = narrow_split_slits(cover, spacing, cfg["wave_min_width_mm"])
             splits = polygons(cover.difference(slits)) if slits is not None else [cover]
             splits = polygons(unary_union(splits))
-            anchoring = cover.buffer(1.1 * base, join_style="round").intersection(inset_anchors)
+            anchor_reach = cover.buffer(1.1 * base, join_style="round")
+            anchoring = polygonal_area(anchor_reach.intersection(inset_anchors))
             if anchoring.is_empty:
-                anchoring = cover.buffer(1.1 * base, join_style="round").intersection(anchors)
+                anchoring = polygonal_area(anchor_reach.intersection(anchors))
             if anchoring.is_empty:
-                anchoring = cover.buffer(1.1 * base, join_style="round").intersection(lower)
+                anchoring = polygonal_area(anchor_reach.intersection(lower))
             if anchoring.is_empty:
                 continue
             # wave_seeds: the anchoring outline (grown a little) clipped to the cover; fallback is the cover edge inside it.
@@ -1636,7 +1649,7 @@ def wave_generate(poly, support, cfg, printer, cancelled):
                     trim = split.buffer(-0.1 * base, join_style="round")
                 if trim.is_empty:
                     trim = split
-                accumulated = seeds.buffer(seed_expansion, cap_style="round").intersection(split)
+                accumulated = polygonal_area(seeds.buffer(seed_expansion, cap_style="round").intersection(split))
                 if accumulated.is_empty:
                     continue
                 levels, area, iteration = [], accumulated.area, 0
@@ -1655,7 +1668,7 @@ def wave_generate(poly, support, cfg, printer, cancelled):
                             fronts = _clean_fronts(grown, trim, min(0.05 * step, resolution), step, influence)
                             if fronts:
                                 levels.append(fronts)
-                    next_region = accumulated.buffer(spacing, join_style="round").intersection(split)
+                    next_region = polygonal_area(accumulated.buffer(spacing, join_style="round").intersection(split))
                     if next_region.is_empty or next_region.area <= area + growth:
                         break
                     fronts = _clean_fronts(next_region, trim, min(0.05 * spacing, resolution), spacing)

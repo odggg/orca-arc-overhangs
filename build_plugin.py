@@ -21,6 +21,10 @@ geometry = geometry.replace('random.choice(pts)', "kwargs['_rng'].choice(pts)")
 geometry = geometry.replace('dx /= magnitude', 'if magnitude == 0:\n        return start_point\n    dx /= magnitude')
 geometry = geometry.replace('while r <= rMax:', "while r <= rMax:\n        if kwargs.get('_cancelled', lambda: False)():\n            raise Cancelled('Cancelled.')")
 geometry = geometry.replace('arcs.append(arcObj)', 'if arc.is_empty or arc.area < 1e-10:\n            break\n        arcs.append(arcObj)')
+# Keep only the area of a circle clip. A point touching a second island
+# must not make the arc's boundary undefined.
+geometry = geometry.replace('arc = circ.intersection(remainingSpace)',
+                            'arc = polygonal_area(circ.intersection(remainingSpace))')
 header = '''# /// script
 # requires-python = ">=3.12"
 # dependencies = ["numpy>=1.26,<3", "shapely>=2.0,<3"]

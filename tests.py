@@ -26,6 +26,70 @@ def fixture(style="modern"):
     return text
 
 class Tests(unittest.TestCase):
+    def test_circle_boundary_ignores_a_tangent_island(self):
+        from shapely.geometry import box
+
+        center = a.Point(0, 0)
+        main_area = box(-0.5, 0.6, 0.5, 1.2)
+        tangent_island = box(1, -0.04, 1.5, 0.04)
+        region = a.MultiPolygon([main_area, tangent_island])
+        arc = a.Arc(center, 1)
+        circle = a.create_circle(center, 1, arc.pointsPerCircle)
+        mixed = circle.intersection(region)
+        self.assertEqual(mixed.geom_type, "GeometryCollection")
+        self.assertIsNone(mixed.boundary)
+
+        expected = a.Arc(center, 1)
+        expected.generateConcentricArc(center, main_area)
+        clipped = arc.generateConcentricArc(center, region)
+        self.assertTrue(clipped.equals(expected.poly))
+        self.assertTrue(arc.extractArcBoundary().equals(expected.extractArcBoundary()))
+
+        # A circle that only touches the printable area cannot make a path.
+        self.assertTrue(arc.generateConcentricArc(center, tangent_island).is_empty)
+        self.assertEqual(a.generateMultipleConcentricArcs(
+            center, 1, 1, a.LineString(), tangent_island, {"ArcWidth": 0.4}), [])
+
+    def test_arc_fill_with_support_touching_a_second_edge(self):
+        from shapely.geometry import box
+
+        source = fixture().splitlines(True)
+        cfg = a.configuration({"minimum_coverage_percent": 80})
+        printer = a.printer_settings(source)
+        width = printer["outer_wall_line_width"]
+        features = a.parse(source)
+        bridge = next(f for f in features if f.role == "bridge")
+        main_support = a.layer_shape([f for f in features if f.layer == 0], width)
+        current = a.layer_shape([f for f in features if f.layer == 1], width)
+        target = a.bridge_region(
+            [a.segment(move) for move in bridge.moves], current, width,
+            printer["nozzle_diameter"] * cfg["arc_spacing_nozzle_ratio"], cfg["wall_overlap_mm"])
+        right = target.bounds[2]
+        edge_contact = box(right, 21, right + 1, 23)
+        support = a.MultiPolygon([main_support, edge_contact])
+        overlap = target.intersection(support)
+        self.assertEqual(overlap.geom_type, "GeometryCollection")
+        self.assertIsNone(overlap.boundary)
+
+        result = a.fill_polygon(target, support, cfg, printer, lambda: False)
+        self.assertIsNotNone(result)
+        paths, coverage = result
+        self.assertGreater(len(paths), 5)
+        self.assertGreaterEqual(coverage, 80)
+        self.assertTrue(all(target.buffer(0.02).covers(path) for path in paths))
+
+    def test_wave_front_ignores_contacts_without_area(self):
+        from shapely.geometry import box
+
+        outline = box(0, 0, 2, 2)
+        contact = a.LineString([(3, 1), (4, 1)])
+        mixed = a.GeometryCollection([outline, contact, a.Point(5, 1)])
+        trim = box(-1, -1, 6, 3)
+        expected = a._clean_fronts(outline, trim, 0.01, 0.4)
+        self.assertTrue(expected)
+        self.assertEqual(a._clean_fronts(mixed, trim, 0.01, 0.4), expected)
+        self.assertEqual(a._clean_fronts(contact, trim, 0.01, 0.4), [])
+
     def test_topology_failure_keeps_one_bridge_and_exports_the_next(self):
         from shapely.geometry import box
 
