@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.4 - 2026-11-23
 
-- Fix Arc/Wave geometry calculations when a clipped area also contains isolated points or lines.
+- Fix an Arc/Wave export crash when clipped areas also contain isolated points or lines.
 
 ## 0.4.3 - 2026-11-23
 
