@@ -44,12 +44,12 @@ def emit_refined_arcs(arcs, before, after, cfg, printer, restore, pre, post, sup
         if cmd == 'M106':
             channel = int(words.get('P', 0))
             modal[f'fan:{channel}'] = line
-        elif cmd == 'M204':
-            modal['acceleration'] = line
+        update_motion_modal(modal, cmd, words)
     out = [MARKER + 'BEGIN\n', ';TYPE:Bridge\n', *pre]
     acceleration = modal.get('acceleration')
     if cfg['support_acceleration_mm_s2'] and acceleration:
-        out.append(f"M204 S{cfg['support_acceleration_mm_s2']:g}\n")
+        prefix = 'SET_VELOCITY_LIMIT ACCEL=' if acceleration.startswith('SET_VELOCITY_LIMIT') else 'M204 S'
+        out.append(f"{prefix}{cfg['support_acceleration_mm_s2']:g}\n")
     fan_key = next((key for key in ('fan:0', 'fan:1') if key in modal), None)
     old_fan = modal.get(fan_key)
     def fan(percent):

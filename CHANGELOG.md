@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix skipped Klipper bridges containing `SET_VELOCITY_LIMIT` acceleration changes.
+- Preserve Klipper motion limits when moving Arc and overhang-wall paths.
+- Recognize compact G-code moves such as `G1E-.6F1800`.
+
 ## 0.4.2 - 2026-11-13
 
 - Import copied Wave settings from gallery pages.

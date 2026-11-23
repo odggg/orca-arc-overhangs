@@ -273,12 +273,12 @@ def emit_refined_arcs(arcs, before, after, cfg, printer, restore, pre, post, sup
         if cmd == 'M106':
             channel = int(words.get('P', 0))
             modal[f'fan:{channel}'] = line
-        elif cmd == 'M204':
-            modal['acceleration'] = line
+        update_motion_modal(modal, cmd, words)
     out = [MARKER + 'BEGIN\n', ';TYPE:Bridge\n', *pre]
     acceleration = modal.get('acceleration')
     if cfg['support_acceleration_mm_s2'] and acceleration:
-        out.append(f"M204 S{cfg['support_acceleration_mm_s2']:g}\n")
+        prefix = 'SET_VELOCITY_LIMIT ACCEL=' if acceleration.startswith('SET_VELOCITY_LIMIT') else 'M204 S'
+        out.append(f"{prefix}{cfg['support_acceleration_mm_s2']:g}\n")
     fan_key = next((key for key in ('fan:0', 'fan:1') if key in modal), None)
     old_fan = modal.get(fan_key)
     def fan(percent):
@@ -874,11 +874,45 @@ class Feature:
     end: int = 0
     moves: list = field(default_factory=list)
 
+VELOCITY_LIMIT_PARAMETERS = {"ACCEL", "VELOCITY", "SQUARE_CORNER_VELOCITY", "MINIMUM_CRUISE_RATIO"}
+
+
+def velocity_limit_words(body):
+    """Read only understood numeric Klipper limits; unknown macros stay protected."""
+    words = {}
+    for token in body.split()[1:]:
+        match = re.fullmatch(r"([A-Z_]+)=([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]?\d+)?)", token)
+        if not match or match[1] not in VELOCITY_LIMIT_PARAMETERS or match[1] in words:
+            return None
+        key, value = match[1], float(match[2])
+        if not math.isfinite(value) or value < 0:
+            return None
+        if key in ("ACCEL", "VELOCITY") and value == 0:
+            return None
+        if key == "MINIMUM_CRUISE_RATIO" and value >= 1:
+            return None
+        words[key] = value
+    return words
+
+
+def update_motion_modal(modal, cmd, words):
+    """Store partial Klipper updates independently; M204 and ACCEL share one state."""
+    if cmd == "M204" and words:
+        modal["acceleration"] = "M204 " + " ".join(f"{k}{v:g}" for k, v in sorted(words.items())) + "\n"
+    elif cmd == "SET_VELOCITY_LIMIT":
+        for key, value in words.items():
+            slot = "acceleration" if key == "ACCEL" else "klipper:" + key
+            modal[slot] = f"SET_VELOCITY_LIMIT {key}={value:.15g}\n"
+
+
 def command(line):
     body = line.split(";", 1)[0].strip().upper()
     if not body:
         return "", {}
-    match = re.match(r"^([GMT]\d+(?:\.\d+)?|T\d+)\b", body)
+    if body.split()[0] == "SET_VELOCITY_LIMIT":
+        return "SET_VELOCITY_LIMIT", velocity_limit_words(body) or {}
+    # Orca may emit compact commands such as G1E-.6 or G1Z6.1F36000.
+    match = re.match(r"^([GMT]\d+(?:\.\d+)?|T\d+)(?=\s|[A-Z]|$)", body)
     if not match:
         return body.split()[0], {}
     return {"G00":"G0","G01":"G1","G02":"G2","G03":"G3"}.get(match[1], match[1]), {k: float(v) for k, v in WORD.findall(body[match.end():])}
@@ -959,13 +993,12 @@ def parse(lines, cancelled=lambda: False):
             if tool in (255, 1000) or (has_bambu_virtual_markers and not has_nonzero_physical_tool and tool == 0):
                 continue
             state.tool = tool
-        elif cmd in ("M204", "M104", "M109", "M106", "M107"):
+        elif cmd in ("M204", "SET_VELOCITY_LIMIT", "M104", "M109", "M106", "M107"):
             # Immutable snapshots let relocated blocks restore the fan, active
             # tool's temperature and acceleration expected at each location.
             modal = dict(state.modal)
-            if cmd == "M204" and words:
-                modal["acceleration"] = "M204 " + " ".join(f"{k}{v:g}" for k, v in sorted(words.items())) + "\n"
-            elif cmd in ("M104", "M109") and "S" in words:
+            update_motion_modal(modal, cmd, words)
+            if cmd in ("M104", "M109") and "S" in words:
                 tool = int(words.get("T", state.tool))
                 modal[f"temperature:{tool}"] = f"M104 T{tool} S{words['S']:g}\n"
             elif cmd in ("M106", "M107"):
@@ -1673,6 +1706,13 @@ def wave_wrappers(lines, index, arcs, cfg, state=None, printer=None):
 # Commands that may sit inside a block the plugin edits. M204 is Orca's acceleration change; G17 selects the
 # XY plane before Orca's spiral Z lift (a G3 with Z), which the replaced block does not need.
 KEPT_COMMANDS = ("", "G0", "G1", "G2", "G3", "M73", "M204", "G17")
+MOTION_LIMIT_COMMANDS = ("M204", "SET_VELOCITY_LIMIT")
+
+
+def editable_command(line):
+    cmd, words = command(line)
+    # Do not whitelist arbitrary Klipper macros or silently discard unsupported parameters.
+    return cmd in KEPT_COMMANDS or (cmd == "SET_VELOCITY_LIMIT" and bool(words))
 
 WALL_ROLES = ("outer wall", "inner wall", "overhang wall")
 SOLID_ROLES = ("solid infill", "internal solid infill", "bottom surface")
@@ -1690,7 +1730,7 @@ def fan_wrappers(lines, index, cfg):
 
 def retime_feature(feature, lines, speed_for):
     """Rewrite feed rates of extruding moves. speed_for(move) -> mm/s or None (unchanged). Returns lines or None."""
-    if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(feature.start, feature.end)):
+    if any(not editable_command(lines[i]) for i in range(feature.start, feature.end)):
         return None
     if len({m.before.tool for m in feature.moves}) > 1:
         return None
@@ -1864,7 +1904,7 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
     if len({move.before.tool for move in moves}) != 1:
         return None
     first, last = strokes[0][0], strokes[-1][0]
-    if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
+    if any(not editable_command(lines[i]) for i in range(first.index, last.index + 1)):
         return None
     # Orca writes ;TYPE before the retract/travel/unretract that opens a feature, so
     # moves inside it are legitimately retracted. Only the replaced extrusion
@@ -1893,7 +1933,7 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
     out = list(lines[feature.start:first.index])
     out.extend(["; FEATURE: Internal solid infill (Hilbert)\n; Hilbert replacement in Arc zone\n", *pre])
     out.extend(lines[i] for i in range(first.index, last.index + 1)
-               if command(lines[i])[0] in ("M204", "G17"))
+               if command(lines[i])[0] in (*MOTION_LIMIT_COMMANDS, "G17"))
     retract, retract_feed = cfg["retract_length_mm"], cfg["retract_speed_mm_s"] * 60
     def jump(x, y):
         if retract:
@@ -2000,7 +2040,7 @@ def schedule_arc_tails(lines, cfg, cancelled):
             continue
         if last.index >= key[1]:
             raise UnsupportedGCode("Overhang wall crosses a tool or layer boundary.")
-        if any(command(lines[i])[0] not in KEPT_COMMANDS
+        if any(not editable_command(lines[i])
                for i in range(first.index, last.index + 1)):
             raise UnsupportedGCode("Overhang wall contains a state command that cannot be moved.")
         raw = [lines[feature.start]] + list(lines[first.index:last.index + 1])
@@ -2032,7 +2072,7 @@ def schedule_arc_tails(lines, cfg, cancelled):
             if before.tool != restore.tool:
                 raise UnsupportedGCode("Arc tail would require an additional material change.")
             # Keep progress and acceleration state at the original location too.
-            kept = [line for line in raw if command(line)[0] in ("M73", "M204", "G17")]
+            kept = [line for line in raw if command(line)[0] in ("M73", *MOTION_LIMIT_COMMANDS, "G17")]
             edits.append((start, end, kept + relocate_travel(after, cfg)))
             tail.extend(relocate_travel(before, cfg))
             tail.extend(line for line in raw if command(line)[0] != "M73")
@@ -2071,14 +2111,14 @@ def move_seconds(lines):
     for line in lines:
         seconds = 0.0
         code = line.split(";")[0]
-        if re.match(r"G[0-3]\b", code):
+        if command(code)[0] in ("G0", "G1", "G2", "G3"):
             words = {k: float(v) for k, v in re.findall(r"([XYF])(-?[0-9.]+)", code)}
             feed = words.get("F", feed)
             nx, ny = words.get("X", x), words.get("Y", y)
             # shortcut: G2/G3 count as their chord, close enough for a time difference
             seconds = math.hypot(nx - x, ny - y) / (feed / 60.0) if feed > 0 else 0.0
             x, y = nx, ny
-        elif re.match(r"G4\b", code):
+        elif command(code)[0] == "G4":
             dwell = re.search(r"P([0-9.]+)", code)
             seconds = float(dwell.group(1)) / 1000.0 if dwell else 0.0
         out.append(seconds)
@@ -2329,7 +2369,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
         if is_retracted(first.before) or is_retracted(last.after):
             skipped("Bridge starts or ends during firmware retraction")
             continue
-        if any(command(lines[i])[0] not in KEPT_COMMANDS for i in range(first.index, last.index + 1)):
+        if any(not editable_command(lines[i]) for i in range(first.index, last.index + 1)):
             skipped("State command inside bridge region")
             continue
         for layer in (feature.layer - 1, feature.layer):
@@ -2368,11 +2408,11 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             skipped("Insufficient area, anchoring or coverage")
             continue
         pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
-        accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] == "M204"]
+        accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] in MOTION_LIMIT_COMMANDS]
         pre = [*pre, *accel]
         replacement = emit_arcs(arcs, first.before, last.after, cfg, printer, pre=pre, post=post, support=support)
         replacement.extend(lines[i] for i in range(first.index, last.index + 1)
-                           if command(lines[i])[0] in ("M73", "M204"))  # the lift's G17 is dropped with the lift itself
+                           if command(lines[i])[0] in ("M73", *MOTION_LIMIT_COMMANDS))  # the lift's G17 is dropped with the lift itself
         replacements.append((first.index, last.index + 1, replacement))
         preview_records.append((feature.layer, z, tool_index, cfg["overhang_mode"], (), current))
         for k in range(1, hilbert_layers + 1):
