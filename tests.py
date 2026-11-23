@@ -26,6 +26,34 @@ def fixture(style="modern"):
     return text
 
 class Tests(unittest.TestCase):
+    def test_arcs_fill_both_sides_of_an_interior_support_rib(self):
+        from shapely.geometry import box
+
+        roof = box(0, 0, 20, 24)
+        rib = box(8, 0, 12, 24)
+        cfg = a.configuration({"minimum_area_mm2": 0, "minimum_coverage_percent": 90})
+        printer = a.printer_settings(fixture().splitlines(), {"nozzle_diameter": 0.6})
+        result = a.fill_polygon(roof, rib, cfg, printer, lambda: False)
+        self.assertIsNotNone(result)
+        paths, coverage = result
+        self.assertGreaterEqual(coverage, 90)
+        self.assertTrue(any(path.bounds[0] < 1 for path in paths))
+        self.assertTrue(any(path.bounds[2] > 19 for path in paths))
+        envelope = roof.buffer(0.02)
+        self.assertTrue(all(envelope.covers(path) for path in paths))
+
+    def test_almost_supported_bridge_keeps_original_toolpaths(self):
+        source = fixture().split("; CHANGE_LAYER", 1)[0]
+        source += "; CHANGE_LAYER\nG1 Z.2\n" + ring(10, 10, 30, 30)
+        source += "; CHANGE_LAYER\nG1 Z.4\n" + ring(10, 10, 30.08, 30)
+        source += "; FEATURE: Bridge\nG1 X29 Y11\n"
+        for i in range(45):
+            y = 11 + i * .4
+            source += f"G1 X29 Y{y:.3f}\nG1 X30.14 Y{y:.3f} E.05\n"
+        output, report = a.process_text(source, {"wall_overlap_mm": .8, "minimum_area_mm2": 0})
+        self.assertEqual(output, source)
+        self.assertEqual(report["skip_reasons"], {"Unsupported area too narrow for an Arc path": 1})
+
     def test_anchor_order_preserves_first_endpoint_on_equal_distance(self):
         from shapely.geometry import box
 

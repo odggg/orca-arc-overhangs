@@ -1259,16 +1259,45 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
     candidates.extend(ls.interpolate(f, normalized=True) for ls in ls_parts for f in (0.25, 0.5, 0.75))
     if cfg["adaptive_paths"]:
         candidates.sort(key=lambda pt: (-support.intersection(pt.buffer(printer["nozzle_diameter"] * 3)).area, pt.x, pt.y))
-    remaining = poly
     initial = []
+    tried = set()
     for pt in candidates:
         if cancelled():
             raise Cancelled("Cancelled.")
-        initial = generateMultipleConcentricArcs(pt, printer["nozzle_diameter"], cfg["max_radius_mm"], boundary, remaining, params)
+        tried.add((pt.x, pt.y))
+        initial = generateMultipleConcentricArcs(pt, printer["nozzle_diameter"], cfg["max_radius_mm"], boundary, poly, params)
         if len(initial) >= 2:
+            generated = complete_arc_fill(initial, poly, support, cfg, printer, params, cancelled)
+            if generated is not None:
+                return generated
             break
-    if len(initial) < 2:
+
+    # The usual seed missed coverage or anchoring. A central rib can offer
+    # a better interface even when part of the support reaches the rim.
+    candidates.extend(ls.interpolate(f, normalized=True)
+                      for ls in _parts(overlap_boundary, "LineString")
+                      for f in (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875))
+    best = initial if len(initial) >= 2 else []
+    best_area = sum(arc.poly.area for arc in best)
+    for pt in candidates:
+        if cancelled():
+            raise Cancelled("Cancelled.")
+        coords = (pt.x, pt.y)
+        if coords in tried:
+            continue
+        tried.add(coords)
+        trial = generateMultipleConcentricArcs(pt, printer["nozzle_diameter"], cfg["max_radius_mm"], boundary, poly, params)
+        area = sum(arc.poly.area for arc in trial)
+        if len(trial) >= 2 and area > best_area:
+            best, best_area = trial, area
+    if not best or best is initial:
         return None
+    return complete_arc_fill(best, poly, support, cfg, printer, params, cancelled)
+
+
+def complete_arc_fill(initial, poly, support, cfg, printer, params, cancelled):
+    remaining = poly
+    boundary = poly.boundary
     lines = getArcBoundarys(initial)
     frontier = [initial[-1]]
     for arc in initial:
@@ -1295,7 +1324,7 @@ def fill_polygon(poly, support, cfg, printer, cancelled):
             continue
         start = move_toward_point(pt, cur.center, cfg["arc_center_offset_mm"])
         arcs = generateMultipleConcentricArcs(start, cfg["arc_center_offset_mm"] + params["ArcWidth"] / 1.5,
-                                              cfg["max_radius_mm"], poly.boundary, remaining, params)
+                                              cfg["max_radius_mm"], boundary, remaining, params)
         iterations += 1
         if not arcs:
             index += 1
@@ -2470,8 +2499,10 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
             arcs = []
             coverages = []
             valid = bool(pieces)
+            reason = "Insufficient area, anchoring or coverage"
+            supported_margin = support.buffer(width * 0.05)
             for poly in pieces:
-                unsupported = poly.difference(support.buffer(width * 0.05))
+                unsupported = poly.difference(supported_margin)
                 geometric_overhang = unsupported.area >= cfg["minimum_area_mm2"] and unsupported.length >= cfg["minimum_overhang_length_mm"]
                 # A nearby Orca overhang label is not proof of a real overhang.
                 # In particular, keep Bridge paths that are supported by the
@@ -2479,7 +2510,14 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
                 if poly.area < cfg["minimum_area_mm2"] or not geometric_overhang:
                     valid = False
                     break
-                fill = fill_polygon_wave if cfg["overhang_mode"] == "wave" else fill_polygon
+                # Small contour differences can otherwise trigger a full fill of
+                # a large, almost completely supported bridge. Require room for
+                # at least one Arc spacing in the actual unsupported footprint.
+                if not wave_mode and unsupported.buffer(-arc_width / 2).is_empty:
+                    reason = "Unsupported area too narrow for an Arc path"
+                    valid = False
+                    break
+                fill = fill_polygon_wave if wave_mode else fill_polygon
                 generated = fill(poly, support, cfg, printer, cancelled)
                 if generated is None:
                     valid = False
@@ -2488,7 +2526,7 @@ def process_text(text, overrides=None, resolved=None, cancelled=lambda: False):
                 arcs.extend(part)
                 coverages.append(coverage)
             if not valid or not arcs:
-                skipped("Insufficient area, anchoring or coverage")
+                skipped(reason)
                 continue
             pre, post = wave_wrappers(lines, first.index, arcs, cfg, first.before, printer) if cfg["overhang_mode"] == "wave" else ((), ())
             accel = [lines[i] for i in range(first.index, last.index + 1) if command(lines[i])[0] in MOTION_LIMIT_COMMANDS]
