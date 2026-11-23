@@ -1,4 +1,4 @@
-# Arc Overhang 0.4.6
+# Arc Overhang 0.4.7
 
-- Try Arc start points on interior support ribs when the usual search cannot fill a bridge.
-- Keep sliced bridge paths when the unsupported area is too narrow for an Arc path.
+- Explain when the preview finds no bridge fill to replace.
+- Recover the active filament diameter from sliced G-code when Orca's preset data omits that slot.
