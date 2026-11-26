@@ -1,4 +1,5 @@
-# Arc Overhang 0.4.7
+# Arc Overhang 0.4.8
 
-- Explain when the preview finds no bridge fill to replace.
-- Recover the active filament diameter from sliced G-code when Orca's preset data omits that slot.
+- Stop replaying unchanged nozzle temperatures when moving Arc and overhang paths.
+- Restore the correct nozzle temperature after `M109 R` commands.
+- Accept RepRapFirmware `G10` and `M568` temperature commands without treating them as retractions.

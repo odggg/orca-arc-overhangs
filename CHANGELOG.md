@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.8 - 2026-11-26
 
 - Stop replaying unchanged nozzle temperatures when moving Arc and overhang paths.
 - Restore the correct nozzle temperature after `M109 R` commands.
