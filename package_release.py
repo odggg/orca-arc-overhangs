@@ -68,6 +68,8 @@ files = {
     "workbench.py.in": ROOT / "workbench.py.in",
     "ui/workbench.js": ROOT / "ui/workbench.js",
     "tests/test_workbench.py": ROOT / "tests/test_workbench.py",
+    "tests/test_firmware_compatibility.py": ROOT / "tests/test_firmware_compatibility.py",
+    "docs/FIRMWARE_COMPATIBILITY.md": ROOT / "docs/FIRMWARE_COMPATIBILITY.md",
     "tests/test_plugin.py": ROOT / "tests/test_plugin.py",
     "docs/WORKBENCH.md": ROOT / "docs/WORKBENCH.md",
     "tests.py": ROOT / "tests.py",

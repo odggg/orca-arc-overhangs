@@ -53,7 +53,7 @@ All UI code and graphics were created for this project. See [UX design notes](do
 - Replace eligible, geometrically unsupported Bridge regions with concentric Arc paths.
 - Select **Print order**: the default keeps the 0.2.4 order (normal walls/infill → Arcs/Waves → Overhang walls). The **Keep slicer order** option preserves normal wall/infill positions, including "Print infill first", and moves only early Overhang walls after the generated support. Neither option crosses a layer or tool-selection boundary.
 - Preserve material changes and use the active tool's nozzle, filament and flow settings.
-- Support parameterless G10/G11 firmware retract commands.
+- Support parameterless G10/G11 firmware retract commands and temperature-only RepRapFirmware G10/M568 commands. Tool and workplace offsets remain unsupported.
 - Choose Arc (default) or Wave overhang mode. Wave grows offset fronts outward from the supported edge, ported from [OrcaSlicer-WaveOverhangs](https://github.com/dennisklappe/OrcaSlicer-WaveOverhangs). Wave mode is experimental; this review validates G-code processing, not physical print quality.
 - Wave exports start with the `WAVE_OVERHANG_BUILD` and `WAVE_OVERHANG_CONFIG` comment lines, so they can be uploaded to the waveoverhangs.com gallery.
 - Adjust inner wall overlap independently from Arc spacing.
