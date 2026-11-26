@@ -322,6 +322,46 @@ def command(line):
         return body.split()[0], {}
     return {"G00":"G0","G01":"G1","G02":"G2","G03":"G3"}.get(match[1], match[1]), {k: float(v) for k, v in WORD.findall(body[match.end():])}
 
+
+def rrf_temperature_commands(line, cmd):
+    """Recognize temperature-only RRF commands without accepting coordinate offsets.
+
+    Heater lists must be preserved verbatim: G10 S200:210 controls two heaters,
+    whereas the general G-code word parser only represents scalar parameters.
+    """
+    if cmd not in ("G10", "M568"):
+        return None
+    body = line.split(";", 1)[0].strip().upper()
+    tail = body[len(cmd):].strip()
+    matches = list(re.finditer(r"([PRSA])\s*(" + NUMBER + r"(?::" + NUMBER + r")*)", tail))
+    if not matches or re.sub(r"([PRSA])\s*(" + NUMBER + r"(?::" + NUMBER + r")*)", "", tail).strip():
+        return None
+    params = {match[1]: match[2] for match in matches}
+    if len(params) != len(matches) or "P" not in params or not ({"S", "R", "A"} & params.keys()):
+        return None
+    if cmd == "G10" and "A" in params:
+        return None
+    try:
+        tool = float(params["P"])
+        if not tool.is_integer() or tool < 0:
+            return None
+        for key, value in params.items():
+            if not all(math.isfinite(float(part)) for part in value.split(":")):
+                return None
+            if key == "A" and value not in ("0", "1", "2"):
+                return None
+    except ValueError:
+        return None
+    tool = int(tool)
+    result = {}
+    for parameter, slot in (("S", "temperature"), ("R", "standby_temperature")):
+        if parameter in params:
+            result[f"{slot}:{tool}"] = f"G10 P{tool} {parameter}{params[parameter]}\n"
+    if "A" in params:
+        result[f"heater_mode:{tool}"] = f"M568 P{tool} A{params['A']}\n"
+    return result
+
+
 def parse(lines, cancelled=lambda: False):
     state = State()
     features = []
@@ -384,9 +424,13 @@ def parse(lines, cancelled=lambda: False):
                         state.retracted = 0.0
             if feature:
                 feature.moves.append(Move(i, before, replace(state), delta, cmd, words))
-        elif cmd in ("G10", "G11"):
-            if words:
-                raise UnsupportedGCode(cmd + " with parameters is not supported; expected firmware retract/unretract.")
+        elif cmd in ("G10", "G11", "M568"):
+            temperature = rrf_temperature_commands(line, cmd)
+            if temperature is not None:
+                state.modal = tuple(sorted({**dict(state.modal), **temperature}.items()))
+                continue
+            if line.split(";", 1)[0].strip().upper() != cmd or cmd == "M568":
+                raise UnsupportedGCode(cmd + " has unsupported parameters; only firmware retract/unretract or RRF temperature-only commands are supported.")
             # Orca emits parameterless G10/G11 for firmware retract. Track the
             # state independently from E-based retracts because only G11 clears it.
             state.firmware_retracted = cmd == "G10"
@@ -402,9 +446,11 @@ def parse(lines, cancelled=lambda: False):
             # tool's temperature and acceleration expected at each location.
             modal = dict(state.modal)
             update_motion_modal(modal, cmd, words)
-            if cmd in ("M104", "M109") and "S" in words:
+            if cmd in ("M104", "M109"):
                 tool = int(words.get("T", state.tool))
-                modal[f"temperature:{tool}"] = f"M104 T{tool} S{words['S']:g}\n"
+                value = words.get("S", words.get("R") if cmd == "M109" else None)
+                if value is not None:
+                    modal[f"temperature:{tool}"] = f"M104 T{tool} S{value:g}\n"
             elif cmd in ("M106", "M107"):
                 channel = int(words.get("P", 0))
                 speed = words.get("S", 255) if cmd == "M106" else 0
@@ -1164,8 +1210,12 @@ def wave_wrappers(lines, index, arcs, cfg, state=None, printer=None):
             post.extend(end)
     if cfg["wave_temperature_c"] and state is not None:
         old = dict(state.modal).get(f"temperature:{state.tool}")
-        if old:
-            pre.append(f"M104 T{state.tool} S{cfg['wave_temperature_c']:g}\n")
+        # A startup heater-off command can precede heating inside an opaque
+        # printer macro. Never use that stale zero as a restoration target.
+        # Multi-heater RRF tools are left untouched by this scalar override.
+        if old and command(old)[1].get("S", 0) > 0 and ":" not in old:
+            prefix = f"G10 P{state.tool}" if command(old)[0] == "G10" else f"M104 T{state.tool}"
+            pre.append(f"{prefix} S{cfg['wave_temperature_c']:g}\n")
             post.append(old)
     speed = cfg["wave_speed_mm_s"]
     if printer and printer.get("max_volumetric_speed"):
@@ -1450,13 +1500,18 @@ def hilbert_feature_replacement(feature, lines, target, cfg, printer, cancelled,
     return out
 
 
-def relocate_travel(target, cfg):
+def relocate_travel(target, cfg, current):
     """Restore the state needed by an unchanged block without extruding a path."""
     if is_retracted(target) or None in (target.x, target.y, target.z):
         raise UnsupportedGCode("Cannot safely relocate a retracted or unknown-position block.")
     retract = cfg["retract_length_mm"]
     feed = cfg["retract_speed_mm_s"] * 60
-    out = [text for _, text in target.modal]
+    current_modal = dict(current.modal)
+    thermal_slots = ("temperature:", "standby_temperature:", "heater_mode:")
+    # Replaying an unchanged startup S0 can turn off a nozzle that a printer
+    # macro has since heated. Only emit thermal state that actually differs.
+    out = [text for key, text in target.modal
+           if not key.startswith(thermal_slots) or current_modal.get(key) != text]
     if retract:
         out.append(f"G1 E{-retract:.7f} F{feed:.2f}\n")
     out.append(f"G0 X{target.x:.5f} Y{target.y:.5f} Z{target.z:.5f} F{cfg['travel_speed_mm_s'] * 60:.2f}\n")
@@ -1539,6 +1594,7 @@ def schedule_arc_tails(lines, cfg, cancelled):
                 first_block = min(blocks, key=lambda b: b[0])
                 insertion, restore = first_block[0], first_block[3]
         tail = []
+        current = restore
         for start, end, raw, before, after in blocks:
             if is_retracted(before) or is_retracted(after) or before.tool != after.tool:
                 raise UnsupportedGCode("Cannot move an Arc/overhang block across an active retraction or tool change.")
@@ -1546,10 +1602,11 @@ def schedule_arc_tails(lines, cfg, cancelled):
                 raise UnsupportedGCode("Arc tail would require an additional material change.")
             # Keep progress and acceleration state at the original location too.
             kept = [line for line in raw if command(line)[0] in ("M73", *MOTION_LIMIT_COMMANDS, "G17")]
-            edits.append((start, end, kept + relocate_travel(after, cfg)))
-            tail.extend(relocate_travel(before, cfg))
+            edits.append((start, end, kept + relocate_travel(after, cfg, before)))
+            tail.extend(relocate_travel(before, cfg, current))
             tail.extend(line for line in raw if command(line)[0] != "M73")
-        tail.extend(relocate_travel(restore, cfg))
+            current = after
+        tail.extend(relocate_travel(restore, cfg, current))
         edits.append((insertion, insertion, tail))
     for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
         lines[start:end] = replacement

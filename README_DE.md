@@ -123,7 +123,9 @@ Geschlossene Aussenkonturen werden benoetigt; Scarf-Ueberlappungen der Waende
 werden projiziert. Nicht-planare Bridge-Bahnen bleiben ausgeschlossen.
 Mehrmaterial mit regulären Werkzeugwechseln wird unterstuetzt. Vase-/Spiral-Modus,
 IDEX, Werkzeugwechsel innerhalb eines Bridge-Abschnitts, volumetrische Extrusion
-werden nicht unterstuetzt. Parameterlose Firmware-Retraktion (G10/G11) wird unterstuetzt.
+werden nicht unterstuetzt. Parameterlose Firmware-Retraktion (G10/G11) und reine
+RepRapFirmware-Temperaturbefehle (G10/M568) werden unterstuetzt. G10-Befehle
+fuer Werkzeug- oder Koordinatenversatz bleiben ausgeschlossen.
 
 Standardmaessig gelten Temperatur und Luefterwerte des ersetzten Bridge-Abschnitts weiter. Im Wave-Modus sind optionale Temperatur-, Bauteil- und Aux-Luefter-Ueberschreibungen moeglich; die vorherigen Werte werden danach wiederhergestellt. Die Temperatur gehoert zum aktiven Werkzeug. Der Gehaeuseluefter bleibt unberuehrt.
 Die eingestellte Plugin-Retraktion muss zu deinem Drucker passen.

@@ -124,7 +124,7 @@ class KlipperTests(unittest.TestCase):
         moves = a.parse(source.splitlines(True))[0].moves
         expected = limits_at_moves(source)
         for move in moves:
-            relocated = "".join(a.relocate_travel(move.after, a.configuration()))
+            relocated = "".join(a.relocate_travel(move.after, a.configuration(), a.State()))
             actual = limits_at_moves(relocated)
             self.assertEqual(actual[max(actual)], expected[move.index])
         self.assertEqual(dict(moves[0].before.modal)["acceleration"], "M204 S700\n")
